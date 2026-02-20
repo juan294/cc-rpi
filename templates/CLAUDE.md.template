@@ -1,0 +1,128 @@
+# Project: [PROJECT NAME]
+
+<!-- CLAUDE.md AUTHORING GUIDE
+Keep this file LEAN. It's loaded every session — only include universally applicable instructions.
+For domain-specific knowledge, use .claude/skills/ (loaded on demand).
+For detailed architecture docs, use docs/ or agent_docs/ (agent reads when relevant).
+Budget: ~150 usable instruction slots. System prompt uses ~50. Don't waste them.
+Test: "Would removing this line cause Claude to make mistakes?" If not, cut it.
+-->
+
+## One-liner
+[Brief description of what this project does]
+
+## Stack
+[Framework, language, key libraries]
+
+## RPI Workflow
+
+This project follows the Research-Plan-Implement (RPI) pattern.
+All significant changes go through four phases:
+1. /research — Understand the codebase as-is
+2. /plan — Create a phased implementation spec
+3. /implement — Execute one phase at a time with review gates
+4. /validate — Verify implementation against the plan
+
+### Context Management
+
+- Each RPI phase should be its own conversation. Don't run research + plan + implement in one session.
+- Use `/clear` between unrelated tasks. Use `/compact` when context is heavy but the task continues.
+- Subagents are context control mechanisms — they search/read in their window and return only distilled results.
+- Research and planning happen on the default branch. Implementation happens in worktrees or feature branches.
+- If research comes back wrong, throw it out and restart with more specific steering.
+
+### Rules for All Phases
+
+- Read all mentioned files COMPLETELY before doing anything else.
+- Never suggest improvements during research — only document what exists.
+- Every code reference must include file:line.
+- Spawn parallel subagents for independent research tasks.
+- Wait for ALL subagents before synthesizing.
+- Never write documents with placeholder values.
+
+### Rules for Implementation
+
+- Follow the atomic loop: implement → review → fix → approve.
+- Run ALL automated verification after each phase.
+- STOP after each phase and wait for human confirmation.
+- Never auto-proceed to the next phase.
+- If the plan doesn't match reality, STOP and explain the mismatch.
+
+### Testing Philosophy
+
+- Prefer automated verification over manual testing.
+- Manual testing is ONLY for: sudo, hardware, new installs, truly visual-only validation.
+- If you can verify it with a command or tool, do so automatically.
+- Don't use Claude for linting/formatting — use automated tools and hooks instead.
+
+## Key Commands
+
+```bash
+# [Adjust these for your project]
+pnpm run test           # Run all tests
+pnpm run typecheck      # Check types
+pnpm run lint           # Check linting
+pnpm run dev            # Local dev server
+pnpm run build          # Production build
+```
+
+### CRITICAL: Run verification commands sequentially, NEVER in parallel
+Never run typecheck, lint, or test as parallel sibling Bash tool calls.
+Chain with `&&` or `;`: `pnpm run typecheck 2>&1; pnpm run lint 2>&1`
+
+## Git Workflow
+
+**`develop` is the default branch. `main` is production only.**
+
+1. All development happens on `develop`
+2. Never commit directly to `main`
+3. Release to production via PR: `develop` → `main`
+4. Always run checks before committing (pre-commit hooks enforce this)
+5. Always `git pull --rebase` before pushing
+
+### Commit Messages
+
+Use conventional commits:
+```
+feat(scope): description (#issue)
+fix(scope): description (#issue)
+test(scope): description
+refactor(scope): description
+chore: description
+docs: description
+```
+
+## Deployment
+[Describe your deployment pipeline — which branch deploys where]
+
+## Agent Operational Rules
+
+### Shell & Tools
+- Chain verification commands sequentially, never as parallel Bash calls
+- In worktrees: prefix every command with `cd /absolute/path && `
+- Never use `~` in file tool paths — use full absolute paths starting with `/`
+- Always pass `{ encoding: 'utf-8' }` to `execSync`/`spawnSync`
+
+### Git Operations
+- Run typecheck/lint BEFORE committing (pre-commit hooks run the same checks)
+- `git pull --rebase` before every push
+- Remove worktrees BEFORE merging PRs with `--delete-branch`
+- `git worktree remove --force` (always use --force)
+- Use `;` not `&&` for multiple cleanup operations
+
+### GitHub CLI
+- Don't guess `gh --json` field names — query available fields first
+- Check CI per-PR with `--json`, not chained human-readable output
+- `review: fail` means "needs approval", NOT a CI failure
+
+### Sub-agents
+- Verify tool permissions before spawning sub-agents for write operations
+- If a sub-agent fails due to permissions, take over manually immediately
+- Monitor context size when running many parallel agents
+
+## Research Documents
+Store in: docs/research/YYYY-MM-DD-description.md
+
+## Implementation Plans
+Store in: docs/plans/YYYY-MM-DD-description.md
+Phase files: docs/plans/YYYY-MM-DD-description-phases/phase-N.md
