@@ -320,3 +320,102 @@ git worktree remove --force .worktrees/foo && git worktree remove .worktrees/bar
 ```
 
 **Rule of thumb:** When applying a fix to a chained command, apply it to ALL instances, not just the first one that failed.
+
+---
+
+## Error #12: Push and forget — CI breaks silently
+
+**Symptom:** Agent pushes code to the development branch, immediately moves on to the next task, and never checks CI status. Hours later, someone discovers CI has been red for multiple commits. Downstream work is built on a broken foundation.
+
+**Root cause:** The agent treats `git push` as the end of the workflow. There's no accountability loop — no one checks whether the pushed code actually passes CI.
+
+**Correct approach — always do this:**
+```bash
+# After every push, spawn a background monitor:
+# 1. Poll CI until it completes
+gh run list --branch develop --limit 1 --json conclusion,status,databaseId
+
+# 2. If it fails, investigate:
+gh run view <run-id> --log-failed 2>&1 | tail -100
+
+# 3. Fix and re-push in the same branch
+# 4. Poll again until green
+```
+
+In Claude Code, use `Task` with `run_in_background: true` to monitor CI without blocking the main terminal.
+
+**Never do this:**
+```bash
+# Don't push and move on without checking:
+git push origin develop
+# ← agent starts next task, never checks CI
+```
+
+**Key detail:** Even single-line changes can break CI if they affect types, imports, or test fixtures. EVERY push gets a monitor.
+
+---
+
+## Error #13: Skipping TDD — writing implementation before tests
+
+**Symptom:** Agent writes implementation code first, then either (a) adds tests as an afterthought that merely assert the implementation is correct rather than specifying behavior, or (b) says "I'll add tests later" and never does. When bugs are later found, there's no regression test to prevent recurrence.
+
+**Root cause:** The agent defaults to implementation-first development. Without an explicit TDD mandate, tests become an optional follow-up rather than the starting point.
+
+**Correct approach — always do this:**
+```
+# For every code change:
+1. Write a failing test that describes the expected behavior
+2. Run the test — confirm it fails (Red)
+3. Write the minimum implementation to make it pass (Green)
+4. Refactor while keeping tests green
+
+# For bug fixes specifically:
+1. Write a test that reproduces the bug
+2. Confirm the test fails
+3. Fix the bug
+4. Confirm the test passes — this is now a regression test
+```
+
+**Never do this:**
+```
+# Don't write code first and tests second:
+1. Write implementation
+2. Write tests that assert the implementation works  ← tests are tautological
+3. "Ship it"
+```
+
+**Why this matters:** Tests written after implementation tend to test that the code does what it does (tautological), not that it does what it should (behavioral). TDD forces tests to be independent specifications.
+
+---
+
+## Error #14: Suggesting manual steps instead of using available tools
+
+**Symptom:** Agent responds with "Go to the dashboard and click..." or "Open the browser and navigate to..." or "Run this command in your terminal..." for operations the agent could perform itself using available CLI tools, shell commands, or MCP servers.
+
+**Root cause:** The agent defaults to instructional mode rather than action mode. It doesn't check whether it has tools available to perform the operation directly.
+
+**Correct approach — always do this:**
+```
+# Before suggesting any manual step, check if you can do it:
+1. Can I use a CLI tool? (gh, git, curl, project CLIs)
+2. Can I use a shell command? (pnpm scripts, build tools)
+3. Can I use MCP servers? (check available tools in the session)
+4. Can I use file tools? (Read/Edit/Write for config changes)
+5. Can I use web tools? (WebSearch/WebFetch for documentation)
+
+# Only suggest manual intervention when genuinely required:
+- OAuth consent flows (requires human browser interaction)
+- Billing dashboards (requires human authorization)
+- Hardware interaction (physical access needed)
+- Elevated privileges the agent doesn't have
+```
+
+**Never do this:**
+```
+# Don't suggest manual steps for things you can do:
+"Please run `gh pr create` in your terminal"  ← you have Bash, run it yourself
+"Go to GitHub and check the CI status"        ← use `gh run list`
+"Open the file and change line 42"            ← use Edit tool
+```
+
+**Key detail:** This error compounds — once an agent starts suggesting manual steps, the user loses trust in the agent's autonomy. Exhaust every tool before escalating.
