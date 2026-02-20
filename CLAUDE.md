@@ -29,11 +29,14 @@ cc-rpi/
 ├── methodology/                      # The RPI approach
 │   ├── README.md                     # Overview and reading order
 │   ├── philosophy.md                 # Core tenets, error amplification
-│   ├── context-engineering.md        # Context management, compaction
+│   ├── context-engineering.md        # Context management, compaction, settings
 │   ├── four-phases.md                # Research → Plan → Implement → Validate
-│   ├── agent-design.md               # Documentarian rule, subagent catalog
+│   ├── agent-design.md               # Documentarian rule, subagent catalog, teams, autonomy
 │   ├── pseudocode-notation.md        # Plan notation format
-│   ├── testing.md                    # Automated-first verification
+│   ├── testing.md                    # Automated-first verification, TDD protocol
+│   ├── push-accountability.md        # Post-push CI ownership, background verification
+│   ├── ci-and-guardrails.md          # Pre-commit hooks, CI workflows, enforcement
+│   ├── scheduled-agents.md           # Recurring quality agents, cron/launchd
 │   └── error-success-logging.md      # Systematic improvement framework
 ├── patterns/                         # Operational knowledge
 │   ├── quick-reference.md            # Rules to internalize before any work
@@ -46,7 +49,8 @@ cc-rpi/
         ├── plan.md                   # /plan — implementation planning
         ├── implement.md              # /implement — phased execution
         ├── validate.md               # /validate — verification
-        └── describe-pr.md            # /describe-pr — PR description
+        ├── describe-pr.md            # /describe-pr — PR description
+        └── pre-launch.md             # /pre-launch — multi-agent production audit
 ```
 
 ## Contributing to This Repo

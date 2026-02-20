@@ -27,14 +27,17 @@ Then tell Claude Code in your target project:
 
 ### Methodology (`methodology/`)
 
-The full Research-Plan-Implement pattern adapted for Claude Code, based on HumanLayer's opencode-rpi and ACE-FCA framework. Organized by topic:
+The full Research-Plan-Implement pattern adapted for Claude Code, based on HumanLayer's opencode-rpi and ACE-FCA framework. Organized by topic (10 files, in reading order):
 
 - **Philosophy** — Core tenets, error amplification principle, mental alignment
-- **Context Engineering** — The foundational discipline: compaction, context quality, utilization targets
+- **Context Engineering** — The foundational discipline: compaction, context quality, settings & permissions
 - **Four Phases** — Research, Plan, Implement, Validate with detailed processes
-- **Agent Design** — Documentarian rule, tool restrictions, subagent catalog
+- **Agent Design** — Documentarian rule, tool restrictions, subagent catalog, agent teams, autonomy principles
 - **Pseudocode Notation** — Compact notation for writing implementation plans
-- **Testing** — Automated-first verification hierarchy
+- **Testing** — Automated-first verification hierarchy, TDD protocol
+- **Push Accountability** — Post-push CI ownership, background polling, fix-and-repush cycle
+- **CI & Guardrails** — Pre-commit hooks, CI workflows, development guardrails, enforcement stack
+- **Scheduled Agents** — Recurring quality agents on cron/launchd, shared context system
 - **Error & Success Logging** — Framework for systematic improvement
 
 ### Known Error Patterns (`patterns/`)
@@ -45,14 +48,15 @@ A catalog of recurring Claude Code agent errors documented from real sessions. E
 - Git operations (worktrees, pre-commit hooks, push rejections)
 - GitHub CLI (`gh` field names, CI status checking)
 - Node.js/TypeScript (ESM shebangs, Buffer vs string)
+- CI & workflow (push-and-forget, skipping TDD, suggesting manual steps)
 
 ### Templates (`templates/`)
 
 Ready-to-use starting points for new projects:
 
 - **CLAUDE.md template** — Comprehensive project configuration with all operational rules baked in
-- **Setup checklist** — Step-by-step guide for new project setup
-- **Slash commands** — `/research`, `/plan`, `/implement`, `/validate`, `/describe-pr`
+- **Setup checklist** — Step-by-step guide including pre-commit hooks, CI setup, push accountability, and scheduled agents
+- **Slash commands** — `/research`, `/plan`, `/implement`, `/validate`, `/describe-pr`, `/pre-launch`
 
 ## Adding New Patterns
 

@@ -120,6 +120,34 @@ docs: description
 - If a sub-agent fails due to permissions, take over manually immediately
 - Monitor context size when running many parallel agents
 
+## Push Accountability
+
+Every push to the development branch requires CI verification. After pushing:
+1. Spawn a background agent to monitor CI: `gh run list --branch develop --limit 1`
+2. If CI passes — log and move on
+3. If CI fails — background agent investigates with `gh run view <id> --log-failed`, fixes, and re-pushes
+4. Main terminal continues working — push verification is non-blocking
+5. Never push to production from a background fix
+
+## TDD Protocol
+
+All code changes follow Red-Green-Refactor:
+1. **Red** — Write a failing test FIRST
+2. **Green** — Minimum code to pass
+3. **Refactor** — Clean up with green tests
+
+No exceptions. Bug fixes need a regression test. Refactors need existing coverage. No "tests later."
+
+## Agent Autonomy
+
+Before asking the user to do anything manually:
+1. Exhaust CLI tools (`gh`, `git`, project CLIs)
+2. Exhaust shell commands (curl, build scripts)
+3. Exhaust file tools (Read/Edit/Write for config changes)
+4. Only then ask for human help — with a clear explanation of what you tried
+
+Autonomy applies to development work. Production-affecting actions always need explicit human authorization.
+
 ## Research Documents
 Store in: docs/research/YYYY-MM-DD-description.md
 

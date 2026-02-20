@@ -36,6 +36,35 @@ Always separate into two sections:
 - [ ] [Step] — WHY manual: [requires sudo / hardware / visual-only]
 ```
 
+## TDD Protocol
+
+Test-Driven Development is mandatory for all code changes. No exceptions — not even "small" changes.
+
+### The Cycle
+
+1. **Red** — Write a failing test FIRST, before touching any implementation code
+2. **Green** — Write the minimum code to make the test pass
+3. **Refactor** — Clean up while keeping tests green
+
+### Rules
+
+- **Tests before code, always.** If you catch yourself writing implementation without a test, stop and write the test first.
+- **Bug fixes need a regression test.** Before fixing a bug, write a test that reproduces it. Then fix the code so the test passes. This ensures the bug never returns.
+- **Refactors need existing tests.** Before refactoring, ensure tests cover the current behavior. If they don't, write them first.
+- **No "I'll add tests later."** There is no later. Tests are written in the same worktree, in the same commit sequence, before the implementation.
+- **Tests are the spec.** A failing test IS the specification for what the code should do. Write the test as if the feature already works, then make it true.
+
+### In the RPI Workflow
+
+TDD integrates into the Implement phase:
+1. Plan specifies what each phase should accomplish
+2. For each phase, write failing tests that capture the acceptance criteria
+3. Implement until all tests pass
+4. Run the full verification suite
+5. Stop and wait for human review
+
+The tests written in step 2 become the automated verification for the phase.
+
 ## Phase Completion Protocol
 
 1. Run ALL automated verification commands.

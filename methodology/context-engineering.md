@@ -168,6 +168,51 @@ For CI pipelines, batch operations, and scaling beyond a single session:
 - **Fan-out pattern** — Generate a task list, then loop: `for file in $(cat files.txt); do claude -p "Migrate $file" --allowedTools "Edit,Bash(git commit *)"; done`
 - **Writer/Reviewer pattern** — Run two sessions: one implements, another reviews the implementation in fresh context (unbiased by having written it).
 
+## Claude Settings & Permissions
+
+Beyond CLAUDE.md content, the agent's operating environment is configured through Claude Code's settings and permission system. These control what tools the agent can use without asking.
+
+### Permission Whitelisting
+
+Configure `.claude/settings.json` to pre-approve common operations so the agent doesn't pause for permission on routine tasks:
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(pnpm run *)",
+      "Bash(git *)",
+      "Bash(gh *)",
+      "Read",
+      "Write",
+      "Edit"
+    ]
+  }
+}
+```
+
+**Principle:** Whitelist development tools aggressively. The agent should never be blocked mid-task by a permission prompt for `git status` or `pnpm run test`. Reserve permission gates for genuinely dangerous operations.
+
+### Environment Variables
+
+Agents inherit environment variables from the shell. For projects that need API keys, database URLs, or service credentials:
+
+- Store them in `.env` (gitignored) for local development
+- Document required variables in CLAUDE.md so agents know what's available
+- Never hardcode secrets in CLAUDE.md or skills — reference `.env` instead
+- For headless/CI mode, pass variables via the environment: `API_KEY=xxx claude -p "prompt"`
+
+### Model Selection
+
+Different tasks benefit from different models. Use `--model` or configure per-agent:
+
+- **Complex reasoning** (architecture, debugging, planning) → most capable model
+- **Routine tasks** (formatting, simple edits, file operations) → faster model
+- **Bulk operations** (migrating many files, batch formatting) → fastest model
+
+In custom agent definitions (`.claude/agents/`), set the `model` field to match the task complexity.
+
 ## You Need a Domain Expert
 
 For complex codebases, at least one person on the team should be an expert in the codebase (or the relevant area). The RPI pattern amplifies expert knowledge — it doesn't replace it. When both participants are unfamiliar with the codebase, research tends to miss critical dependency chains and architectural constraints.

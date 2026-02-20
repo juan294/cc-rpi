@@ -210,3 +210,85 @@ Hooks are deterministic scripts that run automatically at specific points in Cla
 - "Prefer small functions" → Advisory guidance stays in CLAUDE.md.
 
 Configure hooks in `.claude/settings.json` or use the `/hooks` command. Claude can write hooks for you: "Write a hook that runs eslint after every file edit."
+
+---
+
+## Agent Team Patterns
+
+Beyond individual subagents, teams of parallel agents can tackle complex multi-domain problems. Each team member investigates independently, then results are synthesized.
+
+### When to Use Teams
+
+| Scenario | Team Shape | Example |
+|----------|-----------|---------|
+| **Debugging** | 3-5 parallel investigators, each testing a different hypothesis | API, cache, rendering, config, dependencies |
+| **Pre-launch audit** | 6 parallel specialists, each auditing one domain | QA, security, architecture, performance, UX, infrastructure |
+| **Self-healing pipeline** | Audit phase (parallel) → fix phase (parallel) → verify phase | Lint, tests, a11y, security, bundle size |
+| **Health check** | 4 parallel checkers with optional auto-fix | Tests, code quality, CI health, dependency health |
+| **Feature implementation** | Sequential workflow with parallel sub-steps | Read issue → TDD → implement → docs (parallel) → CI verify |
+| **Code review** | 2-3 parallel reviewers with different lenses | Correctness, security, performance |
+
+### Team Design Principles
+
+1. **Read-only auditors.** Audit/investigation agents should never modify files — they report findings. A separate fix step (human or agent) acts on the report.
+2. **Parallel by default.** If agents don't need each other's output, run them simultaneously. Time savings compound.
+3. **Synthesize before acting.** Collect all agent findings into a single report before deciding what to fix. Prevents conflicting changes.
+4. **Self-healing fallback.** If a sub-agent fails due to permissions or tool errors, the parent agent takes over manually using its own tools.
+5. **Retry budget.** Failed agents get one retry with modified instructions. After that, report the failure and move on.
+6. **Cross-agent recommendations.** Each agent should note findings that affect another agent's domain (e.g., security reviewer flagging a performance concern).
+
+### Pre-Launch Audit Template
+
+The most common team pattern. Spawn 6 parallel specialists before any production release:
+
+| Specialist | Focus |
+|------------|-------|
+| **architect** | Dependency health, TypeScript config, circular deps, dead code |
+| **qa-lead** | Full test suite, coverage gaps, graceful degradation |
+| **security-reviewer** | Dependency audit, hardcoded secrets, auth flows, injection vectors |
+| **performance-eng** | Bundle sizes, unused exports, code splitting, Core Web Vitals |
+| **ux-reviewer** | ARIA/a11y, keyboard nav, error states, design consistency |
+| **devops** | Build verification, CI status, env vars, error pages, git state |
+
+Each produces findings categorized as **blockers** (must fix), **warnings** (should fix), or **recommendations** (nice to have). Results synthesize into a single report with a verdict: READY, CONDITIONAL, or NOT READY.
+
+See [templates/commands/pre-launch.md](../templates/commands/pre-launch.md) for the slash command that triggers this team.
+
+---
+
+## Agent Autonomy Principles
+
+Agents should maximize what they accomplish autonomously before requesting human intervention.
+
+### The Tool Exhaustion Rule
+
+**Before asking the user to perform any manual step, exhaust all available tools first.**
+
+1. **CLI tools** — `gh`, `git`, project-specific CLIs
+2. **Shell commands** — `curl`, `pnpm`, build scripts
+3. **MCP servers** — check what tools are available in the session
+4. **Web tools** — `WebSearch`, `WebFetch` for documentation
+5. **File tools** — Read/Edit/Write for configuration changes
+
+Only ask for manual intervention when genuinely required: OAuth consent flows, billing dashboards, hardware interaction, or actions that require elevated privileges the agent doesn't have.
+
+### Autonomy Boundaries
+
+Autonomy applies to **development work**. Production-affecting actions always require explicit human authorization:
+
+- Pushing to production branches
+- Creating or merging PRs targeting production
+- Deploying to production environments
+- Modifying external service configuration
+
+The boundary is clear: agents are autonomous on development, human-gated on production. See [push-accountability.md](push-accountability.md) for the post-push verification protocol.
+
+### Self-Correction Over Escalation
+
+When an agent encounters an error:
+1. **Diagnose** — read the error, understand the root cause
+2. **Fix** — attempt the fix using available tools
+3. **Verify** — run the relevant checks to confirm the fix works
+4. **Escalate only if stuck** — after 2-3 failed attempts, report the issue clearly and ask for guidance
+
+Don't ask "should I fix this?" — just fix it. Don't suggest the user run a command you could run yourself.

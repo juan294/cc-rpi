@@ -32,6 +32,14 @@ These rules must be internalized before starting any work. They prevent the most
 
 11. **Don't run ESM CLI tools with `node <file>`** — shebang + ESM = SyntaxError. Use `chmod +x && ./<file>` or `npx .` instead.
 
+## CI & Workflow Rules
+
+12. **Never push and forget** — after every push to the development branch, spawn a background agent to monitor CI. If CI fails, investigate, fix, and re-push. The push isn't done until CI is green.
+
+13. **Always write tests before implementation (TDD)** — Red-Green-Refactor, every time. Bug fixes need a regression test first. No "tests later." Tests written after implementation tend to be tautological.
+
+14. **Exhaust all tools before suggesting manual steps** — before telling the user "go to the dashboard and...", check if you can use CLI tools, shell commands, MCP servers, or file tools to do it yourself. Only escalate when genuinely impossible.
+
 ---
 
 For detailed symptoms, root causes, and examples, see [agent-errors.md](agent-errors.md).

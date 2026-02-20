@@ -45,12 +45,54 @@ Adjust file paths in each command to match your project's docs directory.
 
 **Slash commands vs skills:** Commands (`.claude/commands/`) are user-invoked workflows. Skills (`.claude/skills/`) are knowledge + workflows that Claude can also auto-detect. Use commands for RPI phases; use skills for domain conventions and reusable task patterns.
 
+## Pre-Commit Hooks
+
+- [ ] Install a hook framework (e.g., Husky for Node.js, pre-commit for Python)
+- [ ] Configure pre-commit to run typecheck + lint:
+  ```bash
+  # Example: Husky
+  npx husky init
+  echo "pnpm run typecheck && pnpm run lint" > .husky/pre-commit
+  ```
+- [ ] Test that the hook rejects a commit with a deliberate type error
+- [ ] Add a note to CLAUDE.md reminding agents to run checks before committing
+
+## CI Setup
+
+- [ ] Create a CI workflow (GitHub Actions, etc.) that runs on push and PR:
+  - Typecheck
+  - Lint
+  - Unit tests
+  - Build verification
+  - (Optional) Security audit, E2E tests
+- [ ] Mark critical CI jobs as required for PR merges
+- [ ] Enable branch protection on the production branch (require CI + review)
+- [ ] Verify CI runs successfully on the development branch
+
 ## Git Setup
 
 - [ ] Initialize repo with `main` as production branch
 - [ ] Create `develop` as default working branch
 - [ ] Set up branch protection rules on GitHub
-- [ ] Configure pre-commit hooks (typecheck, lint, test)
+- [ ] Configure pre-commit hooks (typecheck, lint, test) — see Pre-Commit Hooks above
+
+## Push Accountability
+
+- [ ] Add push accountability instructions to CLAUDE.md or CLAUDE.local.md:
+  - After every push to develop, spawn a background CI monitor
+  - Background agent polls, investigates failures, fixes, and re-pushes
+  - Main terminal stays unblocked
+- [ ] Test the workflow: push a deliberate failure, verify the background agent catches it
+
+## Scheduled Agents (Optional)
+
+- [ ] Create `scripts/agents/` directory for agent shell scripts
+- [ ] Create `docs/agents/` directory for agent reports and shared context
+- [ ] Create `logs/` directory for agent output capture
+- [ ] Write at least one agent script (e.g., test-health, security-audit)
+- [ ] Schedule with launchd (macOS) or cron (Linux)
+- [ ] Verify the agent runs successfully and produces a report
+- [ ] Add `/pre-launch` slash command for multi-agent production audit
 
 ## Workflow Habits
 
@@ -65,6 +107,8 @@ Adjust file paths in each command to match your project's docs directory.
 - [ ] Read research output critically — throw out and redo if wrong
 - [ ] Invest most review time on research and plans, not generated code
 - [ ] For large features, have Claude interview you before planning (AskUserQuestion)
+- [ ] Follow TDD: write failing tests before implementation code
+- [ ] Monitor CI after every push — never push and forget
 
 ## Thoughts Directory Structure
 
