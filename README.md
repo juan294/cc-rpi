@@ -1,6 +1,27 @@
 # cc-rpi — Claude Code Reference & Project Intelligence
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Status: Active](https://img.shields.io/badge/Status-Active-brightgreen.svg)]()
+[![Claude Code](https://img.shields.io/badge/Built%20for-Claude%20Code-blueviolet.svg)](https://docs.anthropic.com/en/docs/claude-code)
+
 A blueprint repository for setting up and running projects with [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Contains the RPI (Research-Plan-Implement) methodology, a catalog of known agent errors, and operational rules learned from hundreds of real sessions.
+
+## Requirements
+
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI installed and configured
+- Git
+
+## Quick Start
+
+Clone the repository:
+
+```bash
+git clone https://github.com/juan294/cc-rpi.git
+```
+
+Then tell Claude Code in your target project:
+
+> Go read the cc-rpi repository and set up this project following all the best practices. Read the quick reference, error catalog, and methodology, then configure CLAUDE.md and slash commands for this project.
 
 ## What's Inside
 
@@ -33,21 +54,21 @@ Ready-to-use starting points for new projects:
 - **Setup checklist** — Step-by-step guide for new project setup
 - **Slash commands** — `/research`, `/plan`, `/implement`, `/validate`, `/describe-pr`
 
-## How to Use This
-
-### Setting Up a New Project
-
-Tell Claude Code:
-
-> Go read the cc-rpi repository at `~/Documents/GenAI_Projects/cc-rpi` and set up this project following all the best practices. Read the quick reference, error catalog, and methodology, then configure CLAUDE.md and slash commands for this project.
-
-### Adding New Patterns
+## Adding New Patterns
 
 When you discover a new recurring error or best practice:
 
 1. Add it to `patterns/agent-errors.md` (detailed entry with symptom/root cause/solution)
 2. Add a one-liner to `patterns/quick-reference.md`
 3. Keep entries generic — no project-specific references
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for full guidelines.
+
+## Community
+
+- [GitHub Discussions](https://github.com/juan294/cc-rpi/discussions) — Ask questions, share ideas, discuss the methodology
+- [Contributing Guide](CONTRIBUTING.md) — How to report patterns, propose improvements, submit PRs
+- [Code of Conduct](CODE_OF_CONDUCT.md) — Expected behavior for all participants
 
 ## Credits
 
@@ -56,4 +77,8 @@ When you discover a new recurring error or best practice:
 
 ## License
 
-MIT
+[MIT](LICENSE)
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for release history.
