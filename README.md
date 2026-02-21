@@ -27,6 +27,10 @@ Then tell Claude Code in your target project:
 
 > Go read the cc-rpi repository and set up this project following all the best practices. Read the quick reference, error catalog, and methodology, then configure CLAUDE.md and slash commands for this project.
 
+## Guide
+
+New here? Read **[GUIDE.md](GUIDE.md)** — a human-readable walkthrough of the philosophy, the workflow, and every command. It covers everything you need to know without diving into every file. Also works great as source material for NotebookLM podcasts or articles.
+
 ## What's Inside
 
 ### Methodology (`methodology/`)

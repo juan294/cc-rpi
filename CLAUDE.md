@@ -25,6 +25,7 @@ The agent should:
 ```
 cc-rpi/
 ├── CLAUDE.md                         # This file (repo self-description)
+├── GUIDE.md                          # Human-readable quick-start guide
 ├── README.md                         # Public documentation
 ├── methodology/                      # The RPI approach
 │   ├── README.md                     # Overview and reading order
