@@ -419,3 +419,28 @@ git push origin develop
 ```
 
 **Key detail:** This error compounds — once an agent starts suggesting manual steps, the user loses trust in the agent's autonomy. Exhaust every tool before escalating.
+
+---
+
+## Error #15: `git branch -d` fails on worktree branches (not fully merged)
+
+**Symptom:** After removing a worktree, `git branch -d <branch>` fails with "error: the branch 'worktree-agent-xxx' is not fully merged" and "If you are sure you want to delete it, run 'git branch -D'." The agent retries with `-D` (uppercase), wasting a turn.
+
+**Root cause:** `git branch -d` (lowercase) checks whether the branch is merged into its upstream tracking branch. Worktree branches are almost never "fully merged" in git's view — they may have been squash-merged via PR (different commit hashes), the remote branch may already be deleted, or the work was abandoned. The lowercase `-d` safety check is designed for long-lived branches, not ephemeral worktree branches.
+
+**Correct approach — always do this:**
+```bash
+# ALWAYS use -D (uppercase, force) for worktree branch cleanup:
+git worktree remove --force /path/to/worktree; git branch -D <branch-name>
+
+# Full worktree cleanup sequence:
+git worktree remove --force /path/to/worktree; git branch -D worktree-branch-name
+```
+
+**Never do this:**
+```bash
+# Don't use lowercase -d for worktree branches:
+git worktree remove --force /path/to/worktree && git branch -d worktree-branch  # ← fails: "not fully merged"
+```
+
+**Key detail:** This combines with Error #11 — use `--force` on `git worktree remove`, `-D` (uppercase) on `git branch`, and `;` (not `&&`) to chain them. The complete worktree cleanup idiom is: `git worktree remove --force <path>; git branch -D <branch>`
