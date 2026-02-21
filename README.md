@@ -70,7 +70,7 @@ Ready-to-use starting points for new projects:
 - **README header template** — Standard project README structure with badges, Chapa embed, and divider
 - **settings.json template** — `.claude/settings.json` with Agent Teams, hooks, and permissions
 - **Setup checklist** — Step-by-step guide including pre-commit hooks, CI setup, push accountability, and scheduled agents
-- **Slash commands** — `/research`, `/plan`, `/implement`, `/validate`, `/describe-pr`, `/pre-launch`
+- **Slash commands** — `/bootstrap`, `/adopt`, `/research`, `/plan`, `/implement`, `/validate`, `/describe-pr`, `/pre-launch`
 
 ## Adding New Patterns
 

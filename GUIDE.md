@@ -41,7 +41,7 @@ Each phase runs in its own Claude Code conversation. This is intentional — it 
 
 ## Getting Started
 
-### Step 1: Clone the Blueprint
+### Step 1: Clone the Blueprint and Install Commands
 
 ```bash
 git clone https://github.com/juan294/cc-rpi.git
@@ -49,30 +49,46 @@ git clone https://github.com/juan294/cc-rpi.git
 
 Keep this repository somewhere permanent on your machine. You'll reference it from every project.
 
-### Step 2: Set Up a New Project
+Then install the two user-level commands that make everything work. These go in your home directory, so they're available in every project — even ones that haven't been set up yet:
 
-Open Claude Code in your new project directory and tell it:
+```bash
+mkdir -p ~/.claude/commands
+cp cc-rpi/templates/commands/bootstrap.md ~/.claude/commands/bootstrap.md
+cp cc-rpi/templates/commands/adopt.md ~/.claude/commands/adopt.md
+```
 
-> Go read the cc-rpi repository at [path] and set up this project following all the best practices. Read the quick reference, error catalog, and methodology, then configure CLAUDE.md and slash commands for this project.
+Edit both files to set the correct path to where you cloned cc-rpi on your machine.
 
-Or, if you've installed the user-level bootstrap command (see Advanced Setup below), just type:
+Now you have two commands available everywhere:
+
+| Command | Use Case |
+|---------|----------|
+| `/bootstrap` | **New project.** Empty or freshly created repo. Sets everything up from scratch. |
+| `/adopt` | **Existing project.** Already has code, maybe some practices in place. Audits what exists and migrates incrementally. |
+
+### Step 2: Set Up Your Project
+
+**Starting a new project?** Open Claude Code in the project directory and type:
 
 ```
 /bootstrap
 ```
 
-The agent will:
-- Learn the 14 operational rules that prevent known mistakes
-- Study the 14 documented error patterns so it never rediscovers them
-- Create your project's CLAUDE.md (the configuration file Claude Code reads every session)
-- Set up `.claude/settings.json` with Agent Teams and tool permissions
-- Copy slash commands into `.claude/commands/`
-- Create the directory structure for research docs and plans
-- Walk you through CI, pre-commit hooks, and git setup
+The agent reads the blueprint, asks you about your project (type, stack, conventions), then creates CLAUDE.md, settings.json, slash commands, directory structure, and walks you through CI and git setup.
+
+**Migrating an existing project?** Open Claude Code in the project directory and type:
+
+```
+/adopt
+```
+
+The agent reads the blueprint, then audits your project with three parallel agents — checking configuration, infrastructure, and workflow. It presents a report showing what's already in place, what's missing (prioritized HIGH/MEDIUM/LOW), and what needs adaptation rather than replacement. You choose what to adopt, and it migrates item by item.
+
+The key difference: `/bootstrap` creates from templates. `/adopt` respects what exists and merges in what's missing.
 
 ### Step 3: Start Working
 
-Once your project is set up, your daily workflow uses four slash commands:
+Once your project is set up (by either command), your daily workflow uses four slash commands:
 
 ```
 /research [topic]     →  Understand the codebase
@@ -84,6 +100,13 @@ Once your project is set up, your daily workflow uses four slash commands:
 That's it. Those four commands are 90% of your interaction with the methodology.
 
 ## Command Cheat Sheet
+
+### Setup Commands
+
+| Command | What It Does | When to Use |
+|---------|-------------|-------------|
+| `/bootstrap` | Reads the cc-rpi blueprint, asks about your project, creates CLAUDE.md, settings, slash commands, and full directory structure. | New projects. Run once at the start. |
+| `/adopt` | Reads the blueprint, audits the existing project with parallel agents, presents a gap report, then migrates what you approve. | Existing projects you want to bring up to standard. |
 
 ### The Core Four
 
@@ -262,15 +285,14 @@ your-project/
 
 ## Advanced Setup
 
-### User-Level Bootstrap Command
+### User-Level Commands: `/bootstrap` and `/adopt`
 
-To make `/bootstrap` available in every project (not just ones already set up):
+These two commands live in `~/.claude/commands/` so they're available in every project. Install them as described in "Getting Started" above. Both commands reference the cc-rpi repository path — update that path in each file to match where you cloned the repo on your machine.
 
-```bash
-mkdir -p ~/.claude/commands
-```
+- **`/bootstrap`** reads the blueprint and creates everything from scratch. It asks you about your project type and stack before generating anything.
+- **`/adopt`** reads the blueprint, then runs a full audit of the existing project (configuration, infrastructure, workflow) before proposing any changes. It presents a prioritized report and only migrates what you approve.
 
-Then create `~/.claude/commands/bootstrap.md` with instructions that tell the agent to read the cc-rpi repository and run the setup checklist. The cc-rpi repo includes this file ready to copy.
+You can also run `/adopt` on a project that was previously bootstrapped — it works as a health check to verify everything is still aligned with the latest blueprint practices.
 
 ### Scheduled Agents
 
