@@ -115,10 +115,14 @@ docs: description
 - Check CI per-PR with `--json`, not chained human-readable output
 - `review: fail` means "needs approval", NOT a CI failure
 
-### Sub-agents
+### Sub-agents & Agent Teams
 - Verify tool permissions before spawning sub-agents for write operations
 - If a sub-agent fails due to permissions, take over manually immediately
 - Monitor context size when running many parallel agents
+- Agent Teams are enabled via `.claude/settings.json` — use them for complex parallel work
+- When creating a team: break work so each teammate owns different files (avoid conflicts)
+- Teammates don't inherit conversation history — include full context in spawn prompts
+- Use subagents for focused tasks (result is all that matters); use teams for collaborative work requiring discussion
 
 ## Push Accountability
 

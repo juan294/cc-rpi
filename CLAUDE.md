@@ -38,11 +38,22 @@ cc-rpi/
 │   ├── ci-and-guardrails.md          # Pre-commit hooks, CI workflows, enforcement
 │   ├── scheduled-agents.md           # Recurring quality agents, cron/launchd
 │   └── error-success-logging.md      # Systematic improvement framework
+├── examples/                         # Sample documents
+│   ├── README.md                     # Index of all examples
+│   ├── research-document.md          # Sample research phase output
+│   ├── implementation-plan.md        # Sample plan with phases and pseudocode
+│   ├── implementation-plan-phases/   # Per-phase detail files
+│   │   └── phase-1.md
+│   ├── error-log.md                  # Sample error log entry
+│   ├── success-log.md                # Sample success log entry
+│   └── pseudocode-examples.md        # Additional pseudocode notation examples
 ├── patterns/                         # Operational knowledge
 │   ├── quick-reference.md            # Rules to internalize before any work
 │   └── agent-errors.md               # Detailed error catalog with solutions
 └── templates/                        # Files to adapt for new projects
     ├── CLAUDE.md.template            # Starting point for project CLAUDE.md
+    ├── README-header.md              # Standard README header (badges, Chapa, divider)
+    ├── settings.json.template        # .claude/settings.json (Agent Teams, hooks, permissions)
     ├── setup-checklist.md            # Step-by-step new project setup
     └── commands/                     # Slash command templates
         ├── research.md               # /research — codebase research

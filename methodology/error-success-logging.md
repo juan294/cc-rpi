@@ -51,3 +51,62 @@ The goal is to improve USER skill at agentic coding, not catalog model failures.
 - The gap: expected vs. got vs. why
 - Prevention action items
 - One-line lesson (actionable, about user behavior)
+
+## Storage and Organization
+
+### Where to Store Logs
+
+Store logs as markdown files in your project's docs directory:
+
+```
+docs/
+├── logs/
+│   ├── errors/
+│   │   └── YYYY-MM-DD-brief-description.md
+│   └── successes/
+│   │   └── YYYY-MM-DD-brief-description.md
+│   └── README.md   # Index with one-line lessons
+```
+
+**Why markdown in git, not a database:**
+- Logs are read by both humans and agents. Markdown is native to both.
+- Git provides full history, blame, and search.
+- Agents can read logs during research phases to avoid repeating known mistakes.
+- No infrastructure to maintain.
+
+### The Index File
+
+Maintain a `docs/logs/README.md` with one-line lessons extracted from each log entry. This serves as a quick-reference for agents loading context:
+
+```markdown
+# Session Logs — Lessons Index
+
+## Error Patterns
+- Always scope API changes to specific endpoint paths (2025-12-15)
+- Don't launch parallel subagents when they have dependencies (2025-12-18)
+- Include success criteria in every implementation prompt (2026-01-03)
+
+## Success Patterns
+- Reference existing code patterns explicitly in prompts (2025-12-16)
+- Constrain first phase to core functionality only (2025-12-20)
+```
+
+### When to Query Logs
+
+- **Before `/research`**: Read the lessons index to prime the agent with known patterns.
+- **Before `/plan`**: Check if similar features had error logs — avoid repeating mistakes.
+- **After a session goes wrong**: Write the error log before closing the session, while context is fresh.
+- **Periodically**: Review the index for recurring patterns. If you see 3+ entries about the same category, add a rule to CLAUDE.md or `patterns/quick-reference.md`.
+
+### Graduating Logs to Rules
+
+When a pattern appears 3 or more times in your logs:
+1. Extract it as a rule in CLAUDE.md or `patterns/quick-reference.md`
+2. Add a detailed entry to `patterns/agent-errors.md` if it's a Claude Code error
+3. The log entries remain as historical evidence, but the rule becomes the primary reference
+
+### Compression Over Time
+
+**On success:** Successes are low-information events after extraction. The one-line lesson in the index is usually sufficient. Full success logs are historical reference.
+
+**On failure:** Full error logs retain their value longer because root cause details matter. Don't compress error logs — they are the evidence base for pattern detection.

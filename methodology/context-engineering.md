@@ -70,6 +70,51 @@ Each phase starts with a fresh context window that reads only the compact artifa
 - What's next (remaining work)
 - What's currently blocking (if anything)
 
+### Good vs Bad Compaction
+
+**Good compaction — preserves signal, discards noise:**
+
+> **Goal:** Add rate limiting to the login endpoint.
+> **Approach:** Redis sliding window, per-IP (20/15min) and per-email (5/15min). Fail-open on Redis outage.
+> **Done:** Phase 1 complete — `src/auth/rate-limiter.ts` implemented with 6 passing unit tests. Uses atomic INCR+EXPIRE via MULTI/EXEC.
+> **Key learning:** Redis session storage at `src/auth/session.ts:5` uses the same connection — reuse it instead of creating a new client.
+> **Next:** Phase 2 — middleware wrapper at `src/middleware/rate-limit.ts`. Wire into `src/routes/auth.ts:12`.
+> **Blocking:** Nothing.
+
+This is 6 lines that let a fresh session continue from exactly where we left off. Every line is actionable.
+
+**Bad compaction — loses critical details:**
+
+> We worked on rate limiting. Made good progress on the first phase. Tests are passing. Need to do the middleware next.
+
+This is useless to a fresh session. No file paths, no design decisions, no specific state. The new session would need to re-research everything.
+
+**Bad compaction — too much noise:**
+
+> [500 lines of test output, full file contents of rate-limiter.ts, conversation about whether to use INCR vs ZADD, 3 failed approaches before the working one, the full Redis documentation we read...]
+
+This defeats the purpose. A compaction that preserves everything is not a compaction — it's a copy. Discard exploration paths, failed approaches, and raw tool output. Keep only the structured findings.
+
+### What Gets Discarded vs Preserved
+
+| Discard (noise) | Preserve (signal) |
+|-----------------|-------------------|
+| File search results (Glob/Grep output) | Which files are relevant and why |
+| Raw file contents | Key findings with `file:line` references |
+| Failed approaches and dead ends | The working approach and why it was chosen |
+| Test output on success | Pass/fail status of each verification step |
+| Full test output on failure | The specific error message and root cause |
+| Conversation about alternatives | The decision made and its rationale |
+| Tool invocation details | The structured result of the investigation |
+
+### Micro-Compaction: The `run_silent` Pattern
+
+For implementation phases, test and build output should be compressed at the tool level, not after the fact. Wrap verification commands so that:
+- **On success:** return a single checkmark or "PASS" line
+- **On failure:** return the full error output
+
+This prevents test suites from consuming thousands of tokens on success while preserving full diagnostic information on failure. Configure this via hooks or shell wrappers in your project.
+
 ## Compaction via Commit Messages
 
 Git commit messages are another compaction surface. Well-written commits serve as a compressed log of what changed and why, which future research agents can use to quickly understand project history without reading every file.
@@ -193,6 +238,52 @@ Configure `.claude/settings.json` to pre-approve common operations so the agent 
 ```
 
 **Principle:** Whitelist development tools aggressively. The agent should never be blocked mid-task by a permission prompt for `git status` or `pnpm run test`. Reserve permission gates for genuinely dangerous operations.
+
+### Feature Flags
+
+Enable experimental features via `env` in settings.json:
+
+```json
+{
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  }
+}
+```
+
+Agent Teams is the primary feature flag all cc-rpi projects enable by default. See [agent-design.md](agent-design.md) for full Agent Teams documentation.
+
+### Hooks
+
+Hooks run automatically at specific points in Claude's workflow. Unlike CLAUDE.md instructions (advisory), hooks are **guaranteed** to execute. Configure in `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'formatter will run on commit via pre-commit hook'"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**Common patterns:**
+- **Post-edit formatter** — run prettier/eslint-fix after file changes
+- **Pre-commit check** — run typecheck/lint before commit creation
+- **Notification** — alert when long tasks complete
+- **Agent Teams quality gate** — `TeammateIdle` and `TaskCompleted` hooks enforce standards on teammate output
+
+**Rule of thumb:** If the behavior must happen every time, use a hook. If it's guidance that allows judgment, use CLAUDE.md.
+
+See `templates/settings.json.template` for a complete starting point.
 
 ### Environment Variables
 
