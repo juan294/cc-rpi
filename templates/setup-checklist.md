@@ -2,6 +2,18 @@
 
 Use this when setting up a new project to follow cc-rpi best practices.
 
+## README Header
+
+- [ ] Structure every project README with the standard header (adapt from `templates/README-header.md`):
+  1. `# Project Name — Tagline`
+  2. GitHub badges (CI, Security Scan, Secret Scanning, stack versions, license)
+  3. One-line project description
+  4. Chapa badge: `![Chapa Badge](https://chapa.thecreativetoken.com/u/juan294/badge.svg)`
+  5. Horizontal divider (`---`)
+  6. Rest of the README content below the divider
+- [ ] Adjust badge URLs to match the project's GitHub owner/repo
+- [ ] Add or remove stack badges as relevant (TypeScript, Node.js, Next.js, Python, etc.)
+
 ## Directory Setup
 
 - [ ] Create `CLAUDE.md` at project root (adapt from `CLAUDE.md.template`)
@@ -18,10 +30,32 @@ Use this when setting up a new project to follow cc-rpi best practices.
   - `docs/research/` — Research documents
   - `docs/plans/` — Implementation plans
   - `docs/decisions/` — Architecture decision records
-- [ ] Configure `.claude/settings.json` for hooks:
-  - Stop hook on file edit → run formatter/linter automatically
-  - Stop hook before commit → run typecheck/lint
+- [ ] Configure `.claude/settings.json` (adapt from `templates/settings.json.template`):
+  - Enable Agent Teams: `"env": { "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1" }`
+  - Configure hooks for file edits and pre-commit (deterministic enforcement)
+  - Pre-approve common tool permissions to reduce prompts (especially for teammates)
   - Hooks are deterministic (guaranteed to run), unlike CLAUDE.md instructions (advisory)
+- [ ] Add `.claude/settings.local.json` to `.gitignore`:
+  - This is the personal/local counterpart to `settings.json` (which is committed and shared)
+  - Use for: individual permission overrides, personal API keys, local tool paths
+  - Claude Code merges both files, with `settings.local.json` taking precedence
+
+### Shared vs Local Configuration
+
+Two file pairs follow the same split pattern:
+
+| Shared (committed) | Local (gitignored) | Purpose |
+|--------------------|--------------------|---------|
+| `CLAUDE.md` | `CLAUDE.local.md` | Project instructions vs personal preferences |
+| `.claude/settings.json` | `.claude/settings.local.json` | Team permissions/hooks vs individual overrides |
+
+**`CLAUDE.md`** — Team-wide rules: RPI workflow, operational rules, git conventions, key commands. Every developer and agent sees the same instructions. Checked into version control.
+
+**`CLAUDE.local.md`** — Personal preferences and local context: your preferred verbosity level, local paths, personal workflow notes, task-specific context you don't want to pollute the shared file with. Gitignored. Optional.
+
+**`settings.json`** — Shared tool permissions, hooks, Agent Teams env var. Committed.
+
+**`settings.local.json`** — Personal permission overrides (e.g., broader `Bash(*)` for your machine), local env vars. Gitignored.
 
 ## CLAUDE.md Configuration
 
@@ -109,6 +143,54 @@ Adjust file paths in each command to match your project's docs directory.
 - [ ] For large features, have Claude interview you before planning (AskUserQuestion)
 - [ ] Follow TDD: write failing tests before implementation code
 - [ ] Monitor CI after every push — never push and forget
+
+## Project-Type Adaptation
+
+The defaults above assume a web application. Adapt these sections based on your project type:
+
+### Web Application (default)
+
+The standard setup applies as-is. Typical stack badges: framework (Next.js, Remix), runtime (Node.js), language (TypeScript), license.
+
+### Library / npm Package
+
+- **Git workflow:** May use `main` only (no `develop`) if releases are tagged from `main`
+- **CI additions:** Add `npm pack` or `pnpm pack` verification, publish dry-run
+- **Testing:** Prioritize unit tests and type-level tests. Add consumer integration tests (test the package from a downstream project's perspective)
+- **CLAUDE.md:** Document the public API surface. Add "do not change exports without a major version bump" rule
+- **Pre-commit:** Add `publint` or `arethetypeswrong` checks if publishing types
+- **Badges:** Add npm version badge, bundle size badge
+
+### CLI Tool
+
+- **CI additions:** Test the CLI binary end-to-end (invoke the compiled CLI with test args, assert output)
+- **Testing:** Focus on integration tests (stdin/stdout/stderr/exit codes) over unit tests
+- **CLAUDE.md:** Document all commands and flags. Add "ESM CLI files use shebang — never run with `node`, use `chmod +x && ./cli` or `npx .`"
+- **Pre-commit:** Add smoke test (run `./cli --help` and assert exit 0)
+
+### Monorepo
+
+- **Git workflow:** Same `develop`/`main` pattern, but CI runs per-package with change detection
+- **CI additions:** Use `turbo`/`nx` affected detection. Only run checks for changed packages
+- **CLAUDE.md:** Document the workspace structure, how packages depend on each other, which package owns which feature
+- **Pre-commit:** Run typecheck across ALL workspace packages (not just changed ones — cross-package type errors are common)
+- **Worktrees:** Extra caution — worktrees with monorepos can have `node_modules` issues. Document `pnpm install` in worktree setup
+- **Agent Teams:** Monorepos are ideal for teams — each teammate owns a different package
+
+### Python Project
+
+- **Pre-commit hooks:** Use the `pre-commit` framework (not Husky). Configure with `.pre-commit-config.yaml`
+- **Key commands:** Replace `pnpm run *` with equivalents: `pytest`, `mypy .`, `ruff check .`, `ruff format --check .`
+- **CI additions:** Add `pip audit` for dependency security, `mypy` for type checking
+- **CLAUDE.md:** Document virtual environment setup. Add `{ encoding: 'utf-8' }` note for subprocess calls
+- **Permissions:** Update settings.json to allow `Bash(python *)", "Bash(pytest *)", "Bash(pip *)`
+
+### Static Site / Documentation
+
+- **Git workflow:** May deploy directly from `main` (no `develop` needed for simple sites)
+- **CI:** Build verification + link checking + image optimization check
+- **Testing:** Minimal — focus on build success and broken link detection
+- **CLAUDE.md:** Keep lean. Document build command, content directory structure, frontmatter conventions
 
 ## Thoughts Directory Structure
 

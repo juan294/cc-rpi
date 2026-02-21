@@ -6,6 +6,10 @@
 
 A blueprint repository for setting up and running projects with [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Contains the RPI (Research-Plan-Implement) methodology, a catalog of known agent errors, and operational rules learned from hundreds of real sessions.
 
+![Chapa Badge](https://chapa.thecreativetoken.com/u/juan294/badge.svg)
+
+---
+
 ## Requirements
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI installed and configured
@@ -50,11 +54,17 @@ A catalog of recurring Claude Code agent errors documented from real sessions. E
 - Node.js/TypeScript (ESM shebangs, Buffer vs string)
 - CI & workflow (push-and-forget, skipping TDD, suggesting manual steps)
 
+### Examples (`examples/`)
+
+Sample documents illustrating the methodology in practice — a research document, implementation plan with phase files, error/success log entries, and additional pseudocode notation examples. Use these as reference when producing your own RPI artifacts.
+
 ### Templates (`templates/`)
 
 Ready-to-use starting points for new projects:
 
 - **CLAUDE.md template** — Comprehensive project configuration with all operational rules baked in
+- **README header template** — Standard project README structure with badges, Chapa embed, and divider
+- **settings.json template** — `.claude/settings.json` with Agent Teams, hooks, and permissions
 - **Setup checklist** — Step-by-step guide including pre-commit hooks, CI setup, push accountability, and scheduled agents
 - **Slash commands** — `/research`, `/plan`, `/implement`, `/validate`, `/describe-pr`, `/pre-launch`
 

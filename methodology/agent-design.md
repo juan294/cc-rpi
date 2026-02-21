@@ -18,6 +18,32 @@ This means:
 
 **Why:** Research agents that mix observation with opinion produce noisy, biased output. Keeping them purely descriptive ensures the human gets clean, factual data to make their own decisions.
 
+### Good vs Bad Examples
+
+**Authentication research — GOOD (describes what IS):**
+> The login endpoint at `src/auth/login.ts:8` accepts email and password in the request body. Passwords are hashed with bcrypt at cost factor 12 (`src/auth/password.ts:6`). There is no rate limiting middleware on this route — requests go directly from the router to the handler. The test suite covers 12 cases for login (`tests/auth/login.test.ts`) and 0 cases for logout.
+
+**Same topic — BAD (suggests what SHOULD BE):**
+> The login endpoint lacks rate limiting, which is a security vulnerability that should be addressed. The bcrypt cost factor of 12 is adequate but could be increased to 14 for better security. The test coverage is poor — the logout flow has no tests and needs them urgently.
+
+**Why the bad version is harmful:**
+- "Security vulnerability" is a judgment, not an observation. The human may already know and have reasons.
+- "Could be increased to 14" is a recommendation the human didn't ask for.
+- "Poor" and "urgently" are opinions that bias the human before they've formed their own assessment.
+- The good version gives the same facts — the human can draw the same conclusions themselves.
+
+**Database patterns — GOOD:**
+> Queries use the repository pattern. `UserRepository` at `src/repos/user.ts:12` wraps Prisma calls. All read queries go through `findUnique` or `findMany` (lines 15-48). Write queries use `prisma.$transaction` (lines 52-78). There are 3 raw SQL queries in `src/repos/analytics.ts:20-45` that bypass the repository pattern.
+
+**Same topic — BAD:**
+> The repository pattern is used inconsistently — most queries go through the proper abstraction but there are 3 raw SQL queries in analytics that break the pattern and should be refactored to use the repository. The transaction handling is good but could benefit from a shared helper.
+
+**API research — GOOD:**
+> The `/api/orders` endpoint returns all orders for the authenticated user with no pagination. The response includes the full order object with nested line items. Average response size for a user with 50 orders is approximately 45KB based on the schema at `src/types/order.ts:8-32`.
+
+**Same topic — BAD:**
+> The orders endpoint has a performance problem — it returns all orders without pagination, which will cause issues at scale. The response is bloated because it includes nested line items that could be loaded lazily. This should be refactored to add pagination and sparse fieldsets.
+
 ## Tool Restrictions by Role
 
 | Role | Can Read/Search | Can Write/Edit | Can Run Shell | Can Access Web |
@@ -46,6 +72,31 @@ This means:
 ---
 
 ## Subagent Catalog
+
+### Quick Reference
+
+All subagent roles mapped to Claude Code's `Task` tool parameters:
+
+| Role | `subagent_type` | Phase | Can Write | Purpose |
+|------|-----------------|-------|-----------|---------|
+| Codebase Locator | `Explore` | Research | No | Find WHERE files live |
+| Codebase Analyzer | `Explore` | Research | No | Understand HOW code works |
+| Pattern Finder | `Explore` | Research | No | Find EXAMPLES of similar patterns |
+| Docs Locator | `Explore` | Research | No | Find relevant historical docs |
+| Docs Analyzer | `Explore` or `general-purpose` | Research | No | Extract INSIGHTS from docs |
+| Web Researcher | `general-purpose` | Research | No | Find external documentation |
+| Implementer | `general-purpose` | Implement | Yes | Write code per plan |
+| Reviewer | `general-purpose` | Implement | Yes (tests/plan only) | Review implementation quality |
+| Specialist (audit) | `general-purpose` | Pre-launch | No | Domain-specific audit (security, performance, etc.) |
+| Teammate | Agent Teams (native) | Any | Yes | Independent parallel worker with own context |
+
+**Key distinctions:**
+- `Explore` agents are fast, read-only, and optimized for codebase navigation. Use for all research tasks.
+- `general-purpose` agents have full tool access including web search. Use when the task needs writing, shell commands, or web access.
+- `Bash` agents are command-execution specialists. Use for CI monitoring, build scripts, and shell-heavy tasks.
+- **Teammates** (via Agent Teams) are full independent Claude Code sessions, not subagents. They don't inherit conversation history and communicate via mailbox.
+
+### Detailed Role Definitions
 
 ### Codebase Locator
 
@@ -256,6 +307,69 @@ See [templates/commands/pre-launch.md](../templates/commands/pre-launch.md) for 
 
 ---
 
+## Claude Code Agent Teams (Native Feature)
+
+Claude Code has a native Agent Teams feature that implements the patterns above as a first-class capability. It is experimental and disabled by default — all cc-rpi projects enable it via `.claude/settings.json`:
+
+```json
+{
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  }
+}
+```
+
+### Architecture
+
+| Component | Role |
+|-----------|------|
+| **Team lead** | The main Claude Code session. Creates the team, spawns teammates, coordinates work. |
+| **Teammates** | Independent Claude Code instances, each with their own context window. |
+| **Task list** | Shared work items that teammates claim and complete. Supports dependencies. |
+| **Mailbox** | Direct messaging between any agents (not just back to the lead). |
+
+### Teams vs Subagents
+
+| Aspect | Subagents (Task tool) | Agent Teams |
+|--------|----------------------|-------------|
+| **Context** | Own window; results return to caller | Own window; fully independent |
+| **Communication** | Report back to parent only | Message each other directly |
+| **Coordination** | Parent manages all work | Shared task list with self-coordination |
+| **Best for** | Focused tasks where only the result matters | Complex work requiring discussion and collaboration |
+| **Token cost** | Lower (results summarized back) | Higher (each teammate is a separate instance) |
+
+**Rule of thumb:** Use subagents for research and review. Use teams for implementation work that spans multiple files or domains.
+
+### Best Practices
+
+1. **Include full context in spawn prompts** — teammates don't inherit the lead's conversation history. They do read `CLAUDE.md`, skills, and MCP servers from the project.
+2. **Break work by file ownership** — each teammate should own a distinct set of files to avoid merge conflicts.
+3. **Size tasks appropriately** — aim for 5-6 tasks per teammate. Too small = coordination overhead exceeds benefit. Too large = risk of wasted effort.
+4. **Pre-approve common operations** in `.claude/settings.json` permissions to reduce prompt interruptions for teammates.
+5. **Start with research/review before implementation** — parallel review first, then parallel implementation.
+6. **Monitor and steer** — check in on teammate progress, redirect approaches that aren't working.
+
+### Display Modes
+
+- **`in-process`** (default) — all teammates run in main terminal. Cycle with Shift+Down, toggle task list with Ctrl+T.
+- **`tmux`** — split-pane mode, one pane per teammate. Requires tmux or iTerm2.
+
+Configure via `settings.json`: `"teammateMode": "in-process"` or CLI: `claude --teammate-mode tmux`.
+
+### Hooks for Quality Gates
+
+- **`TeammateIdle`** — runs when a teammate finishes. Exit code 2 sends feedback and keeps the teammate working.
+- **`TaskCompleted`** — runs when a task is marked complete. Exit code 2 blocks completion and sends feedback.
+
+### Limitations
+
+- No session resumption with in-process teammates (`/resume` won't restore them)
+- One team per session; no nested teams (teammates can't spawn their own teams)
+- Teammates sometimes fail to mark tasks complete — check manually if dependent tasks are blocked
+- Significantly higher token usage — scales with number of active teammates
+
+---
+
 ## Agent Autonomy Principles
 
 Agents should maximize what they accomplish autonomously before requesting human intervention.
@@ -274,14 +388,51 @@ Only ask for manual intervention when genuinely required: OAuth consent flows, b
 
 ### Autonomy Boundaries
 
-Autonomy applies to **development work**. Production-affecting actions always require explicit human authorization:
+#### The Function Stakes Framework
 
-- Pushing to production branches
-- Creating or merging PRs targeting production
-- Deploying to production environments
-- Modifying external service configuration
+Classify every action by its risk level to determine autonomy:
 
-The boundary is clear: agents are autonomous on development, human-gated on production. See [push-accountability.md](push-accountability.md) for the post-push verification protocol.
+| Stakes | Examples | Autonomy |
+|--------|----------|----------|
+| **Read-only** | Searching code, reading files, running tests, `git status`, `git log` | Fully autonomous |
+| **Low** | Writing code per approved plan, creating branches, committing to feature branches | Fully autonomous |
+| **Medium** | Pushing to `develop`, creating PRs, running `npm install` | Autonomous with post-action verification |
+| **High** | Merging PRs, pushing to `main`/production, deploying, modifying external services | Human-gated — always ask first |
+| **Critical** | Deleting branches, force-pushing, dropping databases, modifying CI/CD pipelines | Human-gated — explain consequences before asking |
+
+#### Precise Boundaries
+
+| Action | Autonomous? | Why |
+|--------|------------|-----|
+| Searching/reading code | Yes | Read-only, zero risk |
+| Running tests and linters | Yes | Read-only verification |
+| Writing code per approved plan | Yes | Plan was already human-approved |
+| Creating git branches | Yes | Reversible, local scope |
+| Committing to feature branches | Yes | Reversible, local scope |
+| Pushing to `develop` | Yes, with CI monitor | Medium risk; background agent verifies |
+| Creating PRs | Yes | PR creation is proposing, not acting |
+| Adding PR descriptions | Yes | Informational, not destructive |
+| Merging PRs to `develop` | Ask first | Affects shared branch |
+| Merging PRs to `main`/production | Always ask | Affects production |
+| Deploying to any environment | Always ask | External side effects |
+| Modifying CI/CD workflows | Always ask | Affects all contributors |
+| Deleting branches or worktrees | Ask if remote | Local cleanup is fine; remote deletion is permanent |
+
+#### The Quality Cascade Principle
+
+Human review belongs at the highest-leverage points. A bad line of research can lead to a bad plan, which leads to hundreds of bad lines of code. Therefore:
+
+1. **Research output** — Human reviews critically. Throw out and redo if wrong.
+2. **Implementation plan** — Human reviews and approves before any code is written.
+3. **Generated code** — Automated verification (tests, types, lint) is primary. Human spot-checks.
+
+Invest review time at the top of the cascade, not the bottom. Once a plan is approved and tests pass, the code is trusted.
+
+#### Time-Bounded Autonomy
+
+For scheduled or background agents, use time limits as a safety boundary. An agent running for 15 minutes autonomously is reasonable; an agent running for 6 hours without check-in risks "overbaking" — producing increasingly bizarre emergent behaviors as it goes further off-track.
+
+See [push-accountability.md](push-accountability.md) for the post-push verification protocol and [scheduled-agents.md](scheduled-agents.md) for recurring agent patterns.
 
 ### Self-Correction Over Escalation
 

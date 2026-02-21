@@ -46,6 +46,87 @@ User
 
 ---
 
+## Phase Handoffs
+
+Each RPI phase runs in its own conversation with a fresh context window. Context does NOT carry over automatically — the handoff artifact is what transfers knowledge between phases.
+
+### What Carries Over vs What Starts Fresh
+
+| Carries Over (via artifacts) | Starts Fresh |
+|------------------------------|-------------|
+| Research documents, plan files, phase files | The Claude Code conversation/session |
+| Task status, action items, next steps | Tool output, intermediate search results |
+| Key learnings and discoveries | File content (agent re-reads as needed) |
+| Git state (branch, commit hash) | Permission approvals (re-granted per session) |
+| File references with `file:line` | Exploration paths and dead ends |
+
+### How Each Phase Receives Context
+
+| Transition | What the receiving phase reads |
+|------------|-------------------------------|
+| Research → Plan | The research document. The planner reads it fully, then spawns targeted subagents for deeper investigation. The planner does NOT re-do the research — it trusts the document but verifies claims through code when something seems off. |
+| Plan → Implement | The plan file + phase files. The implementer reads the current phase file and follows it step by step. It does NOT need to read the research document — the plan already distilled research into actionable steps. |
+| Implement → Validate | The plan file (for success criteria) + git diff + test results. The validator checks the plan's criteria against the actual codebase state. |
+| Any phase → Resume later | A handoff document (see template below). When you pause work mid-phase and resume in a new session, the handoff carries the critical context. |
+
+### The Handoff Document
+
+When pausing work and resuming later (whether between phases or within a long phase), create a handoff document. Its purpose is to compact and summarize context so a fresh session can continue without loss.
+
+**Storage:** `docs/handoffs/YYYY-MM-DD-description.md`
+
+**Template:**
+
+```markdown
+---
+date: [ISO datetime]
+branch: [current branch]
+git_commit: [current HEAD hash]
+status: [in-progress | paused | blocked]
+---
+
+# Handoff: [Description]
+
+## Tasks
+- [x] Task 1 — completed
+- [ ] Task 2 — in progress (describe current state)
+- [ ] Task 3 — planned
+
+## Critical References
+- `src/auth/login.ts:8` — main entry point
+- `docs/plans/2025-12-16-rate-limiting.md` — implementation plan
+
+## Recent Changes
+- `src/auth/rate-limiter.ts` — new file, rate limiter core
+- `tests/auth/rate-limiter.test.ts:15-48` — 6 unit tests added
+
+## Learnings
+- The Redis INCR+EXPIRE pattern must be atomic (use MULTI/EXEC)
+- Existing session storage at `src/auth/session.ts` uses the same Redis instance
+
+## Next Steps
+1. Implement the middleware wrapper (Phase 2 of the plan)
+2. Wire the middleware into `src/routes/auth.ts:12`
+
+## Blockers
+(None currently — or describe what's blocking progress)
+```
+
+### Resume Scenarios
+
+When resuming from a handoff, the agent should classify the situation before acting:
+
+| Scenario | What to do |
+|----------|-----------|
+| **Clean continuation** — all changes present, no conflicts | Pick up from the next step in the handoff |
+| **Diverged codebase** — other changes merged since handoff | Verify handoff changes still apply, reconcile if needed |
+| **Incomplete work** — tasks marked in-progress | Complete the in-progress work before moving to next steps |
+| **Stale handoff** — significant time passed | Re-verify critical assumptions through targeted research before continuing |
+
+**Rule:** Never assume handoff state matches current state. Always verify before continuing.
+
+---
+
 ## Phase 1: Research
 
 **Purpose:** Build a complete, accurate map of the codebase as it exists today.
@@ -101,6 +182,21 @@ last_updated_by: [name]
 ## Open Questions
 ```
 
+### Phase Completion Criteria
+
+Research is **done** when:
+- [ ] Every component mentioned in the original question has been located and described
+- [ ] All code references include `file:line` — no vague claims ("somewhere in the auth module")
+- [ ] Data flow is traced end-to-end for the relevant paths (entry point → processing → output)
+- [ ] Test coverage is documented (what tests exist, what's missing)
+- [ ] Open questions are explicitly listed — not buried in findings text
+- [ ] The document is self-contained: a reader who didn't attend the session can understand it
+
+Research is **NOT done** if:
+- Findings contain opinions, suggestions, or quality judgments
+- Any section says "likely" or "probably" without a supporting code reference
+- The open questions list is empty (there are always open questions)
+
 ---
 
 ## Phase 2: Plan
@@ -144,6 +240,23 @@ last_updated_by: [name]
 - Be interactive: don't write the whole plan in one shot. Get buy-in at each step.
 - Be thorough: include file:line references, measurable success criteria.
 - Explicitly list what you are NOT doing (prevent scope creep).
+
+### Phase Completion Criteria
+
+A plan is **done** when:
+- [ ] Every phase has specific files to create/modify (no "update relevant files")
+- [ ] Every phase has automated success criteria with exact commands to run
+- [ ] Pseudocode notation is used for non-trivial logic changes
+- [ ] The scope exclusion list is explicit ("NOT doing: ...")
+- [ ] Zero `[NEEDS CLARIFICATION]` markers remain
+- [ ] The user has reviewed and approved the plan
+- [ ] Phase files exist for every phase (separate files, not inline)
+
+A plan is **NOT done** if:
+- Any success criterion is subjective ("code should be clean")
+- A phase modifies more than 5-7 files (split it)
+- Dependencies between phases are not documented
+- Manual testing is listed without explaining why automation is impossible
 
 ---
 
@@ -190,6 +303,21 @@ Implement (atomic change)
 
 **Reviewer powers:** The reviewer subagent can add tests to the verification checks, strengthening quality.
 
+### Phase Completion Criteria
+
+An implementation phase is **done** when:
+- [ ] All files listed in the phase plan are created/modified
+- [ ] Every automated success criterion passes (typecheck, lint, tests)
+- [ ] The reviewer subagent approves (no open fix requests)
+- [ ] Checkboxes in the plan file are updated
+- [ ] No unrelated changes are included (atomic scope)
+- [ ] Human has confirmed and approved before next phase
+
+An implementation phase is **NOT done** if:
+- Any automated check fails (even if the failure "looks unrelated")
+- The reviewer subagent identified issues that weren't addressed
+- The phase modified files not listed in the plan (scope creep)
+
 ---
 
 ## Phase 4: Validate
@@ -229,4 +357,141 @@ Implement (atomic change)
 (Only if automation is impossible; explain WHY for each item)
 
 ### Recommendations
+```
+
+### Phase Completion Criteria
+
+Validation is **done** when:
+- [ ] Every plan phase has been checked against the actual code
+- [ ] All automated verification commands have been run and results recorded
+- [ ] Deviations from the plan are documented with explanations
+- [ ] The validation report is complete with a clear verdict
+- [ ] Manual testing items (if any) are listed with justification for why automation is impossible
+
+Validation is **NOT done** if:
+- Any automated check was skipped
+- Deviations were found but not explained
+- The report omits phases or success criteria from the original plan
+
+---
+
+## Failure Recovery
+
+When things go wrong during any phase, follow these decision trees instead of guessing.
+
+### Research Comes Back Wrong or Incomplete
+
+```
+Research quality issue detected
+├── Findings contain opinions/suggestions?
+│   └── Strip them. Re-run the offending subagent with stricter documentarian prompt.
+├── Missing file:line references?
+│   └── Re-run the subagent. "Every claim needs file:line. No exceptions."
+├── Key areas not covered?
+│   └── Spawn targeted subagents for the missing areas. Don't redo everything.
+├── Fundamentally wrong understanding?
+│   └── Throw it out entirely. Start a fresh /research with more specific steering.
+└── Open questions block planning?
+    └── Present them to the user. Get answers before proceeding to /plan.
+```
+
+### Plan Doesn't Match Reality During Implementation
+
+```
+Mismatch discovered mid-implementation
+├── Minor: file moved/renamed since plan was written?
+│   └── Fix the reference. Note the correction in the plan file. Continue.
+├── Moderate: API/interface differs from what plan assumed?
+│   └── STOP. Report: Expected [X], Found [Y], Why it matters.
+│       ├── User says "adapt the plan" → update plan file, continue
+│       └── User says "go back to research" → /clear, new /research session
+├── Major: the approach won't work (wrong architecture, missing dependency)?
+│   └── STOP. Do NOT attempt a workaround.
+│       Report what you found and why the plan can't proceed.
+│       User decides: revise plan, new research, or abandon.
+└── Tests reveal the plan's assumptions were wrong?
+    └── STOP. Present the failing test with explanation.
+        The plan needs revision before more code is written.
+```
+
+### CI Fails After Push (Background Agent)
+
+```
+CI failure detected
+├── Attempt 1: Read the failure log
+│   ├── Lint/format error → fix and re-push
+│   ├── Type error → fix and re-push
+│   ├── Test failure (test is correct) → fix the code and re-push
+│   └── Test failure (test is wrong) → fix the test and re-push
+├── Attempt 2: Different failure after fix?
+│   └── Read the new failure. Fix and re-push.
+├── Attempt 3: Still failing?
+│   └── STOP. Report to the user:
+│       - What failed (exact error)
+│       - What you tried (all 3 attempts)
+│       - Why you think it's stuck
+│       Do NOT retry a 4th time. Do NOT force-push.
+└── Failure is in unrelated code (not your changes)?
+    └── Report to the user. Don't fix code you didn't change
+        unless the user explicitly asks.
+```
+
+### Subagents Disagree or Return Conflicting Results
+
+```
+Conflicting subagent results
+├── Both found different code paths for the same feature?
+│   └── Both may be correct. Synthesize: "Path A handles X, Path B handles Y."
+│       Spawn a follow-up agent to trace which path runs in which scenario.
+├── One says a function exists, another says it doesn't?
+│   └── Trust the one with file:line references. Discard the one without.
+│       If both have references, read the files yourself to resolve.
+├── Different agents recommend conflicting approaches?
+│   └── Research agents shouldn't recommend anything (documentarian rule).
+│       If they did, strip the recommendations. Present the facts to the user.
+└── One agent failed/timed out?
+    └── Use results from successful agents. Re-run the failed one once.
+        If it fails again, proceed without it and note the gap.
+```
+
+### Scheduled Agent Crashes
+
+```
+Scheduled agent failure
+├── Claude CLI crashed (non-zero exit)?
+│   └── Check the log file. Common causes:
+│       - Context too large → reduce the agent's scope
+│       - Rate limited → increase the interval between runs
+│       - Network timeout → add retry logic to the shell script
+├── Agent ran but produced no report?
+│   └── Check if the output directory exists and has write permissions.
+│       Check if the agent prompt is correctly formatted.
+├── Agent ran but report is empty/useless?
+│   └── Review the prompt. The agent likely needs more specific instructions
+│       or the shared context file is missing/stale.
+└── Two agents ran simultaneously and conflicted?
+    └── Stagger their schedules (don't run at the same time).
+        If both write to the same file, use separate output files
+        and a synthesis step.
+```
+
+### Validation Reveals Major Issues
+
+```
+Validation finds problems
+├── Missing functionality (plan says implemented, code doesn't have it)?
+│   └── Go back to /implement for the affected phase.
+│       Do NOT start a new plan — the plan is correct, execution was incomplete.
+├── Wrong behavior (code does something different from the plan)?
+│   └── Determine: is the plan wrong or the code wrong?
+│       ├── Plan was wrong (edge case not considered) → revise plan, then fix code
+│       └── Code diverged from plan → fix code to match plan
+├── Tests pass but behavior is wrong?
+│   └── Tests are incomplete. Write the missing test (Red), then fix (Green).
+├── Performance/security concern not in the plan?
+│   └── Log it as a finding in the validation report.
+│       User decides whether to address now or defer.
+└── All automated checks pass but something feels off?
+    └── Document the concern specifically. "Feels off" is not actionable.
+        Either write a test that captures the concern or move on.
 ```

@@ -133,6 +133,154 @@ launchctl unload ~/Library/LaunchAgents/com.project.agent.my-agent.plist
 | **Performance check** | Weekly | Bundle sizes, build times, regression detection |
 | **Documentation sync** | Weekly | Stale docs, undocumented public APIs, broken links |
 
+## Concrete Agent Prompts
+
+### Test Health Agent
+
+```bash
+PROMPT="You are the test-health scheduled agent.
+
+Run the full test suite 3 times to detect flaky tests:
+1. Run: pnpm run test --reporter json 2>&1
+2. Record which tests pass/fail on each run
+3. Flag any test that fails on at least 1 of 3 runs as FLAKY
+4. Report: total tests, pass rate, flaky tests (with file:line), coverage if available
+
+Write your report to docs/agents/test-health-report.md with sections:
+- Summary (1 line: GREEN/YELLOW/RED + pass rate)
+- Flaky Tests (file:line + failure message for each)
+- Failed Tests (consistently failing)
+- Coverage Changes (if measurable)
+
+Append to shared-context.md:
+- Overall status
+- Any flaky tests that other agents should know about"
+```
+
+### Security Audit Agent
+
+```bash
+PROMPT="You are the security-audit scheduled agent.
+
+Perform these checks:
+1. Run: pnpm audit --json 2>&1 (or npm audit / pip audit)
+2. Search for hardcoded secrets: grep for API keys, tokens, passwords in source files
+3. Check .env.example against actual env var usage — flag undocumented vars
+4. Check for injection vectors: unsanitized user input in SQL, shell commands, HTML
+5. Verify CORS configuration if applicable
+
+Write your report to docs/agents/security-audit-report.md with sections:
+- Summary (1 line: GREEN/YELLOW/RED + critical count)
+- Dependency Vulnerabilities (severity, package, recommendation)
+- Hardcoded Secrets (file:line — DO NOT include the actual secret)
+- Injection Risks (file:line + type)
+- Configuration Issues
+
+Append to shared-context.md:
+- Critical vulnerabilities count
+- Any findings that affect other agents' domains"
+```
+
+### Code Quality Agent
+
+```bash
+PROMPT="You are the code-quality scheduled agent.
+
+Perform these checks:
+1. Run: pnpm run lint --format json 2>&1
+2. Run: pnpm run typecheck 2>&1
+3. Search for TODO/FIXME/HACK comments and count by category
+4. Identify dead code: exported functions with zero import references
+5. Check for files over 500 lines (complexity indicator)
+
+Write your report to docs/agents/code-quality-report.md with sections:
+- Summary (1 line: GREEN/YELLOW/RED + issue count)
+- Lint Issues (count by rule, top 5 most frequent)
+- Type Errors (count + file:line for each)
+- Technical Debt (TODO/FIXME/HACK counts + examples)
+- Large Files (path + line count)
+- Dead Code Candidates (exported but never imported)
+
+Append to shared-context.md:
+- Issue counts by category
+- New issues since last run (if previous report exists)"
+```
+
+### Dependency Health Agent
+
+```bash
+PROMPT="You are the dependency-health scheduled agent.
+
+Perform these checks:
+1. Check for outdated packages: pnpm outdated --format json 2>&1
+2. Identify major version bumps available (breaking changes)
+3. Verify lockfile integrity: pnpm install --frozen-lockfile 2>&1
+4. Check for duplicate packages in the dependency tree
+5. Flag packages with no recent updates (>2 years, possible abandonment)
+
+Write your report to docs/agents/dependency-health-report.md with sections:
+- Summary (1 line: GREEN/YELLOW/RED + outdated count)
+- Critical Updates (security patches, major versions behind)
+- Outdated Packages (name, current, latest, type of update)
+- Lockfile Status (clean or issues found)
+- Abandoned Packages (no updates in 2+ years)
+
+Append to shared-context.md:
+- Packages needing urgent updates
+- Any dependency conflicts that affect other agents"
+```
+
+## Resilience Patterns
+
+### Failure Recovery
+
+Scheduled agents should be resilient to common failure modes:
+
+```bash
+# Retry logic for the Claude CLI call
+MAX_RETRIES=2
+RETRY_COUNT=0
+
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+  if claude -p "$PROMPT" --allowedTools "Read,Glob,Grep" --output-format text > "$REPORT_FILE" 2>&1; then
+    break
+  fi
+  RETRY_COUNT=$((RETRY_COUNT + 1))
+  echo "[$(date)] Attempt $RETRY_COUNT failed. Retrying..."
+  sleep 10
+done
+
+if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+  echo "[$(date)] $AGENT_NAME FAILED after $MAX_RETRIES attempts" >> "$REPORT_FILE"
+fi
+```
+
+### WIP Limits
+
+For agents that produce work items requiring human review (like research or planning agents), enforce a WIP limit to prevent accumulating more unreviewed work than humans can handle:
+
+```bash
+# Check how many items are pending review before starting new work
+PENDING_COUNT=$(ls docs/agents/pending-review/ 2>/dev/null | wc -l)
+WIP_LIMIT=5
+
+if [ "$PENDING_COUNT" -ge "$WIP_LIMIT" ]; then
+  echo "[$(date)] WIP limit reached ($PENDING_COUNT/$WIP_LIMIT). Skipping run."
+  exit 0
+fi
+```
+
+### Stagger Schedules
+
+Don't run multiple agents at the same time. If they write to the same shared context file, they can conflict. Stagger by at least 15 minutes:
+
+| Agent | Schedule |
+|-------|----------|
+| Test health | Daily 6:00 AM |
+| Code quality | Daily 6:15 AM |
+| Security audit | Weekly Monday 6:30 AM |
+| Dependency health | Weekly Monday 6:45 AM |
+
 ## Shared Context System
 
 The shared context file (`docs/agents/shared-context.md`) is a cross-agent intelligence workspace. Every scheduled agent:
