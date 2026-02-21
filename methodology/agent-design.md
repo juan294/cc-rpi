@@ -440,6 +440,6 @@ When an agent encounters an error:
 1. **Diagnose** — read the error, understand the root cause
 2. **Fix** — attempt the fix using available tools
 3. **Verify** — run the relevant checks to confirm the fix works
-4. **Escalate only if stuck** — after 2-3 failed attempts, report the issue clearly and ask for guidance
+4. **Escalate only if stuck** — after 3 failed attempts, report the issue clearly and ask for guidance
 
 Don't ask "should I fix this?" — just fix it. Don't suggest the user run a command you could run yourself.
