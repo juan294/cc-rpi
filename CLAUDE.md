@@ -39,7 +39,7 @@ cc-rpi/
 │   ├── ci-and-guardrails.md          # Pre-commit hooks, CI workflows, enforcement
 │   ├── scheduled-agents.md           # Recurring quality agents, cron/launchd
 │   └── error-success-logging.md      # Systematic improvement framework
-├── examples/                         # Sample documents
+├── examples/                         # Sample documents and workflow walkthroughs
 │   ├── README.md                     # Index of all examples
 │   ├── research-document.md          # Sample research phase output
 │   ├── implementation-plan.md        # Sample plan with phases and pseudocode
@@ -47,7 +47,11 @@ cc-rpi/
 │   │   └── phase-1.md
 │   ├── error-log.md                  # Sample error log entry
 │   ├── success-log.md                # Sample success log entry
-│   └── pseudocode-examples.md        # Additional pseudocode notation examples
+│   ├── pseudocode-examples.md        # Additional pseudocode notation examples
+│   └── workflows/                    # End-to-end developer interaction walkthroughs
+│       ├── bootstrap-new-project.md  # New project setup + first feature
+│       ├── add-new-feature.md        # Adding rate limiting with full RPI cycle
+│       └── refactor-existing-code.md # Auth service extraction with phased refactor
 ├── patterns/                         # Operational knowledge
 │   ├── quick-reference.md            # Rules to internalize before any work
 │   └── agent-errors.md               # Detailed error catalog with solutions
