@@ -40,6 +40,8 @@ These rules must be internalized before starting any work. They prevent the most
 
 14. **Exhaust all tools before suggesting manual steps** — before telling the user "go to the dashboard and...", check if you can use CLI tools, shell commands, MCP servers, or file tools to do it yourself. Only escalate when genuinely impossible.
 
+15. **Always `git branch -D` (uppercase) for worktree branches** — worktree branches are almost never "fully merged" in git's view (squash merges, deleted remotes, abandoned work). Lowercase `-d` fails with "not fully merged." Full cleanup idiom: `git worktree remove --force <path>; git branch -D <branch>`
+
 ---
 
 For detailed symptoms, root causes, and examples, see [agent-errors.md](agent-errors.md).
