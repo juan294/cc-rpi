@@ -57,6 +57,8 @@ cc-rpi/
     ├── settings.json.template        # .claude/settings.json (Agent Teams, hooks, permissions)
     ├── setup-checklist.md            # Step-by-step new project setup
     └── commands/                     # Slash command templates
+        ├── bootstrap.md              # /bootstrap — new project setup (user-level)
+        ├── adopt.md                  # /adopt — existing project migration (user-level)
         ├── research.md               # /research — codebase research
         ├── plan.md                   # /plan — implementation planning
         ├── implement.md              # /implement — phased execution
