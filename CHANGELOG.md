@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## Unreleased
 
+## [1.1.0] - 2026-02-23
+
 ### Added
 
 - **Errors #16–#21** — six new agent error patterns added to `agent-errors.md` and `quick-reference.md`:
