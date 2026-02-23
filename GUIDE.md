@@ -55,16 +55,18 @@ Then install the two user-level commands that make everything work. These go in 
 mkdir -p ~/.claude/commands
 cp cc-rpi/templates/commands/bootstrap.md ~/.claude/commands/bootstrap.md
 cp cc-rpi/templates/commands/adopt.md ~/.claude/commands/adopt.md
+cp cc-rpi/templates/commands/update.md ~/.claude/commands/update.md
 ```
 
-Edit both files to set the correct path to where you cloned cc-rpi on your machine.
+Edit all three files to set the correct path to where you cloned cc-rpi on your machine.
 
-Now you have two commands available everywhere:
+Now you have three commands available everywhere:
 
 | Command | Use Case |
 |---------|----------|
 | `/bootstrap` | **New project.** Empty or freshly created repo. Sets everything up from scratch. |
 | `/adopt` | **Existing project.** Already has code, maybe some practices in place. Audits what exists and migrates incrementally. |
+| `/update` | **Keep in sync.** Pulls latest cc-rpi changes and updates your project's commands, rules, and settings. Run manually or schedule nightly. |
 
 ### Step 2: Set Up Your Project
 
@@ -107,6 +109,7 @@ That's it. Those four commands are 90% of your interaction with the methodology.
 |---------|-------------|-------------|
 | `/bootstrap` | Reads the cc-rpi blueprint, asks about your project, creates CLAUDE.md, settings, slash commands, and full directory structure. | New projects. Run once at the start. |
 | `/adopt` | Reads the blueprint, audits the existing project with parallel agents, presents a gap report, then migrates what you approve. | Existing projects you want to bring up to standard. |
+| `/update` | Pulls latest cc-rpi, diffs changes since last sync, updates commands and blueprint-managed CLAUDE.md sections, adds new settings. | Manually or via nightly scheduled agent. |
 
 ### The Core Four
 
@@ -285,14 +288,25 @@ your-project/
 
 ## Advanced Setup
 
-### User-Level Commands: `/bootstrap` and `/adopt`
+### User-Level Commands: `/bootstrap`, `/adopt`, and `/update`
 
-These two commands live in `~/.claude/commands/` so they're available in every project. Install them as described in "Getting Started" above. Both commands reference the cc-rpi repository path — update that path in each file to match where you cloned the repo on your machine.
+These three commands live in `~/.claude/commands/` so they're available in every project. Install them as described in "Getting Started" above. All three reference the cc-rpi repository path — update that path in each file to match where you cloned the repo on your machine.
 
 - **`/bootstrap`** reads the blueprint and creates everything from scratch. It asks you about your project type and stack before generating anything.
 - **`/adopt`** reads the blueprint, then runs a full audit of the existing project (configuration, infrastructure, workflow) before proposing any changes. It presents a prioritized report and only migrates what you approve.
+- **`/update`** pulls the latest cc-rpi, diffs changes since the last sync, and updates the project's commands, blueprint-managed CLAUDE.md sections, and settings. It tracks sync state in `.claude/cc-rpi-sync.json` so nightly runs are incremental and efficient. Works both interactively and headlessly.
 
 You can also run `/adopt` on a project that was previously bootstrapped — it works as a health check to verify everything is still aligned with the latest blueprint practices.
+
+### Nightly Blueprint Sync
+
+The `/update` command is designed to run as a scheduled agent. Set it up once per project:
+
+1. Copy `templates/scripts/cc-rpi-update-agent.sh` to your project's `scripts/agents/`
+2. Set the `CC_RPI_PATH` variable to your cc-rpi clone location
+3. Schedule it with launchd (macOS) or cron (Linux) — the script has templates in its comments
+
+The shell script reads update instructions from cc-rpi at runtime, so when you improve the `/update` command in cc-rpi, all projects automatically get the new logic on their next scheduled run.
 
 ### Scheduled Agents
 

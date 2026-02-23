@@ -118,9 +118,34 @@ Adjust file paths in each command to match your project's docs directory.
   - Main terminal stays unblocked
 - [ ] Test the workflow: push a deliberate failure, verify the background agent catches it
 
+## Blueprint Sync (Recommended)
+
+Set up nightly syncing with the cc-rpi blueprint so this project automatically stays current with new rules, error patterns, and command improvements.
+
+- [ ] Install the `/update` command as a user-level command (`~/.claude/commands/update.md`)
+- [ ] Run `/update` once manually to verify it works and create the initial `.claude/cc-rpi-sync.json`
+- [ ] Copy the scheduled agent script from `cc-rpi/templates/scripts/cc-rpi-update-agent.sh` to `scripts/agents/cc-rpi-update.sh`
+- [ ] Set `CC_RPI_PATH` in the script to your cc-rpi clone location
+- [ ] Make it executable: `chmod +x scripts/agents/cc-rpi-update.sh`
+- [ ] Create required directories: `mkdir -p docs/agents logs`
+- [ ] Schedule with launchd (macOS) or cron (Linux) — see script comments for templates
+- [ ] Verify the agent runs: `./scripts/agents/cc-rpi-update.sh` and check `docs/agents/cc-rpi-update-report.md`
+
+### How It Works
+
+The sync uses `.claude/cc-rpi-sync.json` to track the last synced commit. On each run, it:
+1. Pulls the latest cc-rpi
+2. Uses `git diff` to identify what changed since last sync (efficient — no full re-read)
+3. Updates slash commands (direct replacement from templates)
+4. Updates blueprint-managed CLAUDE.md sections (smart merge — preserves project-specific content)
+5. Adds new settings.json permissions (additive — never removes project-specific entries)
+6. Commits changes with `chore: sync with cc-rpi blueprint <version>`
+
+The shell script reads update instructions from cc-rpi at runtime, so when cc-rpi improves the `/update` command, all projects automatically get the new logic.
+
 ## Scheduled Agents (Optional)
 
-- [ ] Create `scripts/agents/` directory for agent shell scripts
+- [ ] Create `scripts/agents/` directory for agent shell scripts (already done if blueprint sync is set up)
 - [ ] Create `docs/agents/` directory for agent reports and shared context
 - [ ] Create `logs/` directory for agent output capture
 - [ ] Write at least one agent script (e.g., test-health, security-audit)

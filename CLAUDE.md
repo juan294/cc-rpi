@@ -60,15 +60,18 @@ cc-rpi/
     ├── README-header.md              # Standard README header (badges, Chapa, divider)
     ├── settings.json.template        # .claude/settings.json (Agent Teams, hooks, permissions)
     ├── setup-checklist.md            # Step-by-step new project setup
-    └── commands/                     # Slash command templates
-        ├── bootstrap.md              # /bootstrap — new project setup (user-level)
-        ├── adopt.md                  # /adopt — existing project migration (user-level)
-        ├── research.md               # /research — codebase research
-        ├── plan.md                   # /plan — implementation planning
-        ├── implement.md              # /implement — phased execution
-        ├── validate.md               # /validate — verification
-        ├── describe-pr.md            # /describe-pr — PR description
-        └── pre-launch.md             # /pre-launch — multi-agent production audit
+    ├── commands/                     # Slash command templates
+    │   ├── bootstrap.md              # /bootstrap — new project setup (user-level)
+    │   ├── adopt.md                  # /adopt — existing project migration (user-level)
+    │   ├── update.md                 # /update — nightly blueprint sync (user-level)
+    │   ├── research.md               # /research — codebase research
+    │   ├── plan.md                   # /plan — implementation planning
+    │   ├── implement.md              # /implement — phased execution
+    │   ├── validate.md               # /validate — verification
+    │   ├── describe-pr.md            # /describe-pr — PR description
+    │   └── pre-launch.md             # /pre-launch — multi-agent production audit
+    └── scripts/                      # Scheduled agent shell script templates
+        └── cc-rpi-update-agent.sh    # Nightly blueprint sync agent
 ```
 
 ## Contributing to This Repo
