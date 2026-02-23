@@ -1,0 +1,80 @@
+name: Validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # --- Internal markdown link validation ---
+      - name: Check internal markdown links
+        run: |
+          errfile=$(mktemp)
+          echo 0 > "$errfile"
+          repo_root=$(realpath .)
+
+          while IFS= read -r file; do
+            dir=$(dirname "$file")
+            # Extract markdown links: [text](path) — skip images (![...])
+            grep -oP '(?<!\!)\[[^\]]*\]\(\K[^)]+' "$file" 2>/dev/null | while IFS= read -r link; do
+              # Strip anchor fragments
+              target="${link%%#*}"
+              # Skip external URLs, empty targets (pure anchors), and mailto
+              if [[ "$target" =~ ^https?:// ]] || [[ -z "$target" ]] || [[ "$target" =~ ^mailto: ]]; then
+                continue
+              fi
+              # Resolve relative to the file's directory
+              resolved=$(realpath -m "$dir/$target")
+              # Skip GitHub-relative links that resolve outside the repo
+              if [[ "$resolved" != "$repo_root"* ]]; then
+                continue
+              fi
+              if [[ ! -e "$resolved" ]]; then
+                echo "::error file=${file#./}::Broken link: $link -> $resolved"
+                echo 1 > "$errfile"
+              fi
+            done
+          done < <(find . -name '*.md' -not -path './.git/*')
+
+          if [[ "$(cat "$errfile")" == "1" ]]; then
+            echo "::error::Broken internal links found"
+            rm "$errfile"
+            exit 1
+          fi
+          rm "$errfile"
+          echo "All internal markdown links valid"
+
+      # --- ShellCheck on script templates ---
+      - name: Lint shell scripts
+        run: shellcheck --severity=warning templates/scripts/cc-rpi-update-agent.sh
+
+      # --- JSON syntax validation ---
+      - name: Validate JSON files
+        run: |
+          ok=true
+          for f in templates/settings.json.template; do
+            if ! python3 -c "import json, sys; json.load(open(sys.argv[1]))" "$f"; then
+              echo "::error file=$f::Invalid JSON"
+              ok=false
+            fi
+          done
+          $ok && echo "All JSON files valid"
+
+      # --- YAML syntax validation ---
+      - name: Validate YAML files
+        run: |
+          pip install --quiet pyyaml
+          ok=true
+          for f in .github/ISSUE_TEMPLATE/config.yml; do
+            if ! python3 -c "import yaml, sys; yaml.safe_load(open(sys.argv[1]))" "$f"; then
+              echo "::error file=$f::Invalid YAML"
+              ok=false
+            fi
+          done
+          $ok && echo "All YAML files valid"
