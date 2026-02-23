@@ -2,7 +2,7 @@
 
 ## What This Is
 
-This is the blueprint repository for Claude Code projects. It contains:
+This is a blueprint repository for Claude Code projects. It contains:
 - The RPI (Research-Plan-Implement) methodology adapted for Claude Code
 - A catalog of known agent errors with proven solutions
 - Operational rules that prevent recurring mistakes
