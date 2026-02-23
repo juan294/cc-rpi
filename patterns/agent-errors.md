@@ -444,3 +444,180 @@ git worktree remove --force /path/to/worktree && git branch -d worktree-branch  
 ```
 
 **Key detail:** This combines with Error #11 — use `--force` on `git worktree remove`, `-D` (uppercase) on `git branch`, and `;` (not `&&`) to chain them. The complete worktree cleanup idiom is: `git worktree remove --force <path>; git branch -D <branch>`
+
+---
+
+## Error #16: Commands fail because dependencies aren't installed
+
+**Symptom:** `pnpm vitest run ...` fails with `ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL` — "Command 'vitest' not found". Or `pnpm run test` fails with "sh: vitest: command not found" and "Local package.json exists, but node_modules missing, did you mean to install?"
+
+**Root cause:** The agent runs test/build/lint commands in a fresh clone, new worktree, or environment where `pnpm install` hasn't been run. Dependencies aren't available.
+
+**Correct approach — always do this:**
+```bash
+# Before running any project commands in a new environment, install dependencies:
+pnpm install  # or npm install, yarn install
+
+# Especially important in worktrees (they don't share node_modules):
+cd /path/to/worktree && pnpm install && pnpm run test
+
+# Check if node_modules exists before running commands:
+ls node_modules/.package-lock.json 2>/dev/null || pnpm install
+```
+
+**Never do this:**
+```bash
+# Don't assume dependencies are installed in fresh environments:
+cd /path/to/worktree && pnpm run test  # ← "command not found"
+```
+
+**Applies to:** Any fresh worktree, clone, or CI environment. Node.js worktrees do NOT share node_modules with the main repo unless using workspaces with hoisting.
+
+---
+
+## Error #17: jq syntax error — shell escaping corrupts filter expressions
+
+**Symptom:** `gh pr checks <PR> --json name,state | jq '[.[] | select(.state \!= "SUCCESS")]'` fails with "jq: error: syntax error, unexpected INVALID_CHARACTER" pointing at `\!=`.
+
+**Root cause:** The agent over-escapes the `!=` operator. Inside single-quoted shell strings, `!` is literal — no escaping needed. Adding `\` before `!` passes the literal backslash to jq, which doesn't understand `\!=` as an operator.
+
+**Correct approach — always do this:**
+```bash
+# Use single quotes and don't escape operators:
+gh pr checks 458 --json name,state | jq '[.[] | select(.state != "SUCCESS")]'
+
+# jq operators need no shell escaping inside single quotes:
+jq '.[] | select(.name != "review")'
+jq '.[] | select(.state == "SUCCESS" or .state == "SKIPPED")'
+
+# If you need shell variable interpolation, use --arg:
+jq --arg val "$SHELL_VAR" '.[] | select(.name == $val)'
+```
+
+**Never do this:**
+```bash
+# Don't escape jq operators inside single quotes:
+jq '.[] | select(.state \!= "SUCCESS")'   # ← INVALID_CHARACTER
+jq ".[] | select(.state != \"SUCCESS\")"   # ← fragile double-quote escaping
+```
+
+**Key detail:** Inside single quotes (`'...'`), the shell passes everything literally — no expansion, no escaping needed. Always use single quotes for jq filters.
+
+---
+
+## Error #18: Git commands fail on repo with no commits yet
+
+**Symptom:** `git log --oneline -20` fails with "fatal: your current branch 'main' does not have any commits yet" in a newly initialized repository.
+
+**Root cause:** The agent runs git history/diff commands as part of its standard workflow (e.g., checking recent commits before committing) without checking if the repo has any commits. This happens during project bootstrap after `git init` but before the first commit.
+
+**Correct approach — always do this:**
+```bash
+# Check if commits exist before running git log:
+git rev-parse HEAD >/dev/null 2>&1 && git log --oneline -20 || echo "No commits yet"
+
+# During bootstrap, create the initial commit first:
+git add . && git commit -m "feat: initial commit"
+# Now git log works
+```
+
+**Never do this:**
+```bash
+# Don't assume commits exist in a new repo:
+git log --oneline -20  # ← fatal if no commits yet
+git diff HEAD          # ← also fails
+```
+
+**Applies to:** Project bootstrap workflows, fresh `git init` repos. Always handle the empty-repo case.
+
+---
+
+## Error #19: API content filter blocks file creation in parallel
+
+**Symptom:** When creating multiple boilerplate files in parallel (LICENSE, CODE_OF_CONDUCT.md, SECURITY.md, CONTRIBUTING.md), one or more Write tool calls fail with "API Error: 400 — Output blocked by content filtering policy". The blocked calls waste the entire turn.
+
+**Root cause:** The Anthropic API content filter sometimes blocks generation of certain standard open-source files (especially CODE_OF_CONDUCT.md and SECURITY.md) due to their policy/legal language triggering safety filters. When these are created in parallel, the entire batch is affected.
+
+**Correct approach — always do this:**
+```
+# Create boilerplate files one at a time, not in parallel:
+1. Create LICENSE
+2. Create CONTRIBUTING.md
+3. Create CODE_OF_CONDUCT.md
+4. Create SECURITY.md
+
+# If a content filter blocks a file:
+# - Simplify the content (use minimal templates)
+# - Reference an external URL instead of inline content
+# - Ask the user to create that specific file manually
+```
+
+**Never do this:**
+```
+# Don't create all boilerplate files in one parallel batch:
+Parallel Write: LICENSE, CODE_OF_CONDUCT.md, SECURITY.md, CONTRIBUTING.md
+# ← one blocked file wastes the whole turn
+```
+
+**Key detail:** This is a platform limitation, not a code error. The workaround is sequential creation with graceful fallback. If a file gets blocked, move on and note it for the user rather than retrying the same content.
+
+---
+
+## Error #20: `gh release create --body` — wrong flag name
+
+**Symptom:** `gh release create v1.0.0 --title "v1.0.0: Title" --body "Release notes..."` fails with "unknown flag: --body".
+
+**Root cause:** The agent confuses flags between `gh` subcommands. `gh pr create` and `gh issue create` use `--body`, but `gh release create` uses `--notes` (or `-n`). Different subcommands use different flag names for similar concepts.
+
+**Correct approach — always do this:**
+```bash
+# For releases, use --notes (not --body):
+gh release create v1.0.0 --title "v1.0.0: Title" --notes "Release notes here"
+
+# If unsure, check the help:
+gh release create --help 2>&1 | head -20
+
+# Known flag differences:
+# gh pr create:      --body, --title
+# gh issue create:   --body, --title
+# gh release create: --notes, --title  (NOT --body)
+```
+
+**Never do this:**
+```bash
+# Don't assume --body works on all gh subcommands:
+gh release create v1.0.0 --body "notes"  # ← "unknown flag: --body"
+```
+
+**Key detail:** This is the same class of error as Error #4 (guessing `--json` fields). Different `gh` subcommands have different flags even for semantically similar concepts. When in doubt, check `--help`.
+
+---
+
+## Error #21: `pip3 install` fails on macOS — externally-managed-environment
+
+**Symptom:** `pip3 install <package>` fails with "error: externally-managed-environment — This environment is externally managed. To install Python packages system-wide, try brew install xyz."
+
+**Root cause:** macOS with Homebrew Python (3.12+) enforces PEP 668, which prevents `pip3 install` from modifying the system Python environment. This protects against breaking system tools that depend on Python.
+
+**Correct approach — always do this:**
+```bash
+# For CLI tools, use brew:
+brew install git-filter-repo
+
+# For Python applications, use pipx (isolated environments):
+brew install pipx && pipx install <package>
+
+# For Python libraries in a project, use a virtual environment:
+python3 -m venv .venv && source .venv/bin/activate && pip install <package>
+```
+
+**Never do this:**
+```bash
+# Don't use pip3 install on macOS with Homebrew Python:
+pip3 install git-filter-repo  # ← "externally-managed-environment"
+
+# Don't use --break-system-packages (risks breaking Homebrew):
+pip3 install --break-system-packages <package>  # ← dangerous
+```
+
+**Applies to:** Any macOS system with Homebrew Python 3.12+. Always prefer `brew install` for CLI tools and `pipx` for Python applications.

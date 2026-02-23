@@ -42,6 +42,20 @@ These rules must be internalized before starting any work. They prevent the most
 
 15. **Always `git branch -D` (uppercase) for worktree branches** — worktree branches are almost never "fully merged" in git's view (squash merges, deleted remotes, abandoned work). Lowercase `-d` fails with "not fully merged." Full cleanup idiom: `git worktree remove --force <path>; git branch -D <branch>`
 
+## Environment & Dependencies Rules
+
+16. **Install dependencies before running commands in fresh environments** — worktrees, clones, and CI don't have node_modules. Always run `pnpm install` (or equivalent) first.
+
+17. **Don't escape operators inside single-quoted jq filters** — `!=` is literal inside `'...'`. Writing `\!=` passes a backslash to jq, causing "INVALID_CHARACTER" syntax errors.
+
+18. **Handle empty repos gracefully** — `git log` and `git diff HEAD` fail on repos with no commits. Check `git rev-parse HEAD` first or create an initial commit during bootstrap.
+
+19. **Create boilerplate files sequentially, not in parallel** — API content filters can block certain files (CODE_OF_CONDUCT, SECURITY.md). Sequential creation with fallback prevents wasted turns.
+
+20. **`gh release create` uses `--notes`, not `--body`** — different `gh` subcommands use different flags for similar concepts. `--body` is for `pr create` and `issue create`. When in doubt, check `--help`.
+
+21. **Use `brew install` instead of `pip3 install` on macOS** — Homebrew Python 3.12+ blocks system-wide pip installs (PEP 668). Use `brew` for CLI tools, `pipx` for Python apps.
+
 ---
 
 For detailed symptoms, root causes, and examples, see [agent-errors.md](agent-errors.md).
