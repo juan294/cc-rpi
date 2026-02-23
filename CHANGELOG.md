@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## Unreleased
 
+### Added
+
+- **Errors #16–#21** — six new agent error patterns added to `agent-errors.md` and `quick-reference.md`:
+  - **#16:** Commands fail because dependencies aren't installed (fresh worktrees/clones missing node_modules)
+  - **#17:** jq syntax error from over-escaping `!=` as `\!=` inside single-quoted filters
+  - **#18:** Git commands fail on repos with no commits yet (bootstrap scenario)
+  - **#19:** API content filter blocks parallel boilerplate file creation
+  - **#20:** `gh release create` uses `--notes`, not `--body` (wrong flag name across subcommands)
+  - **#21:** `pip3 install` fails on macOS with Homebrew Python 3.12+ (externally-managed-environment)
+
+### Fixed
+
+- Removed hardcoded local paths from template commands (`/bootstrap`, `/adopt`)
+- Replaced hardcoded GitHub username in template Chapa badge URLs with `[OWNER]` placeholder
+- Genericized personal references in `CLAUDE.md` for public consumption
+- Removed unused GitHub Sponsors configuration
+
 ## [1.0.0] - 2026-02-21
 
 ### Added
