@@ -33,9 +33,23 @@ Now execute the setup checklist against THIS project. Work through it section by
 8. Add `.claude/settings.local.json` to `.gitignore`.
 9. Walk through the remaining checklist items (pre-commit hooks, CI, git setup) — ask me for decisions where needed.
 
+## Phase 4: Save to Memory
+
+After completing all setup:
+
+10. Save the following to auto memory so future sessions start with full awareness:
+    - Project name, type, and stack
+    - Key decisions made during setup (git workflow, CI choices, deployment targets)
+    - Any project-specific conventions or constraints the user mentioned
+    - Which optional features were adopted vs skipped
+    - The operational rules and error patterns you internalized from Phase 1
+
+This ensures the next session doesn't start from zero — the agent already knows the project context, the rules, and the decisions that shaped the setup.
+
 ## Rules for This Process
 
 - **Ask before assuming.** Every project is different. Don't guess the stack, conventions, or workflow.
 - **Adapt, don't copy.** The templates are starting points. Tailor everything to this specific project.
 - **Keep CLAUDE.md lean.** Only include instructions that would cause mistakes if missing. If Claude can infer it from code, don't add it.
 - **Don't read methodology files unless needed.** You have the rules and error patterns memorized from Phase 1. Reference methodology files only when you need depth on a specific topic during setup.
+- **Always save to memory.** Phase 4 is not optional. Every bootstrap must end with a memory save.

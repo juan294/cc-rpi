@@ -152,6 +152,19 @@ Before asking the user to do anything manually:
 
 Autonomy applies to development work. Production-affecting actions always need explicit human authorization.
 
+## Memory Management
+
+When you discover an operational lesson during any session — CI failure pattern, permission issue, workaround, tooling quirk, environment-specific behavior — save it to auto memory immediately. Don't wait to be asked.
+
+What to save proactively:
+- CI/CD pipeline behaviors and failure patterns specific to this project
+- Environment quirks (build flags, platform issues, dependency conflicts)
+- Project-specific conventions confirmed by the user
+- Workarounds for tools, APIs, or libraries used in this project
+- Permission configurations that required adjustment
+
+After completing `/bootstrap`, `/adopt`, or any significant configuration change, save the key decisions and project context to auto memory so future sessions start with full awareness.
+
 ## Research Documents
 Store in: docs/research/YYYY-MM-DD-description.md
 

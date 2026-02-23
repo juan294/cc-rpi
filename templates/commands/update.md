@@ -52,6 +52,7 @@ On incremental syncs (lastSyncCommit exists), prioritize reading files that appe
     - `## Push Accountability`
     - `## TDD Protocol`
     - `## Agent Autonomy`
+    - `## Memory Management`
 11. For each blueprint-managed section:
     - If the project's version differs from the template → update to match.
     - If the project has added project-specific content *within* a blueprint section (e.g., extra rules), preserve it — only update the parts that came from the template.

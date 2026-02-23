@@ -98,6 +98,20 @@ After presenting the report:
 3. **Create a migration plan** as a checklist based on their decisions.
 4. **Execute the plan item by item**, confirming after each major change.
 
+## Phase 5: Save to Memory
+
+After completing the migration:
+
+5. Save the following to auto memory so future sessions start with full awareness:
+    - Project name, type, and stack
+    - What was already in place vs what was migrated
+    - Key decisions made during adoption (what the user chose to keep, skip, or adapt)
+    - Any project-specific conventions or constraints discovered during the audit
+    - CI/CD pipeline behavior, deployment targets, environment quirks
+    - The operational rules and error patterns you internalized from Phase 1
+
+This ensures the next session doesn't start from zero — the agent already knows the project context, the rules, and the migration decisions.
+
 ## Rules for This Process
 
 - **Audit first, change nothing.** Phase 2 and 3 are entirely read-only. No files are modified until the user approves the plan.
@@ -107,3 +121,4 @@ After presenting the report:
 - **Ask before assuming.** When in doubt about whether to change something, ask.
 - **Keep CLAUDE.md lean.** When updating it, only add instructions that would cause mistakes if missing.
 - **One thing at a time.** Don't batch all changes into one massive commit. Make logical, reviewable changes.
+- **Always save to memory.** Phase 5 is not optional. Every adoption must end with a memory save.
