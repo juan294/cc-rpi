@@ -56,6 +56,14 @@ These rules must be internalized before starting any work. They prevent the most
 
 21. **Use `brew install` instead of `pip3 install` on macOS** — Homebrew Python 3.12+ blocks system-wide pip installs (PEP 668). Use `brew` for CLI tools, `pipx` for Python apps.
 
+22. **Re-read directory contents before bulk file operations** — don't operate on memorized/stale file lists from previous sessions. Always `ls` first or use `rm -f` (ignores nonexistent). Files may already be deleted.
+
+23. **Don't fabricate GitHub identifiers — discover them** — repo names, branch names, and issue numbers are case-sensitive and must be exact. Use `gh repo list`, `git branch -r`, or `gh issue list --search` instead of guessing.
+
+24. **Never use `../` relative paths for cross-project Bash commands** — cwd resets between Bash calls (Error #2). Use full absolute paths starting with `/` for any file operation outside the current project.
+
+25. **Use `git push -u` on first push — `git pull --rebase` needs upstream tracking** — branches that have never been pushed have no tracking info. Always `git push -u origin <branch>` first, or specify remote explicitly: `git pull --rebase origin <branch>`.
+
 ---
 
 For detailed symptoms, root causes, and examples, see [agent-errors.md](agent-errors.md).

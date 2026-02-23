@@ -11,6 +11,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - **`/update` command** — user-level slash command for syncing projects with the latest cc-rpi blueprint. Uses incremental git-diff detection via `.claude/cc-rpi-sync.json`, updates commands (direct replacement), CLAUDE.md (smart merge of blueprint-managed sections), and settings.json (additive merge). Works both interactively and headlessly for scheduled agents.
 - **Blueprint sync scheduled agent** (`templates/scripts/cc-rpi-update-agent.sh`) — shell script template for nightly automated syncing. Reads update instructions from cc-rpi at runtime (self-updating). Includes retry logic, launchd/cron scheduling templates, and preflight checks.
 - **Blueprint Sync section** in `setup-checklist.md` — step-by-step setup for nightly syncing with explanation of the three-tier update strategy.
+- **Errors #22–#25** — four new agent error patterns added to `agent-errors.md` and `quick-reference.md`:
+  - **#22:** `rm` fails on stale file list — agent operates on memorized filenames without re-reading directory
+  - **#23:** `gh` commands fail when agent fabricates/guesses repo names, branch names, or identifiers
+  - **#24:** Cross-project `../` relative paths fail because Bash cwd resets between calls
+  - **#25:** `git pull --rebase` fails on branches with no upstream tracking — use `git push -u` first
 
 ## [1.1.0] - 2026-02-23
 

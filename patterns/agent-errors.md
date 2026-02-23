@@ -621,3 +621,135 @@ pip3 install --break-system-packages <package>  # ← dangerous
 ```
 
 **Applies to:** Any macOS system with Homebrew Python 3.12+. Always prefer `brew install` for CLI tools and `pipx` for Python applications.
+
+---
+
+## Error #22: `rm` fails on stale file list — agent doesn't re-read directory
+
+**Symptom:** `rm /path/to/file1.png /path/to/file2.png ...` fails with "No such file or directory" for every file in the list. The agent is trying to delete files that were already removed in a previous session or that no longer exist at those paths.
+
+**Root cause:** The agent operates on a memorized or cached list of files instead of checking what actually exists in the directory right now. Between sessions, files may have been moved, renamed, or already deleted. The agent "remembers" filenames from a prior context and acts on stale information.
+
+**Correct approach — always do this:**
+```bash
+# Always list the directory contents fresh before bulk operations:
+ls /path/to/directory/
+
+# Use -f to ignore nonexistent files (when some may already be deleted):
+rm -f /path/to/directory/file1.png /path/to/directory/file2.png
+
+# Or use a glob to delete what actually exists:
+rm -f /path/to/directory/*.png
+
+# For selective deletion, verify each file first:
+for f in /path/to/directory/*.png; do [ -f "$f" ] && rm "$f"; done
+```
+
+**Never do this:**
+```bash
+# Don't operate on files from memory without re-reading the directory:
+rm /path/to/file1.png /path/to/file2.png  # ← files may not exist anymore
+
+# Don't batch many rm paths from a stale list:
+rm file-from-tuesday.png file-from-wednesday.png  # ← already deleted last session
+```
+
+**Key detail:** This is especially common in multi-session workflows where the agent processes and deletes files, then in a later session tries to delete the same files again. Always re-read directory contents at the start of any bulk file operation.
+
+---
+
+## Error #23: `gh` command fails — agent fabricates repo/resource names
+
+**Symptom:** `gh repo view owner/XILLVER --json name,owner` fails with "GraphQL: Could not resolve to a Repository with the name 'owner/XILLVER'." The agent used a repo name that doesn't exist — it was guessed, misspelled, or hallucinated.
+
+**Root cause:** The agent infers or fabricates GitHub identifiers (repository names, branch names, issue numbers) instead of discovering them through queries. GitHub identifiers are case-sensitive and must match exactly. Guessing leads to API failures.
+
+**Correct approach — always do this:**
+```bash
+# Discover repos instead of guessing names:
+gh repo list <owner> --json name --limit 50
+
+# Verify a repo exists before querying it:
+gh repo view <owner>/<repo> --json name 2>&1 || echo "Repo not found"
+
+# For branches, list before assuming:
+git branch -r | grep <pattern>
+# or:
+gh api repos/<owner>/<repo>/branches --jq '.[].name'
+
+# For issues/PRs, query by search rather than guessing numbers:
+gh issue list --search "keyword" --json number,title
+```
+
+**Never do this:**
+```bash
+# Don't fabricate or guess identifiers:
+gh repo view owner/GUESSED-NAME --json name  # ← might not exist
+gh pr view 999 --json title                   # ← PR number might be wrong
+git checkout origin/assumed-branch            # ← branch might not exist
+```
+
+**Key detail:** This is the same class of error as Error #4 (guessing `--json` fields) and Error #20 (guessing flag names) — the agent assumes identifiers instead of querying them. GitHub names are case-sensitive: `MyRepo` != `myrepo` != `MYREPO`.
+
+---
+
+## Error #24: Cross-project `../` relative paths fail in Bash commands
+
+**Symptom:** `rm ../other-project/scripts/agent.sh ../other-project/docs/agents/report.md` fails with "No such file or directory". The agent uses `../` relative paths to reference files in sibling projects, but the shell's working directory is not what the agent expects.
+
+**Root cause:** The Bash tool's working directory resets to the primary working directory between calls (see Error #2). Even within a single call, `../` relative paths are fragile — they depend on the exact cwd, which may differ from what the agent assumes. This is an extension of the worktree cwd problem applied to cross-project file operations.
+
+**Correct approach — always do this:**
+```bash
+# Always use absolute paths for cross-project operations:
+rm -f /Users/username/projects/other-project/scripts/agent.sh
+rm -f /Users/username/projects/other-project/docs/agents/report.md
+
+# For multiple files across projects, use absolute paths with ; (not &&):
+rm -f /absolute/path/project-a/file1; rm -f /absolute/path/project-b/file2
+```
+
+**Never do this:**
+```bash
+# Don't use relative paths for cross-project operations:
+rm ../other-project/scripts/agent.sh    # ← cwd may not be where you think
+rm ../../shared/config.json             # ← breaks when cwd resets
+
+# Don't assume cwd is in a specific project:
+cd ../other-project && rm scripts/agent.sh  # ← cd may fail silently, rm runs in wrong dir
+```
+
+**Applies to:** Any Bash command that references files outside the current project. Always use full absolute paths starting with `/`. This is Error #2's principle (absolute paths in worktrees) generalized to all cross-directory operations.
+
+---
+
+## Error #25: `git pull --rebase` fails — no upstream tracking for branch
+
+**Symptom:** `git pull --rebase && git push` fails with "There is no tracking information for the current branch. Please specify which branch you want to rebase against."
+
+**Root cause:** The agent runs `git pull --rebase` on a branch that has never been pushed to a remote, or where upstream tracking was never configured. Without tracking info, git doesn't know which remote branch to pull from. This commonly happens on freshly created branches, new repos after `git init`, or after cloning when switching to a new local branch.
+
+**Correct approach — always do this:**
+```bash
+# On first push of any branch, always set upstream tracking:
+git push -u origin <branch>
+
+# After -u is set, plain git pull --rebase works.
+
+# If unsure whether tracking is set, specify remote and branch explicitly:
+git pull --rebase origin <branch> && git push origin <branch>
+
+# Or check tracking status first:
+git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || echo "No upstream — use git push -u origin <branch>"
+```
+
+**Never do this:**
+```bash
+# Don't assume all branches have upstream tracking:
+git pull --rebase && git push  # ← fails on branches without tracking
+
+# Don't retry the same command after this error:
+git pull --rebase  # ← same error, still no tracking info
+```
+
+**Key detail:** Rule #6 says "always `git pull --rebase` before pushing." This error is what happens when you follow that rule on a branch with no upstream. The fix is to always use `-u` on the first push, which sets tracking so subsequent pull/push cycles work. If you're unsure, specify `origin <branch>` explicitly — it always works regardless of tracking state.
