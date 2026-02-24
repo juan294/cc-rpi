@@ -56,7 +56,7 @@ On incremental syncs (lastSyncCommit exists), prioritize reading files that appe
 11. For each blueprint-managed section:
     - If the project's version differs from the template → update to match.
     - If the project has added project-specific content *within* a blueprint section (e.g., extra rules), preserve it — only update the parts that came from the template.
-    - If a section doesn't exist in the project → skip it (don't add sections, that's `/adopt`'s job).
+    - If a section doesn't exist in the project → **add it** from the template. Place it after the last existing blueprint-managed section, preserving the order from the template. New blueprint sections are new knowledge — `/update` is responsible for delivering them.
 12. **Do NOT touch** project-specific sections: One-liner, Stack, Key Commands, Git Workflow, Deployment, Commit Messages, Research Documents, Implementation Plans, or any custom section.
 13. The `### CRITICAL: Run verification commands sequentially` section under Key Commands is blueprint-originated — update it if it exists.
 
@@ -91,7 +91,7 @@ On incremental syncs (lastSyncCommit exists), prioritize reading files that appe
 23. Present a summary:
     - cc-rpi version synced to (tag + commit hash)
     - Commands updated/added (list them)
-    - CLAUDE.md sections updated (list them)
+    - CLAUDE.md sections updated/added (list them)
     - settings.json changes (list them)
     - Notable new content: new error patterns, new rules, methodology changes
     - "Already up to date" if nothing changed

@@ -60,6 +60,7 @@ set -euo pipefail
 # ── Configuration ──
 # Change these for your project:
 CC_RPI_PATH="<path-to-your-cc-rpi-clone>"
+CLAUDE_BIN="${CLAUDE_BIN:-$HOME/.local/bin/claude}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -77,6 +78,13 @@ fi
 
 if [ ! -f "$UPDATE_INSTRUCTIONS" ]; then
   echo "[$(date)] ERROR: Update command not found at $UPDATE_INSTRUCTIONS"
+  exit 1
+fi
+
+if [ ! -x "$CLAUDE_BIN" ]; then
+  echo "[$(date)] ERROR: claude binary not found at $CLAUDE_BIN"
+  echo "[$(date)] Set CLAUDE_BIN in this script or export it as an env var."
+  echo "[$(date)] Common locations: \$HOME/.local/bin/claude, /usr/local/bin/claude"
   exit 1
 fi
 
@@ -111,7 +119,7 @@ echo "[$(date)] Project: $PROJECT_ROOT"
 echo "[$(date)] Blueprint: $CC_RPI_PATH"
 
 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-  if claude -p "$PROMPT" \
+  if "$CLAUDE_BIN" -p "$PROMPT" \
     --allowedTools "Read,Write,Edit,Glob,Grep,Bash(git *)" \
     --output-format text \
     > "$REPORT_FILE" 2>&1; then
