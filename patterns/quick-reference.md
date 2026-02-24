@@ -62,7 +62,11 @@ These rules must be internalized before starting any work. They prevent the most
 
 24. **Never use `../` relative paths for cross-project Bash commands** — cwd resets between Bash calls (Error #2). Use full absolute paths starting with `/` for any file operation outside the current project.
 
-25. **Use `git push -u` on first push — `git pull --rebase` needs upstream tracking** — branches that have never been pushed have no tracking info. Always `git push -u origin <branch>` first, or specify remote explicitly: `git pull --rebase origin <branch>`.
+25. **Use `git push -u` on first push — both `git push` and `git pull --rebase` need upstream tracking** — branches that have never been pushed have no tracking info. Always `git push -u origin <branch>` first, or specify remote explicitly: `git pull --rebase origin <branch>`.
+
+26. **Don't build complex regex pipelines in shell — use dedicated tools** — macOS defaults to zsh where `!`, `{`, `}` trigger special parsing. `grep -oP` with complex Perl regex breaks with zsh parse errors. Use the built-in Grep tool, dedicated linters, or `bash -c '...'` for complex regex.
+
+27. **Only pass correct file types to linters — don't fight intentional patterns** — `markdownlint` on `.sh` files = hundreds of false errors. Before "fixing" linter warnings, check if the pattern is intentional (e.g., continuous step numbering). Add linter exceptions for intentional style, don't change the content.
 
 ---
 

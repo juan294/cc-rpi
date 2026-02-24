@@ -723,18 +723,20 @@ cd ../other-project && rm scripts/agent.sh  # ← cd may fail silently, rm runs 
 
 ---
 
-## Error #25: `git pull --rebase` fails — no upstream tracking for branch
+## Error #25: `git push` or `git pull --rebase` fails — no upstream tracking for branch
 
-**Symptom:** `git pull --rebase && git push` fails with "There is no tracking information for the current branch. Please specify which branch you want to rebase against."
+**Symptom (push variant):** `git push` fails with "fatal: The current branch main has no upstream branch. To push the current branch and set the remote as upstream, use `git push --set-upstream origin main`."
 
-**Root cause:** The agent runs `git pull --rebase` on a branch that has never been pushed to a remote, or where upstream tracking was never configured. Without tracking info, git doesn't know which remote branch to pull from. This commonly happens on freshly created branches, new repos after `git init`, or after cloning when switching to a new local branch.
+**Symptom (pull variant):** `git pull --rebase && git push` fails with "There is no tracking information for the current branch. Please specify which branch you want to rebase against."
+
+**Root cause:** The agent runs `git push` or `git pull --rebase` on a branch that has never been pushed to a remote, or where upstream tracking was never configured. Without tracking info, git doesn't know which remote branch to push to or pull from. This commonly happens on freshly created branches, new repos after `git init`, or after cloning when switching to a new local branch.
 
 **Correct approach — always do this:**
 ```bash
 # On first push of any branch, always set upstream tracking:
 git push -u origin <branch>
 
-# After -u is set, plain git pull --rebase works.
+# After -u is set, plain git push / git pull --rebase works.
 
 # If unsure whether tracking is set, specify remote and branch explicitly:
 git pull --rebase origin <branch> && git push origin <branch>
@@ -746,10 +748,90 @@ git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || echo "No ups
 **Never do this:**
 ```bash
 # Don't assume all branches have upstream tracking:
-git pull --rebase && git push  # ← fails on branches without tracking
+git push                       # ← fails on branches without tracking
+git pull --rebase && git push  # ← also fails
 
 # Don't retry the same command after this error:
-git pull --rebase  # ← same error, still no tracking info
+git push  # ← same error, still no tracking info
 ```
 
 **Key detail:** Rule #6 says "always `git pull --rebase` before pushing." This error is what happens when you follow that rule on a branch with no upstream. The fix is to always use `-u` on the first push, which sets tracking so subsequent pull/push cycles work. If you're unsure, specify `origin <branch>` explicitly — it always works regardless of tracking state.
+
+---
+
+## Error #26: Complex shell regex fails in zsh — special characters parsed differently
+
+**Symptom:** A complex `grep -oP` or `grep -P` pipeline fails with `(eval):1: parse error: condition expected: \!` or similar zsh parse errors. The regex contains characters like `!`, `{`, `}`, or `(` that zsh interprets before they reach grep.
+
+**Root cause:** macOS defaults to zsh, where `!` triggers history expansion and other special characters have different quoting rules than bash. When the agent builds complex regex pipelines with `grep -oP`, characters like `\!` inside the pattern are intercepted by zsh's parser before grep ever sees them. This is compounded by the agent building overly complex shell one-liners instead of using available tools.
+
+**Correct approach — always do this:**
+```bash
+# Option 1 (preferred): Use the Grep tool instead of shell grep:
+# The built-in Grep tool handles regex safely without shell interpretation.
+
+# Option 2: If shell grep is required, use bash explicitly:
+bash -c 'grep -oP "\[(?![!])([^\]]*\]\(\K[^\)]+" "$1"' _ "$file"
+
+# Option 3: Simplify the regex — break complex patterns into steps:
+grep -o '\[.*\](.*)'  # simpler grep, then process in a second step
+
+# Option 4: Use dedicated tools instead of regex pipelines:
+# For markdown links: use markdown-link-check, markdownlint, or remark
+# For JSON: use jq
+# For structured data: use awk with simpler patterns
+```
+
+**Never do this:**
+```bash
+# Don't build complex Perl regex pipelines in zsh:
+grep -oP '\[(?![!])([^\]]*\]\(\K[^\)]+' "$file"  # ← zsh parse error on \!
+
+# Don't build Rube Goldberg shell one-liners:
+while IFS= read -r file; do dir=$(dirname "$file"); grep -oP '...' "$file" | while IFS= read -r link; do ...
+# ← fragile, unreadable, breaks on zsh special chars
+```
+
+**Key detail:** The agent's impulse to build complex shell pipelines is the deeper problem. Before writing any multi-pipe shell command with regex, ask: (1) Can I use the built-in Grep/Glob tools? (2) Is there a dedicated CLI tool for this? (3) Can I break this into simpler steps? Complex one-liners that work in bash often fail in zsh — and macOS is zsh by default.
+
+---
+
+## Error #27: Linter runs on wrong file types or fights intentional patterns
+
+**Symptom:** `markdownlint-cli2 "file.md" "script.sh" "config.yml"` reports hundreds of errors — most from non-markdown files being parsed as markdown. Or: linter reports errors like `MD029/ol-prefix` on files where continuous numbering (steps 1-22 across sections) is intentional. The agent then wastes turns "fixing" intentional formatting.
+
+**Root cause:** Two related problems: (1) The agent passes files to a linter without filtering for the correct file type. It globs too broadly or includes all changed files regardless of extension. (2) The agent treats all linter warnings as bugs to fix, not considering whether the flagged pattern is intentional (e.g., continuous step numbering for agent instructions).
+
+**Correct approach — always do this:**
+```bash
+# Only pass correct file types to linters:
+markdownlint-cli2 "**/*.md"                          # ← only markdown
+eslint "**/*.{ts,tsx,js,jsx}"                          # ← only JS/TS
+shellcheck scripts/*.sh                                # ← only shell scripts
+
+# When linting specific files, filter by extension:
+echo "$changed_files" | grep '\.md$' | xargs markdownlint-cli2
+
+# When a linter flags known-intentional patterns:
+# 1. Check if the pattern is documented (README, CLAUDE.md, comments)
+# 2. Add a disable comment or config override for that specific rule
+# 3. Do NOT "fix" intentional formatting to satisfy the linter
+
+# Use .markdownlintignore or inline disable comments:
+<!-- markdownlint-disable MD029 -->
+```
+
+**Never do this:**
+```bash
+# Don't pass all files to a markdown linter:
+markdownlint-cli2 "templates/**/*"  # ← includes .sh, .json, .yml files
+
+# Don't "fix" intentional formatting:
+# If steps are numbered 1-22 across sections intentionally,
+# don't reset numbering per-section just because MD029 complains.
+
+# Don't blindly fix all linter errors without understanding context:
+# Some "errors" are intentional style choices documented in the project.
+```
+
+**Key detail:** Before fixing any linter error, check whether the flagged pattern is intentional. Continuous numbered steps in agent instruction files, shell scripts linted as markdown, and style choices documented in project config are all false positives. The agent should add linter exceptions for intentional patterns, not change the content to satisfy the linter.
