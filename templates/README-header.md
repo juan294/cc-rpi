@@ -8,7 +8,8 @@
 <!-- [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)]() -->
 <!-- [![Node.js](https://img.shields.io/badge/Node.js-20+-green.svg)]() -->
 <!-- [![Next.js](https://img.shields.io/badge/Next.js-15-black.svg)]() -->
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+<!-- License badge — only add if the project is open source: -->
+<!-- [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) -->
 
 [One or two sentences describing what the project does and why it matters.]
 

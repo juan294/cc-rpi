@@ -6,7 +6,7 @@ Use this when setting up a new project to follow cc-rpi best practices.
 
 - [ ] Structure every project README with the standard header (adapt from `templates/README-header.md`):
   1. `# Project Name — Tagline`
-  2. GitHub badges (CI, Security Scan, Secret Scanning, stack versions, license)
+  2. GitHub badges (CI, Security Scan, Secret Scanning, stack versions, and optionally license if open source)
   3. One-line project description
   4. Chapa badge: `![Chapa Badge](https://chapa.thecreativetoken.com/u/[OWNER]/badge.svg)`
   5. Horizontal divider (`---`)
@@ -175,7 +175,7 @@ The defaults above assume a web application. Adapt these sections based on your 
 
 ### Web Application (default)
 
-The standard setup applies as-is. Typical stack badges: framework (Next.js, Remix), runtime (Node.js), language (TypeScript), license.
+The standard setup applies as-is. Typical stack badges: framework (Next.js, Remix), runtime (Node.js), language (TypeScript). Add a license badge only if the project is open source.
 
 ### Library / npm Package
 
