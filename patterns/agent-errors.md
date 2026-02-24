@@ -10,7 +10,7 @@ Documented from real recurring issues across projects. Each entry includes the s
 
 **Symptom:** Running `typecheck` and `lint` (or any verification commands) as parallel Bash tool calls. When one exits non-zero, the others are killed with "Sibling tool call errored" — their output is lost completely.
 
-**Root cause:** Claude Code kills all sibling Bash calls when any one fails.
+**Root cause:** Claude Code kills all sibling tool calls when any one fails. This applies to ALL tool types — Bash, TaskOutput, Read, etc.
 
 **Correct approach — always do this:**
 ```bash
@@ -26,9 +26,14 @@ pnpm run typecheck 2>&1 && pnpm run lint 2>&1
 # Parallel sibling Bash tool calls — one failure kills the rest:
 Tool call 1: pnpm run typecheck 2>&1
 Tool call 2: pnpm run lint 2>&1   ← killed if typecheck fails
+
+# Parallel sibling TaskOutput calls — same problem:
+Tool call 1: TaskOutput(task-id-1)  ← "No task found" → kills siblings
+Tool call 2: TaskOutput(task-id-2)  ← "Sibling tool call errored"
+Tool call 3: TaskOutput(task-id-3)  ← "Sibling tool call errored"
 ```
 
-**Applies to:** typecheck, lint, test, build — any commands that can fail. Also applies to sub-agents.
+**Applies to:** ALL parallel sibling tool calls — Bash, TaskOutput, Read, sub-agents. Any tool that can error will kill its siblings. Check background tasks sequentially, not in parallel.
 
 ---
 
@@ -911,3 +916,71 @@ uv sync --all-extras  # ← picks Python 3.14, packages may not have wheels
 ```
 
 **Key detail:** This is especially common on macOS with Homebrew, where `brew install python` installs the latest stable release and `brew upgrade` can bump it to a new minor version. Always check `.python-version` or `pyproject.toml` `requires-python` before running `uv sync`. If the project doesn't pin a version, default to the latest widely-supported release (currently 3.13), not whatever the system provides.
+
+---
+
+## Error #30: `gh pr create` before pushing branch to remote
+
+**Symptom:** `gh pr create --base master --title "feat: ..." --body "## Summary..."` fails with "aborted: you must first push the current branch to a remote, or use the --head flag".
+
+**Root cause:** The agent ran `gh pr create` without first pushing the branch to the remote. A PR requires the branch to exist on the remote — GitHub can't create a PR from a branch that only exists locally. The agent skipped the push step, going directly from local commits to PR creation.
+
+**Correct approach — always do this:**
+```bash
+# ALWAYS push with -u before creating a PR:
+git push -u origin <branch>
+
+# THEN create the PR:
+gh pr create --base main --title "feat: ..." --body "..."
+
+# Full PR workflow:
+# 1. Commit changes locally
+# 2. Push to remote: git push -u origin <branch>
+# 3. Create PR: gh pr create --base main --title "..." --body "..."
+```
+
+**Never do this:**
+```bash
+# Don't create a PR before pushing:
+git commit -m "feat: something"
+gh pr create --base main --title "feat: something" --body "..."  # ← branch not on remote!
+```
+
+**Key detail:** This combines with Error #25 — `git push -u` both sets upstream tracking AND pushes the branch to the remote. Using `-u` on the first push handles both problems at once. The PR creation workflow should always be: commit → push with `-u` → create PR.
+
+---
+
+## Error #31: Agent guesses CLI flags that don't exist on unfamiliar tools
+
+**Symptom:** `vercel inspect <url> --json` fails with "Error: unknown or unexpected option: --json". Or `vercel logs --output raw <url>` gets "The '--output' option was ignored because it is now deprecated." The agent assumes flags from one CLI (like `gh`) work on unrelated CLIs (like `vercel`, `aws`, `docker`).
+
+**Root cause:** The agent transfers mental models between CLIs. Because `gh` supports `--json` for structured output, the agent assumes all CLIs do. Because one tool has `--output`, the agent assumes another does too. Each CLI has its own flag vocabulary — there's no universal standard.
+
+**Correct approach — always do this:**
+```bash
+# Check available flags before using them on unfamiliar CLIs:
+vercel inspect --help 2>&1 | head -30
+vercel logs --help 2>&1 | head -30
+
+# Use the correct flags for each CLI:
+# Vercel: no --json flag; use vercel inspect <url> and parse text output
+# gh: supports --json with field names
+# aws: supports --output json|table|text
+# docker: supports --format with Go templates
+
+# For structured output from CLIs without --json, pipe to text processing:
+vercel inspect <url> 2>&1 | grep -E "^  (id|name|status|target)"
+```
+
+**Never do this:**
+```bash
+# Don't assume flags transfer between CLIs:
+vercel inspect <url> --json          # ← "unknown option: --json"
+vercel logs --output raw <url>       # ← "--output" deprecated
+
+# Don't guess flags based on other CLIs:
+# gh uses --json     → doesn't mean vercel does
+# curl uses --output → doesn't mean vercel does
+```
+
+**Key detail:** This is the same class of error as Error #4 (guessing `gh --json` fields), Error #20 (guessing `gh` flag names), and Error #23 (fabricating identifiers) — the common thread is guessing instead of querying. Before using any flag on an unfamiliar CLI, run `<cmd> --help` to verify it exists. This takes 5 seconds and prevents wasted turns from invalid commands.

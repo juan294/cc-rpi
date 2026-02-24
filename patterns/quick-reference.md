@@ -4,7 +4,7 @@ These rules must be internalized before starting any work. They prevent the most
 
 ## Shell & Tool Rules
 
-1. **Never run verification commands as parallel sibling Bash calls** — chain with `&&` or `;` instead. If one sibling fails, all parallel calls are killed.
+1. **Never run sibling tool calls that can fail in parallel** — chain Bash commands with `&&` or `;` instead. Applies to ALL tool types: Bash, TaskOutput, Read. If one sibling fails, all parallel calls are killed.
 
 2. **Worktrees: always use absolute paths in every Bash command** — shell cwd resets to the main repo between calls. Prefix every command with `cd /absolute/path/to/worktree &&`.
 
@@ -71,6 +71,10 @@ These rules must be internalized before starting any work. They prevent the most
 28. **Use `--fix` for auto-fixable linter issues — don't manually edit** — `[*]` in ruff output means auto-fixable. Run `ruff check --fix` or `eslint --fix` first, then check for remaining manual issues. Don't waste turns manually reordering imports that `--fix` handles in one command.
 
 29. **Specify Python version for `uv sync` — system default may be too new** — `uv` auto-selects the newest Python on the system. If Homebrew has Python 3.14+, packages may lack wheels. Check `.python-version` or use `uv sync --python 3.13`.
+
+30. **Always `git push -u` before `gh pr create`** — a PR requires the branch to exist on the remote. Push with `-u` first, then create the PR. Combines with Rule #25 — `-u` handles both upstream tracking and remote existence.
+
+31. **Don't guess CLI flags on unfamiliar tools — run `--help` first** — `--json` works on `gh` but not `vercel`. `--output` works on `curl` but is deprecated on `vercel`. Each CLI has its own flag vocabulary. Run `<cmd> --help` before using flags you haven't verified.
 
 ---
 
