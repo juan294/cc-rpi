@@ -68,6 +68,10 @@ These rules must be internalized before starting any work. They prevent the most
 
 27. **Only pass correct file types to linters — don't fight intentional patterns** — `markdownlint` on `.sh` files = hundreds of false errors. Before "fixing" linter warnings, check if the pattern is intentional (e.g., continuous step numbering). Add linter exceptions for intentional style, don't change the content.
 
+28. **Use `--fix` for auto-fixable linter issues — don't manually edit** — `[*]` in ruff output means auto-fixable. Run `ruff check --fix` or `eslint --fix` first, then check for remaining manual issues. Don't waste turns manually reordering imports that `--fix` handles in one command.
+
+29. **Specify Python version for `uv sync` — system default may be too new** — `uv` auto-selects the newest Python on the system. If Homebrew has Python 3.14+, packages may lack wheels. Check `.python-version` or use `uv sync --python 3.13`.
+
 ---
 
 For detailed symptoms, root causes, and examples, see [agent-errors.md](agent-errors.md).

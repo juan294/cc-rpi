@@ -835,3 +835,79 @@ markdownlint-cli2 "templates/**/*"  # ← includes .sh, .json, .yml files
 ```
 
 **Key detail:** Before fixing any linter error, check whether the flagged pattern is intentional. Continuous numbered steps in agent instruction files, shell scripts linted as markdown, and style choices documented in project config are all false positives. The agent should add linter exceptions for intentional patterns, not change the content to satisfy the linter.
+
+---
+
+## Error #28: Agent manually fixes auto-fixable linter issues instead of using `--fix`
+
+**Symptom:** `ruff check src/ tests/` reports `I001 [*] Import block is un-sorted or un-formatted` (or similar auto-fixable rules). The `[*]` marker indicates the issue is auto-fixable. The agent then opens each file and manually reorders imports, wasting multiple turns on something a single command handles.
+
+**Root cause:** The agent runs linters in check-only mode and doesn't recognize auto-fixable markers (`[*]` in ruff, `--fix` available in eslint). It treats every linter error as something to manually edit, even when the linter itself can fix it automatically.
+
+**Correct approach — always do this:**
+```bash
+# For ruff (Python): use --fix for auto-fixable issues:
+ruff check --fix src/ tests/
+ruff format src/ tests/          # for formatting issues
+
+# For eslint (JS/TS): use --fix:
+eslint --fix src/
+
+# For prettier: it always auto-fixes:
+prettier --write "src/**/*.{ts,tsx}"
+
+# General pattern:
+# 1. Run linter with --fix first to handle auto-fixable issues
+# 2. Run linter in check-only mode to see remaining manual issues
+# 3. Only manually edit files for issues that can't be auto-fixed
+ruff check --fix src/ tests/ 2>&1; ruff check src/ tests/ 2>&1
+```
+
+**Never do this:**
+```bash
+# Don't manually fix auto-fixable issues:
+ruff check src/ tests/      # ← sees I001 [*] import sorting
+# Then manually reorders imports in 5 files...  ← wasted 5 turns
+
+# Don't ignore the [*] marker — it means "I can fix this for you":
+# I001 [*] = auto-fixable
+# E501     = NOT auto-fixable (no [*])
+```
+
+**Key detail:** The `[*]` marker in ruff output means the issue is auto-fixable with `--fix`. Similarly, eslint's `--fix` handles a large subset of rules automatically. Always try `--fix` first — it handles import sorting, whitespace, trailing commas, and many formatting issues. Only manually edit for issues the linter can't auto-fix.
+
+---
+
+## Error #29: `uv sync` fails — auto-selected Python version too new for packages
+
+**Symptom:** `uv sync --all-extras` exits code 1 during package installation. Output shows `Using CPython 3.14.3 interpreter at: /opt/homebrew/opt/python@3.14/bin/python3.14` — uv picked the newest system Python, which is too new for some packages (missing wheels, C extension build failures). Common failures: `cryptography`, `pymupdf`, `pandas`, `numpy`, or any package with compiled extensions.
+
+**Root cause:** `uv` auto-selects the newest Python interpreter available on the system. When the user has installed Python 3.14 via Homebrew (or any bleeding-edge version), `uv` picks it by default. Many packages don't ship pre-built wheels for the newest Python minor version, causing build failures or incompatibilities.
+
+**Correct approach — always do this:**
+```bash
+# Check if the project pins a Python version:
+cat .python-version 2>/dev/null
+grep -A2 'requires-python' pyproject.toml 2>/dev/null
+
+# Specify the Python version explicitly if needed:
+uv sync --python 3.13 --all-extras
+
+# Or pin the Python version in the project:
+echo "3.13" > .python-version
+uv sync --all-extras  # ← now uses 3.13
+
+# If a venv already exists with the wrong Python, recreate:
+rm -rf .venv && uv sync --python 3.13 --all-extras
+```
+
+**Never do this:**
+```bash
+# Don't assume the system default Python is compatible:
+uv sync --all-extras  # ← picks Python 3.14, packages may not have wheels
+
+# Don't ignore the "Using CPython X.Y.Z" line in uv output:
+# If it shows a version newer than 3.13, many packages will fail to install
+```
+
+**Key detail:** This is especially common on macOS with Homebrew, where `brew install python` installs the latest stable release and `brew upgrade` can bump it to a new minor version. Always check `.python-version` or `pyproject.toml` `requires-python` before running `uv sync`. If the project doesn't pin a version, default to the latest widely-supported release (currently 3.13), not whatever the system provides.
