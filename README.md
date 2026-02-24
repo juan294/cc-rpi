@@ -1,5 +1,6 @@
 # cc-rpi — Claude Code Reference & Project Intelligence
 
+[![Version: v1.2.1](https://img.shields.io/badge/Version-v1.2.1-orange.svg)](https://github.com/juan294/cc-rpi/releases/tag/v1.2.1)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Status: Active](https://img.shields.io/badge/Status-Active-brightgreen.svg)]()
 [![Claude Code](https://img.shields.io/badge/Built%20for-Claude%20Code-blueviolet.svg)](https://docs.anthropic.com/en/docs/claude-code)
