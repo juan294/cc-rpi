@@ -21,8 +21,8 @@ jobs:
 
           while IFS= read -r file; do
             dir=$(dirname "$file")
-            # Extract markdown links: [text](path) — skip images (![...])
-            grep -oP '(?<!\!)\[[^\]]*\]\(\K[^)]+' "$file" 2>/dev/null | while IFS= read -r link; do
+            # Extract markdown links: [text](path) — skip images (![...]) and code blocks
+            awk '/^```/{skip=!skip; next} !skip{print}' "$file" | grep -oP '(?<!\!)\[[^\]]*\]\(\K[^)]+' 2>/dev/null | while IFS= read -r link; do
               # Strip anchor fragments
               target="${link%%#*}"
               # Skip external URLs, empty targets (pure anchors), and mailto
