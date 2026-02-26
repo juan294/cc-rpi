@@ -76,6 +76,16 @@ These rules must be internalized before starting any work. They prevent the most
 
 31. **Don't guess CLI flags on unfamiliar tools — run `--help` first** — `--json` works on `gh` but not `vercel`. `--output` works on `curl` but is deprecated on `vercel`. Each CLI has its own flag vocabulary. Run `<cmd> --help` before using flags you haven't verified.
 
+32. **Check repo merge settings before `gh pr merge`** — don't default to `--merge`. Repos may only allow squash/rebase, require branches to be up-to-date, or have auto-merge disabled. Run `gh api repos/{owner}/{repo}` to check allowed methods first.
+
+33. **Commit or stash before `git pull --rebase`** — `git pull --rebase` fails if there are unstaged changes. Always commit your work before the pull+push sequence. Don't chain `git pull --rebase && git push` right after editing files.
+
+34. **Don't retry WebFetch on a 403 domain — switch strategies** — a 403 means the domain blocks automated requests. Alternate URL paths on the same domain will also 403. Use WebSearch instead, or ask the user for the content.
+
+35. **`gh pr checks` exit code 0 doesn't mean "passed" — it means "no failures yet"** — all-pending checks also return exit code 0. Always inspect the actual output or use `--json` to distinguish passed from pending. Use `--watch` to wait for completion.
+
+36. **Don't build mega inline shell one-liners — write a temp script** — if your command needs `while`/`for`/`awk` with complex logic, write it to `/tmp/script.sh` and execute that. zsh can't parse long inline commands with special characters, Unicode, or nested quotes. Prefer built-in tools (Grep, Read, Glob) over shell pipelines.
+
 ---
 
 For detailed symptoms, root causes, and examples, see [agent-errors.md](agent-errors.md).

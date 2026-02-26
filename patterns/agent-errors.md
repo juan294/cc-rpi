@@ -984,3 +984,203 @@ vercel logs --output raw <url>       # ← "--output" deprecated
 ```
 
 **Key detail:** This is the same class of error as Error #4 (guessing `gh --json` fields), Error #20 (guessing `gh` flag names), and Error #23 (fabricating identifiers) — the common thread is guessing instead of querying. Before using any flag on an unfamiliar CLI, run `<cmd> --help` to verify it exists. This takes 5 seconds and prevents wasted turns from invalid commands.
+
+---
+
+## Error #32: `gh pr merge` fails — wrong merge method, branch not up-to-date, or auto-merge disabled
+
+**Symptom:** `gh pr merge <N> --merge` fails with any of: (1) "the head branch is not up to date with the base branch", (2) "the base branch policy prohibits the merge", or (3) `--auto` fails with "Pull request Auto merge is not allowed for this repository (enablePullRequestAutoMerge)." The agent blindly retries with different flags instead of diagnosing the actual issue.
+
+**Root cause:** The agent defaults to `gh pr merge --merge` without checking the repository's branch protection settings. Repos often require squash or rebase merges only, require branches to be up-to-date before merge, or don't have auto-merge enabled. The agent tries one flag, it fails, then guesses another flag — wasting multiple turns.
+
+**Correct approach — always do this:**
+```bash
+# Before merging, check allowed merge methods:
+gh api repos/{owner}/{repo} --jq '{
+  allow_merge: .allow_merge_commit,
+  allow_squash: .allow_squash_merge,
+  allow_rebase: .allow_rebase_merge,
+  auto_merge: .allow_auto_merge
+}'
+
+# Use the correct merge method based on repo settings:
+gh pr merge <N> --squash    # if only squash is allowed
+gh pr merge <N> --rebase    # if only rebase is allowed
+
+# If "head branch not up to date" — update the branch first:
+gh pr update-branch <N>     # ← uses GitHub API to update
+# Or locally:
+git fetch origin && git rebase origin/main && git push
+
+# If you need auto-merge, verify it's enabled first:
+gh api repos/{owner}/{repo} --jq '.allow_auto_merge'
+```
+
+**Never do this:**
+```bash
+# Don't default to --merge without checking:
+gh pr merge <N> --merge            # ← may violate branch policy
+
+# Don't blindly escalate through flags:
+gh pr merge <N> --merge            # ← fails: policy prohibits
+gh pr merge <N> --merge --auto     # ← fails: auto-merge not enabled
+# Wasted 2 turns — should have checked settings first
+
+# Don't retry merge without fixing the underlying issue:
+gh pr merge <N> --merge            # ← fails: branch not up-to-date
+gh pr merge <N> --merge            # ← same failure, nothing changed
+```
+
+**Key detail:** These three failure modes all stem from the same mistake — attempting merge without understanding the repo's configuration. One `gh api` call reveals allowed methods, auto-merge status, and branch protection rules. Always check before merging.
+
+---
+
+## Error #33: `git pull --rebase` fails — unstaged changes in working tree
+
+**Symptom:** `git pull --rebase && git push origin <branch>` fails with "cannot pull with rebase: You have unstaged changes. Please commit or stash them." The agent chains pull+push without checking for a clean working tree first.
+
+**Root cause:** The agent has uncommitted changes from recent edits (e.g., code fixes, file modifications) and immediately tries to pull --rebase. Git refuses to rebase over a dirty working tree because the rebase could conflict with local changes. The agent follows rule #6 ("always pull --rebase before pushing") but skips the prerequisite of having a clean tree.
+
+**Correct approach — always do this:**
+```bash
+# Always check for dirty state before pull --rebase:
+git status --short
+
+# If there are uncommitted changes, commit them first:
+git add -A && git commit -m "fix: description" && git pull --rebase && git push
+
+# Or stash if the changes aren't ready to commit:
+git stash && git pull --rebase && git push && git stash pop
+
+# Best pattern: commit all work BEFORE the pull+push sequence
+```
+
+**Never do this:**
+```bash
+# Don't chain pull+push without checking working tree state:
+git pull --rebase && git push origin develop   # ← fails if dirty
+
+# Don't assume the working tree is clean after editing files:
+# (you just ran Edit tool 3 times — of course there are changes)
+```
+
+**Key detail:** This error often follows a pattern: the agent edits files, runs checks, then tries to push without committing first. The fix is simple — always commit before the pull+push sequence. This complements Rule #6 (always pull --rebase before push) with the prerequisite that the tree must be clean first.
+
+---
+
+## Error #34: WebFetch returns 403 — agent retries same blocked domain
+
+**Symptom:** WebFetch to a URL returns "Request failed with status code 403." The agent then tries alternate URL paths on the same domain — all return 403. Meanwhile, parallel fetch attempts trigger "Sibling tool call errored" (Error #1), compounding the failure.
+
+**Root cause:** Many sites (help centers, documentation portals, APIs) block automated/bot requests at the domain level. A 403 from one URL on a domain means ALL URLs on that domain will likely return 403. Retrying with different paths wastes turns and, if done in parallel, triggers sibling tool call failures.
+
+**Correct approach — always do this:**
+```bash
+# On first 403, switch strategies immediately:
+# Option 1: Use WebSearch to find the information from other sources
+# Option 2: Ask the user to copy-paste the relevant content
+# Option 3: Try a cached/archive version if appropriate
+
+# If you must try multiple URLs, do it sequentially (not parallel):
+# And stop after the first 403 — the domain is blocking you
+```
+
+**Never do this:**
+```
+# Don't retry multiple URLs on the same 403 domain:
+Fetch(https://help.example.com/articles/123-topic-a)     # ← 403
+Fetch(https://help.example.com/articles/456-topic-b)     # ← also 403
+Fetch(https://help.example.com/articles/789-topic-c)     # ← also 403
+
+# Especially don't do it in parallel (triggers Error #1):
+Parallel Fetch 1: help.example.com/path-a  # ← 403 → kills siblings
+Parallel Fetch 2: help.example.com/path-b  # ← "Sibling tool call errored"
+Parallel Fetch 3: help.example.com/path-c  # ← "Sibling tool call errored"
+```
+
+**Key detail:** A 403 is a domain-level signal, not a page-level one. The server is rejecting automated access entirely. No amount of URL variation will fix it. Switch to WebSearch or ask the user for the content.
+
+---
+
+## Error #35: `gh pr checks` exit code 0 with pending checks — misread as "all passed"
+
+**Symptom:** Agent runs `gh pr checks <N> 2>&1`, sees exit code 0, and concludes all CI checks passed. But the output shows every check with status "pending" — none have actually run yet. The agent then proceeds to merge or reports "CI is green" when CI hasn't started.
+
+**Root cause:** `gh pr checks` returns exit code 0 when there are no failures — including when all checks are still pending. Exit code 0 means "no failures detected," NOT "all checks passed." The agent checks only the exit code and ignores the actual status values in the output.
+
+**Correct approach — always do this:**
+```bash
+# Use --watch to wait for checks to complete:
+gh pr checks <N> --watch
+
+# Or use --json to inspect actual check states:
+gh pr checks <N> --json name,state,conclusion --jq '
+  if all(.state == "COMPLETED" and .conclusion == "SUCCESS") then "all_passed"
+  elif any(.state != "COMPLETED") then "still_pending"
+  else "has_failures" end
+'
+
+# Or parse text output to detect pending status:
+gh pr checks <N> 2>&1 | grep -c "pending"
+# If count > 0, checks are not done yet
+
+# Best: Use --watch in a background agent to monitor until completion
+```
+
+**Never do this:**
+```bash
+# Don't rely on exit code alone:
+gh pr checks <N> 2>&1
+# Exit code 0 + "pending" everywhere = NOT passed
+
+# Don't immediately try to merge after seeing exit code 0:
+gh pr checks <N> 2>&1          # ← exit 0, all pending
+gh pr merge <N> --merge        # ← premature, checks haven't run
+
+# Don't report "CI is green" based on exit code:
+# "Exit code 0" ≠ "all checks passed" when checks are pending
+```
+
+**Key detail:** The three states of `gh pr checks` exit codes: 0 = no failures (could be all-passed OR all-pending), 1 = at least one failure. You MUST inspect the actual output or use `--json` to distinguish between "passed" and "pending." This is especially important in repos where checks take several minutes to start after a push.
+
+---
+
+## Error #36: Agent builds mega inline shell one-liner that zsh can't parse
+
+**Symptom:** Agent constructs a massive single-line Bash command with `while`, `do`, `awk`, pipes, and special characters all inline. Fails with zsh errors like `(eval):1: condition expected: \≠` or other parse errors. The command is so long it's unreadable and undebuggable.
+
+**Root cause:** The agent tries to accomplish a multi-step operation (file scanning, text processing, conditional logic) in a single inline shell command instead of writing a script file. zsh parses inline commands differently than bash scripts — special characters, Unicode, backticks, and nested quotes all become problematic. The longer the one-liner, the higher the probability of a parse failure.
+
+**Correct approach — always do this:**
+```bash
+# For any multi-step shell logic, write a temporary script:
+cat > /tmp/process.sh << 'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root=$(realpath .)
+while IFS= read -r file; do
+    dir=$(dirname "$file")
+    # Complex awk/processing logic here
+    awk '/^```/{skip=!skip; next} !skip{print}' "$file"
+done < <(find "$repo_root" -name "*.md")
+SCRIPT
+chmod +x /tmp/process.sh && /tmp/process.sh
+
+# Or better: use dedicated tools instead of shell pipelines
+# Grep tool for searching, Read tool for file content, etc.
+```
+
+**Never do this:**
+```bash
+# Don't build mega one-liners with complex logic:
+errfile=$(mktemp) && echo 0 > "$errfile" && repo_root=$(realpath .) && while IFS= read -r file; do dir=$(dirname "$file"); awk '/^``/{skip=!skip; next} !skip{p...' ← BREAKS in zsh
+
+# Don't embed Unicode or special characters in inline commands:
+awk '... ≠ ...'    # ← zsh can't parse ≠ inline
+
+# Don't chain more than 2-3 simple commands inline:
+# If your command needs while/for/awk/sed, it's a script, not a one-liner
+```
+
+**Key detail:** This is related to Error #26 (complex regex in zsh) but broader — it's about the entire anti-pattern of mega one-liners. The threshold is simple: if your command needs control flow (`while`, `for`, `if`) or complex text processing (`awk` with multi-line logic), write it to a temp file and execute that. This also makes debugging possible when things fail. Prefer using Claude Code's built-in tools (Grep, Read, Glob) over shell pipelines whenever possible.
