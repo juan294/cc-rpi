@@ -1184,3 +1184,145 @@ awk '... ≠ ...'    # ← zsh can't parse ≠ inline
 ```
 
 **Key detail:** This is related to Error #26 (complex regex in zsh) but broader — it's about the entire anti-pattern of mega one-liners. The threshold is simple: if your command needs control flow (`while`, `for`, `if`) or complex text processing (`awk` with multi-line logic), write it to a temp file and execute that. This also makes debugging possible when things fail. Prefer using Claude Code's built-in tools (Grep, Read, Glob) over shell pipelines whenever possible.
+
+---
+
+## Error #37: Scheduled agent silently fails under macOS launchd
+
+**Symptom:** A scheduled agent script works perfectly when run from a terminal (`./scripts/agents/my-agent.sh`) but silently fails, crashes, or exits immediately when launched by `launchctl start`. The log file is empty or contains cryptic errors like "Too many open files", "claude: command not found", or an OAuth login URL that nobody sees.
+
+**Root cause:** Three independent issues compound under launchd's minimal execution environment (plus a fourth — see [Error #38](#error-38-claude-cli-crashes-with-unexpected-when-plist-runs-script-directly) for the ProgramArguments wrapper requirement):
+
+1. **File descriptor limit (hard cap 256):** launchd enforces a hard limit of 256 open files per process. Claude CLI needs 100K+ file descriptors for its Node.js runtime and network connections. `ulimit -n` inside the script has no effect because the hard limit is 256 — you can't raise soft above hard.
+
+2. **Missing environment variables:** launchd doesn't source `~/.zshrc`, `~/.bash_profile`, or any shell profile. PATH is minimal (`/usr/bin:/bin:/usr/sbin:/sbin`), HOME may be unset, and TERM is absent. Claude CLI and its dependencies aren't on PATH.
+
+3. **No interactive authentication:** Claude CLI's default OAuth flow opens a browser for login. Under launchd, there's no TTY, no browser, and no user to click "Authorize." The CLI either hangs waiting for auth or exits with an error. `claude setup-token` creates a persistent API token that works in non-interactive environments.
+
+**Correct approach — always do this:**
+
+```xml
+<!-- In the .plist file — resource limits MUST be in the plist, not the script -->
+<key>HardResourceLimits</key>
+<dict>
+  <key>NumberOfFiles</key>
+  <integer>122880</integer>
+</dict>
+<key>SoftResourceLimits</key>
+<dict>
+  <key>NumberOfFiles</key>
+  <integer>122880</integer>
+</dict>
+<!-- Environment variables — plist is the only reliable place -->
+<key>EnvironmentVariables</key>
+<dict>
+  <key>HOME</key>
+  <string>/Users/YOUR_USERNAME</string>
+  <key>TERM</key>
+  <string>xterm-256color</string>
+  <key>PATH</key>
+  <string>/usr/local/bin:/opt/homebrew/bin:/Users/YOUR_USERNAME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+</dict>
+```
+
+```bash
+# In the agent script — defense-in-depth (supplements the plist)
+
+# 1. Ensure critical env vars exist (fallback if plist vars missing)
+export HOME="${HOME:-$(eval echo ~$(whoami))}"
+export TERM="${TERM:-xterm-256color}"
+export PATH="/usr/local/bin:/opt/homebrew/bin:$HOME/.local/bin:$PATH"
+
+# 2. Verify file descriptor limit (plist should have set this)
+ulimit -n 122880 2>/dev/null
+FD_LIMIT=$(ulimit -n)
+if [ "$FD_LIMIT" -lt 10000 ]; then
+  echo "[$(date)] FATAL: File descriptor limit too low ($FD_LIMIT)."
+  echo "  Fix: Add HardResourceLimits/SoftResourceLimits to your .plist"
+  exit 1
+fi
+
+# 3. Verify non-interactive auth works
+if ! "$CLAUDE_BIN" -p "echo ok" --output-format text >/dev/null 2>&1; then
+  echo "[$(date)] FATAL: Claude CLI auth failed in non-interactive mode."
+  echo "  Fix: Run 'claude setup-token' from an interactive terminal."
+  exit 1
+fi
+```
+
+```bash
+# One-time setup — run interactively before scheduling:
+claude setup-token
+# Then test the plist:
+launchctl start com.project.agent.my-agent
+# Check logs — don't trust terminal execution as proof it works
+```
+
+**Never do this:**
+```bash
+# Don't rely on ulimit alone — launchd hard limit is 256, can't raise above it:
+ulimit -n 122880  # ← fails silently, stays at 256
+
+# Don't source shell profiles — fragile and may have interactive-only code:
+source ~/.zshrc   # ← may fail or produce side effects under launchd
+
+# Don't rely on interactive OAuth — no browser, no TTY under launchd:
+# Claude will try to open a browser URL that nobody will see
+
+# Don't test by running the script from a terminal:
+./scripts/agents/my-agent.sh  # ← works! (terminal has high fd limit + full env)
+# This proves nothing about launchd execution
+```
+
+**Key detail:** All three fixes must be applied together — any single missing fix causes silent failure. The plist resource limits are the only way to raise file descriptors under launchd (`ulimit` can't exceed the hard limit). The plist environment variables are the only reliable way to set PATH (scripts can supplement but not replace). And `claude setup-token` is the only way to authenticate without a browser. Always test with `launchctl start`, never from a terminal — terminal execution masks all three problems.
+
+---
+
+## Error #38: Claude CLI crashes with "Unexpected" when plist runs script directly
+
+**Symptom:** Agent plist with correct resource limits, env vars, and auth still fails. Claude CLI returns `error: An unknown error occurred (Unexpected)` even for `claude --version`. The error is instant (< 1 second). Exit code is 0 despite the error.
+
+**Root cause:** When launchd directly executes a script located inside a project directory that has a `.claude/` folder, the Claude CLI misidentifies the project context from the initial process arguments. This causes an internal crash before any real work begins. The same script works fine when located outside the project tree (e.g., `/tmp`), or when the plist uses `/bin/bash -c "exec /bin/bash <script>"` instead of running the script directly.
+
+**Diagnostic clue:** The failure is **location-dependent**, not content-dependent. The same script at `/tmp/my-agent.sh` works, but at `/project/scripts/agents/my-agent.sh` fails. Removing `.claude/settings.json` doesn't fix it. The error is a CLI bug in how it resolves project context under launchd's process model.
+
+**Correct approach from the start:**
+
+Use `/bin/bash -c "exec /bin/bash <script>"` in ProgramArguments instead of the script path directly:
+
+```xml
+<!-- WRONG — direct script execution, causes crash: -->
+<key>ProgramArguments</key>
+<array>
+  <string>/path/to/project/scripts/agents/my-agent.sh</string>
+</array>
+
+<!-- ALSO WRONG — /bin/bash without -c exec, same crash: -->
+<key>ProgramArguments</key>
+<array>
+  <string>/bin/bash</string>
+  <string>/path/to/project/scripts/agents/my-agent.sh</string>
+</array>
+
+<!-- CORRECT — bash -c with exec wrapper: -->
+<key>ProgramArguments</key>
+<array>
+  <string>/bin/bash</string>
+  <string>-c</string>
+  <string>exec /bin/bash /path/to/project/scripts/agents/my-agent.sh</string>
+</array>
+```
+
+The `exec` replaces the initial shell process, so the agent script still runs as PID 1 of the launchd job (clean process tree, correct signal handling). The `-c` wrapper changes the initial process context so Claude CLI doesn't misidentify the project root from the launchd process arguments.
+
+**Never do this:**
+```xml
+<!-- Don't run scripts directly — even with /bin/bash prefix: -->
+<array>
+  <string>/bin/bash</string>
+  <string>/project/scripts/agents/my-agent.sh</string>
+</array>
+<!-- Claude CLI will crash with "Unexpected" if the script is inside a .claude/ project -->
+```
+
+**Key detail:** This error has zero debug output — `--debug-file` is never written because the CLI crashes before reaching the debug initialization. The exit code is 0 despite the error, which means auth preflight checks (`if ! claude -p "echo ok" >/dev/null 2>&1`) silently pass, masking the problem. Combined with [Error #37](#error-37-scheduled-agent-silently-fails-under-macos-launchd), a working launchd agent plist requires four fixes: resource limits, env vars, setup-token auth, and the `-c exec` ProgramArguments wrapper.

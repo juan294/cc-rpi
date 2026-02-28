@@ -34,11 +34,35 @@ Scheduled agents run outside of interactive sessions on a recurring schedule. Th
 
 set -euo pipefail
 
+# ── Environment setup (required for launchd) ──
+# launchd provides a minimal env — no PATH, no TERM, possibly no HOME.
+# These are no-ops in a normal terminal but critical under launchd.
+export HOME="${HOME:-$(eval echo ~$(whoami))}"
+export TERM="${TERM:-xterm-256color}"
+export PATH="/usr/local/bin:/opt/homebrew/bin:$HOME/.local/bin:$PATH"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 AGENT_NAME="my-agent"
+CLAUDE_BIN="${CLAUDE_BIN:-$HOME/.local/bin/claude}"
 REPORT_FILE="docs/agents/${AGENT_NAME}-report.md"
+
+# ── File descriptor check ──
+ulimit -n 122880 2>/dev/null
+FD_LIMIT=$(ulimit -n)
+if [ "$FD_LIMIT" -lt 10000 ]; then
+  echo "[$(date)] FATAL: File descriptor limit too low ($FD_LIMIT)."
+  echo "  Fix: Add HardResourceLimits/SoftResourceLimits to your .plist"
+  exit 1
+fi
+
+# ── Authentication preflight ──
+if ! "$CLAUDE_BIN" -p "echo ok" --output-format text >/dev/null 2>&1; then
+  echo "[$(date)] FATAL: Claude CLI auth failed in non-interactive mode."
+  echo "  Fix: Run 'claude setup-token' from an interactive terminal."
+  exit 1
+fi
 
 # ── 1. Read shared context from other agents ──
 SHARED_CONTEXT=""
@@ -61,7 +85,7 @@ After completing your analysis, append a SHARED_CONTEXT block to docs/agents/sha
 cd "$PROJECT_ROOT"
 echo "[$(date)] Starting $AGENT_NAME agent..."
 
-claude -p "$PROMPT" \
+"$CLAUDE_BIN" -p "$PROMPT" \
   --allowedTools "Read,Glob,Grep,Bash(npm run *),Bash(pnpm run *)" \
   --output-format text \
   > "$REPORT_FILE" 2>&1
@@ -89,7 +113,9 @@ echo "[$(date)] $AGENT_NAME complete. Report: $REPORT_FILE"
   <string>com.project.agent.my-agent</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/absolute/path/to/project/scripts/agents/my-agent.sh</string>
+    <string>/bin/bash</string>
+    <string>-c</string>
+    <string>exec /bin/bash /absolute/path/to/project/scripts/agents/my-agent.sh</string>
   </array>
   <key>StartCalendarInterval</key>
   <dict>
@@ -97,6 +123,25 @@ echo "[$(date)] $AGENT_NAME complete. Report: $REPORT_FILE"
     <integer>6</integer>
     <key>Minute</key>
     <integer>0</integer>
+  </dict>
+  <key>HardResourceLimits</key>
+  <dict>
+    <key>NumberOfFiles</key>
+    <integer>122880</integer>
+  </dict>
+  <key>SoftResourceLimits</key>
+  <dict>
+    <key>NumberOfFiles</key>
+    <integer>122880</integer>
+  </dict>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key>
+    <string>/Users/YOUR_USERNAME</string>
+    <key>TERM</key>
+    <string>xterm-256color</string>
+    <key>PATH</key>
+    <string>/usr/local/bin:/opt/homebrew/bin:/Users/YOUR_USERNAME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
   </dict>
   <key>StandardOutPath</key>
   <string>/absolute/path/to/project/logs/my-agent.log</string>
@@ -111,9 +156,26 @@ echo "[$(date)] $AGENT_NAME complete. Report: $REPORT_FILE"
 cp com.project.agent.my-agent.plist ~/Library/LaunchAgents/
 launchctl load ~/Library/LaunchAgents/com.project.agent.my-agent.plist
 
+# Test (don't rely on terminal execution — it masks launchd issues):
+launchctl start com.project.agent.my-agent
+
 # Uninstall:
 launchctl unload ~/Library/LaunchAgents/com.project.agent.my-agent.plist
 ```
+
+#### macOS launchd Gotchas
+
+launchd provides a minimal execution environment that breaks Claude CLI in four ways. All four must be fixed together — any single missing fix causes silent failure. See [Error #37](../patterns/agent-errors.md#error-37-scheduled-agent-silently-fails-under-macos-launchd) and [Error #38](../patterns/agent-errors.md#error-38-claude-cli-crashes-with-unexpected-when-plist-runs-script-directly) for full details.
+
+**1. File descriptor limit (hard cap 256).** launchd sets a hard limit of 256 open files. Claude CLI needs 100K+ for Node.js. `ulimit -n` in the script cannot raise above the hard limit — the fix must be in the plist via `HardResourceLimits` and `SoftResourceLimits` (shown in the plist template above).
+
+**2. Missing environment variables.** launchd doesn't source shell profiles (`~/.zshrc`, `~/.bash_profile`). PATH is minimal (`/usr/bin:/bin:/usr/sbin:/sbin`), HOME may be unset, TERM is absent. The fix is `EnvironmentVariables` in the plist (shown above), supplemented by fallback exports in the script.
+
+**3. No interactive authentication.** Claude CLI's default OAuth flow opens a browser. Under launchd there's no TTY and no browser. Fix: run `claude setup-token` once from an interactive terminal to create a persistent API token. The script should verify auth works before attempting the main task.
+
+**4. ProgramArguments must use `/bin/bash -c exec`.** When launchd directly executes a script located inside a project directory (via shebang), Claude CLI crashes with "An unknown error occurred (Unexpected)". The fix is to use `/bin/bash -c "exec /bin/bash /path/to/script.sh"` in ProgramArguments (shown in the plist template above). This changes the process context so Claude doesn't misidentify the project root from the initial process arguments.
+
+**Testing:** Always test with `launchctl start <label>`, never by running the script from a terminal. Terminal execution has full env vars, high fd limits, and interactive auth — it masks all four problems.
 
 ### Linux (cron)
 
@@ -311,6 +373,8 @@ The shared context file (`docs/agents/shared-context.md`) is a cross-agent intel
 ## Prerequisites
 
 - Claude CLI installed and authenticated (`claude --version`)
+- Non-interactive auth configured: run `claude setup-token` from an interactive terminal (required for launchd/cron — OAuth won't work without a browser)
+- macOS launchd: plist must include `HardResourceLimits`/`SoftResourceLimits` with `NumberOfFiles: 122880`, `EnvironmentVariables` with HOME, TERM, PATH, and `ProgramArguments` must use `/bin/bash -c "exec /bin/bash <script>"` format (see plist template above, [Error #37](../patterns/agent-errors.md#error-37-scheduled-agent-silently-fails-under-macos-launchd), and [Error #38](../patterns/agent-errors.md#error-38-claude-cli-crashes-with-unexpected-when-plist-runs-script-directly))
 - Project dependencies installed (agents may run test/build commands)
 - `docs/agents/` directory exists in the project
 - `logs/` directory exists for output capture

@@ -19,6 +19,7 @@
 # ── macOS launchd ──
 #
 #   Create ~/Library/LaunchAgents/com.<project>.agent.cc-rpi-update.plist:
+#   (Replace YOUR_USERNAME with your macOS username)
 #
 #   <?xml version="1.0" encoding="UTF-8"?>
 #   <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
@@ -29,7 +30,9 @@
 #     <string>com.<project>.agent.cc-rpi-update</string>
 #     <key>ProgramArguments</key>
 #     <array>
-#       <string>/absolute/path/to/project/scripts/agents/cc-rpi-update.sh</string>
+#       <string>/bin/bash</string>
+#       <string>-c</string>
+#       <string>exec /bin/bash /absolute/path/to/project/scripts/agents/cc-rpi-update.sh</string>
 #     </array>
 #     <key>StartCalendarInterval</key>
 #     <dict>
@@ -38,6 +41,25 @@
 #       <key>Minute</key>
 #       <integer>0</integer>
 #     </dict>
+#     <key>HardResourceLimits</key>
+#     <dict>
+#       <key>NumberOfFiles</key>
+#       <integer>122880</integer>
+#     </dict>
+#     <key>SoftResourceLimits</key>
+#     <dict>
+#       <key>NumberOfFiles</key>
+#       <integer>122880</integer>
+#     </dict>
+#     <key>EnvironmentVariables</key>
+#     <dict>
+#       <key>HOME</key>
+#       <string>/Users/YOUR_USERNAME</string>
+#       <key>TERM</key>
+#       <string>xterm-256color</string>
+#       <key>PATH</key>
+#       <string>/usr/local/bin:/opt/homebrew/bin:/Users/YOUR_USERNAME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+#     </dict>
 #     <key>StandardOutPath</key>
 #     <string>/absolute/path/to/project/logs/cc-rpi-update.log</string>
 #     <key>StandardErrorPath</key>
@@ -45,7 +67,11 @@
 #   </dict>
 #   </plist>
 #
+#   One-time setup (run interactively before scheduling):
+#     claude setup-token
+#
 #   Install: launchctl load ~/Library/LaunchAgents/com.<project>.agent.cc-rpi-update.plist
+#   Test:    launchctl start com.<project>.agent.cc-rpi-update
 #   Remove:  launchctl unload ~/Library/LaunchAgents/com.<project>.agent.cc-rpi-update.plist
 #
 # ── Linux cron ──
@@ -62,12 +88,39 @@ set -euo pipefail
 CC_RPI_PATH="<path-to-your-cc-rpi-clone>"
 CLAUDE_BIN="${CLAUDE_BIN:-$HOME/.local/bin/claude}"
 
+# ── Environment setup (required for launchd) ──
+# launchd provides a minimal environment — no PATH, no TERM, possibly no HOME.
+# These lines are no-ops in a normal terminal but critical under launchd.
+# Do NOT use `source ~/.zshrc` — too fragile for non-interactive shells.
+export HOME="${HOME:-$(eval echo ~$(whoami))}"
+export TERM="${TERM:-xterm-256color}"
+export PATH="/usr/local/bin:/opt/homebrew/bin:$HOME/.local/bin:$PATH"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 AGENT_NAME="cc-rpi-update"
 REPORT_FILE="docs/agents/${AGENT_NAME}-report.md"
 UPDATE_INSTRUCTIONS="$CC_RPI_PATH/templates/commands/update.md"
+
+# ── File descriptor check ──
+# launchd enforces a hard limit of 256 file descriptors by default.
+# Claude CLI needs 100K+ for its Node.js runtime. The plist must set
+# HardResourceLimits/SoftResourceLimits — ulimit alone can't exceed
+# the hard limit. This check catches a missing plist configuration.
+ulimit -n 122880 2>/dev/null
+FD_LIMIT=$(ulimit -n)
+if [ "$FD_LIMIT" -lt 10000 ]; then
+  echo "[$(date)] FATAL: File descriptor limit too low ($FD_LIMIT)."
+  echo "  launchd hard limit is 256 by default — ulimit can't raise above it."
+  echo "  Fix: Add HardResourceLimits + SoftResourceLimits to your .plist:"
+  echo "    <key>HardResourceLimits</key>"
+  echo "    <dict><key>NumberOfFiles</key><integer>122880</integer></dict>"
+  echo "    <key>SoftResourceLimits</key>"
+  echo "    <dict><key>NumberOfFiles</key><integer>122880</integer></dict>"
+  echo "  Then: launchctl unload + load the plist to apply."
+  exit 1
+fi
 
 # ── Preflight checks ──
 
@@ -85,6 +138,16 @@ if [ ! -x "$CLAUDE_BIN" ]; then
   echo "[$(date)] ERROR: claude binary not found at $CLAUDE_BIN"
   echo "[$(date)] Set CLAUDE_BIN in this script or export it as an env var."
   echo "[$(date)] Common locations: \$HOME/.local/bin/claude, /usr/local/bin/claude"
+  exit 1
+fi
+
+# ── Authentication preflight ──
+# Under launchd, there's no TTY and no browser for OAuth.
+# Claude must be set up with a persistent token via `claude setup-token`.
+if ! "$CLAUDE_BIN" -p "echo ok" --output-format text >/dev/null 2>&1; then
+  echo "[$(date)] FATAL: Claude CLI auth failed in non-interactive mode."
+  echo "  launchd has no TTY/browser — interactive OAuth won't work."
+  echo "  Fix: Run 'claude setup-token' from an interactive terminal first."
   exit 1
 fi
 

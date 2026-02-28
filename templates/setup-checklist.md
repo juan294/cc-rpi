@@ -128,8 +128,11 @@ Set up nightly syncing with the cc-rpi blueprint so this project automatically s
 - [ ] Set `CC_RPI_PATH` in the script to your cc-rpi clone location
 - [ ] Make it executable: `chmod +x scripts/agents/cc-rpi-update.sh`
 - [ ] Create required directories: `mkdir -p docs/agents logs`
+- [ ] Run `claude setup-token` from an interactive terminal (required for non-interactive auth under launchd/cron)
+- [ ] Ensure your launchd plist has `HardResourceLimits`/`SoftResourceLimits` (NumberOfFiles: 122880), `EnvironmentVariables` (HOME, TERM, PATH), and ProgramArguments uses `/bin/bash -c "exec /bin/bash <script>"` wrapper — see script comments for the full plist template
 - [ ] Schedule with launchd (macOS) or cron (Linux) — see script comments for templates
-- [ ] Verify the agent runs: `./scripts/agents/cc-rpi-update.sh` and check `docs/agents/cc-rpi-update-report.md`
+- [ ] Test with `launchctl start <label>` (not by running the script from a terminal — terminal execution masks launchd issues)
+- [ ] Check `docs/agents/cc-rpi-update-report.md` and `logs/cc-rpi-update.error.log` for results
 
 ### How It Works
 
@@ -149,8 +152,11 @@ The shell script reads update instructions from cc-rpi at runtime, so when cc-rp
 - [ ] Create `docs/agents/` directory for agent reports and shared context
 - [ ] Create `logs/` directory for agent output capture
 - [ ] Write at least one agent script (e.g., test-health, security-audit)
+- [ ] For macOS launchd: ensure plist has resource limits, env vars, and `/bin/bash -c exec` wrapper in ProgramArguments (see [scheduled-agents.md](../methodology/scheduled-agents.md) for plist template and gotchas)
+- [ ] Run `claude setup-token` for non-interactive auth (required for launchd/cron)
 - [ ] Schedule with launchd (macOS) or cron (Linux)
-- [ ] Verify the agent runs successfully and produces a report
+- [ ] Test with `launchctl start` (macOS) — don't test from a terminal, it masks launchd issues
+- [ ] Verify the agent produces a report in `docs/agents/`
 - [ ] Add `/pre-launch` slash command for multi-agent production audit
 
 ## Workflow Habits

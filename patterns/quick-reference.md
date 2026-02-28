@@ -86,6 +86,10 @@ These rules must be internalized before starting any work. They prevent the most
 
 36. **Don't build mega inline shell one-liners — write a temp script** — if your command needs `while`/`for`/`awk` with complex logic, write it to `/tmp/script.sh` and execute that. zsh can't parse long inline commands with special characters, Unicode, or nested quotes. Prefer built-in tools (Grep, Read, Glob) over shell pipelines.
 
+37. **macOS launchd agents need four fixes** — plist `HardResourceLimits`/`SoftResourceLimits` (NumberOfFiles: 122880), plist `EnvironmentVariables` (HOME, TERM, PATH), `claude setup-token` for non-interactive auth, and ProgramArguments must use `/bin/bash -c "exec /bin/bash <script>"` (not direct script path). Test with `launchctl start`, not from a terminal — terminal execution masks all four problems.
+
+38. **launchd plist must NOT run project scripts directly** — `<string>/project/scripts/agent.sh</string>` in ProgramArguments causes Claude CLI to crash with "Unexpected" when the script is inside a directory with `.claude/`. Use `/bin/bash -c "exec /bin/bash <script>"` wrapper instead. Exit code is 0 despite the error, so preflight checks silently pass.
+
 ---
 
 For detailed symptoms, root causes, and examples, see [agent-errors.md](agent-errors.md).
