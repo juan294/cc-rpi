@@ -1229,7 +1229,7 @@ awk '... ≠ ...'    # ← zsh can't parse ≠ inline
 # In the agent script — defense-in-depth (supplements the plist)
 
 # 1. Ensure critical env vars exist (fallback if plist vars missing)
-export HOME="${HOME:-$(eval echo ~$(whoami))}"
+export HOME="${HOME:-$(eval echo ~"$(whoami)")}"
 export TERM="${TERM:-xterm-256color}"
 export PATH="/usr/local/bin:/opt/homebrew/bin:$HOME/.local/bin:$PATH"
 

@@ -37,7 +37,7 @@ set -euo pipefail
 # ── Environment setup (required for launchd) ──
 # launchd provides a minimal env — no PATH, no TERM, possibly no HOME.
 # These are no-ops in a normal terminal but critical under launchd.
-export HOME="${HOME:-$(eval echo ~$(whoami))}"
+export HOME="${HOME:-$(eval echo ~"$(whoami)")}"
 export TERM="${TERM:-xterm-256color}"
 export PATH="/usr/local/bin:/opt/homebrew/bin:$HOME/.local/bin:$PATH"
 

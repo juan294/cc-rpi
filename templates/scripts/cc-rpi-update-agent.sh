@@ -92,7 +92,7 @@ CLAUDE_BIN="${CLAUDE_BIN:-$HOME/.local/bin/claude}"
 # launchd provides a minimal environment — no PATH, no TERM, possibly no HOME.
 # These lines are no-ops in a normal terminal but critical under launchd.
 # Do NOT use `source ~/.zshrc` — too fragile for non-interactive shells.
-export HOME="${HOME:-$(eval echo ~$(whoami))}"
+export HOME="${HOME:-$(eval echo ~"$(whoami)")}"
 export TERM="${TERM:-xterm-256color}"
 export PATH="/usr/local/bin:/opt/homebrew/bin:$HOME/.local/bin:$PATH"
 
