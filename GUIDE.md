@@ -117,20 +117,22 @@ That's it. Those four commands are 90% of your interaction with the methodology.
 |---------|-------------|-------------|
 | `/research [question]` | Spawns parallel agents to explore the codebase. Produces a research document at `docs/research/`. | Before any change. Understanding comes first. |
 | `/plan [feature]` | Creates a phased implementation plan with pseudocode, success criteria, and test requirements. Saves to `docs/plans/`. | After research is reviewed and approved. |
-| `/implement [plan path]` | Executes the plan one phase at a time. Stops after each phase for your approval. Uses reviewer subagents for quality. | After the plan is reviewed and approved. |
-| `/validate [plan path]` | Runs every automated check from the plan, verifies all phases are complete, produces a validation report. | After implementation is done. |
+| `/implement [plan path]` | Executes the plan one phase at a time. Reviewer checks plan compliance, then `/simplify` handles code quality. Stops after each phase. | After the plan is reviewed and approved. |
+| `/validate [plan path]` | Runs every automated check from the plan, verifies all phases are complete, produces a validation report. Recommends `/simplify` for quality findings. | After implementation is done. |
 
 ### Supporting Commands
 
 | Command | What It Does | When to Use |
 |---------|-------------|-------------|
 | `/describe-pr` | Generates a PR description from the current branch's diff and commit history. | Before opening or updating a PR. |
-| `/pre-launch` | Spawns 6 parallel specialist agents (QA, security, performance, architecture, UX, devops) for a production audit. | Before any production release. |
+| `/pre-launch` | Spawns 6 parallel specialist agents (QA, security, performance, architecture, UX, devops) for a production audit. | Before any production release. Run `/simplify` after to fix code quality findings. |
 
-### Built-in Claude Code Commands You Should Know
+### Native Claude Code Commands Used in the Workflow
 
 | Command | What It Does | When to Use |
 |---------|-------------|-------------|
+| `/simplify` | Spawns 3 parallel agents (code reuse, code quality, efficiency) to review changed code and apply fixes. Anthropic-maintained. | After reviewer approval in `/implement`. After `/pre-launch` audit. Anytime after significant code changes. |
+| `/batch [instruction]` | Decomposes work into 5-30 independent units, executes each in a parallel git worktree, opens a PR per unit. | For `[batch-eligible]` plan phases. Migrations, bulk refactors, multi-issue sprints. |
 | `/clear` | Resets the conversation context. | Between unrelated tasks. The most underused command. |
 | `/compact [focus]` | Summarizes the current conversation with a focus area. | Same task, but context is getting heavy. |
 | `/worktree` | Creates an isolated git worktree for implementation. | When starting `/implement`. Keep main clean. |
@@ -171,11 +173,13 @@ Plans use a compact pseudocode notation so you can see exactly what changes in e
 You type `/implement docs/plans/2026-02-21-rate-limiting.md` and the agent:
 
 1. Reads the plan.
-2. Starts with Phase 1 only.
-3. Delegates implementation to subagents, then sends the result to a reviewer subagent.
-4. Runs all automated verification (tests, typecheck, lint).
-5. Updates the plan's checkboxes.
-6. **Stops and waits for your confirmation.**
+2. Checks for `[batch-eligible]` phases — if all remaining phases are independent, offers to use `/batch` to execute them in parallel (one worktree per phase, each opens a PR).
+3. Otherwise, starts with Phase 1 only.
+4. Delegates implementation to subagents, then sends the result to a reviewer subagent for **plan compliance** (does the code match the spec?).
+5. Runs `/simplify` — Anthropic's native code quality pass (reuse, quality, efficiency). This catches things the plan-compliance reviewer doesn't check.
+6. Runs all automated verification (tests, typecheck, lint).
+7. Updates the plan's checkboxes.
+8. **Stops and waits for your confirmation.**
 
 You review, approve, and it moves to Phase 2. One phase at a time. Never auto-proceeding.
 
@@ -215,7 +219,7 @@ This sounds restrictive, but it's the single most impactful rule for research qu
 
 ### Error Prevention
 
-The blueprint includes 14 operational rules learned from real sessions. These aren't theoretical — they're patterns that caused actual failures and wasted time. Examples:
+The blueprint includes 42 operational rules learned from real sessions. These aren't theoretical — they're patterns that caused actual failures and wasted time. Examples:
 
 - Never run verification commands in parallel (they interfere with each other)
 - Always use absolute paths in worktree commands (relative paths resolve to the wrong directory)
@@ -242,7 +246,7 @@ Before any production release, you can run `/pre-launch` to spawn 6 specialist a
 5. **UX Reviewer** — Accessibility, keyboard navigation, error states
 6. **DevOps** — CI status, environment variables, build verification
 
-They all run simultaneously, read-only, and produce a combined report with a verdict: READY, CONDITIONAL, or NOT READY. No auto-fixing — you decide what to address.
+They all run simultaneously, read-only, and produce a combined report with a verdict: READY, CONDITIONAL, or NOT READY. No auto-fixing — you decide what to address. When you're ready to fix code quality findings (dead code, duplicates, inefficiencies), run `/simplify` first — it handles the bulk of architect and performance-eng findings in one automated pass.
 
 ## Project Structure After Setup
 
@@ -329,8 +333,8 @@ The blueprint repository contains detailed documentation on every topic mentione
 | Plan notation | `methodology/pseudocode-notation.md` | How to write and read implementation plans |
 | Testing approach | `methodology/testing.md` | TDD protocol, verification hierarchy |
 | CI ownership | `methodology/push-accountability.md` | Background CI monitoring, fix-and-repush |
-| Error patterns | `patterns/agent-errors.md` | 14 documented errors with symptoms and solutions |
-| Operational rules | `patterns/quick-reference.md` | 14 rules to prevent known mistakes |
+| Error patterns | `patterns/agent-errors.md` | 38 documented errors with symptoms and solutions |
+| Operational rules | `patterns/quick-reference.md` | 42 rules to prevent known mistakes |
 | Worked examples | `examples/README.md` | Sample research docs, plans, logs, pseudocode |
 
 ## Credits

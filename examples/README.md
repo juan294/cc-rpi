@@ -9,7 +9,7 @@ What the outputs of each phase look like:
 | File | Illustrates |
 |------|------------|
 | `research-document.md` | Research phase output: descriptive, no opinions, file:line references |
-| `implementation-plan.md` | Plan phase output: phases, pseudocode notation, success criteria |
+| `implementation-plan.md` | Plan phase output: phases, pseudocode notation, success criteria, batch eligibility assessment |
 | `implementation-plan-phases/` | Per-phase detail files referenced by the plan |
 | `error-log.md` | Error log entry: root cause analysis focused on user skill |
 | `success-log.md` | Success log entry: what worked and why it's repeatable |

@@ -147,20 +147,22 @@ Writing tests first...
 [tests: token generation, verification, refresh, role checking, expiry handling]
 
 Tests written. Running them — they should all FAIL (red phase):
-- ✅ 11 tests, 11 failing (AuthService doesn't exist yet)
+- [x] 11 tests, 11 failing (AuthService doesn't exist yet)
 
 Now implementing to make them pass...
 [creates src/services/authService.ts]
 [implements AuthService class]
+[reviewer: plan compliance PASS]
+[/simplify: clean]
 [runs tests]
 
 Phase 1 complete:
-- ✅ AuthService class with: generateToken, verifyToken, refreshToken,
+- [x] AuthService class with: generateToken, verifyToken, refreshToken,
   extractFromHeader, checkRole, requireRole middleware factory
-- ✅ JWT secret loaded from config in one place
-- ✅ 11 tests, all passing (green phase)
-- ✅ Existing code untouched — old auth still works
-- ✅ TypeScript compiles, lint clean
+- [x] JWT secret loaded from config in one place
+- [x] 11 tests, all passing (green phase)
+- [x] Existing code untouched — old auth still works
+- [x] TypeScript compiles, lint clean
 
 Ready for Phase 2?
 ```
@@ -178,15 +180,18 @@ Claude: Starting Phase 2: Migrate middleware and routes to AuthService
 [replaces inline role checks in admin.ts with requireRole('admin')]
 [fixes 401/403: unauthorized = 401, forbidden (wrong role) = 403]
 [updates imports in all 4 route files]
+[reviewer: plan compliance PASS]
+[/simplify: found duplicated error response construction in 2 route files. Fixed.]
 [runs full test suite]
 
 Phase 2 complete:
-- ✅ auth middleware now delegates to AuthService
-- ✅ 3 inline role checks replaced with requireRole() middleware
-- ✅ Consistent responses: 401 for missing/invalid token, 403 for wrong role
-- ✅ Route definitions cleaner: router.get('/users', auth, requireRole('admin'), handler)
-- ✅ All existing tests still pass (38 tests)
-- ✅ 4 new tests for role middleware and error responses
+- [x] auth middleware now delegates to AuthService
+- [x] 3 inline role checks replaced with requireRole() middleware
+- [x] Consistent responses: 401 for missing/invalid token, 403 for wrong role
+- [x] Route definitions cleaner: router.get('/users', auth, requireRole('admin'), handler)
+- [x] /simplify: 1 fix applied (error response reuse)
+- [x] All existing tests still pass (38 tests)
+- [x] 4 new tests for role middleware and error responses
 
 Ready for Phase 3?
 ```
@@ -202,15 +207,18 @@ Claude: Starting Phase 3: Fix refresh token bug + cleanup
 [deletes src/utils/token.ts — all logic now in AuthService]
 [removes dead imports from auth.ts and auth routes]
 [adds regression test for the refresh token expiry bug]
+[reviewer: plan compliance PASS]
+[/simplify: flagged unused error type export from old token.ts re-export. Removed.]
 [runs full test suite]
 
 Phase 3 complete:
-- ✅ Refresh token bug fixed (rejects expired tokens before refreshing)
-- ✅ Regression test: expired token refresh returns 401
-- ✅ src/utils/token.ts deleted
-- ✅ No dead imports remaining
-- ✅ Full suite: 45 tests, all passing
-- ✅ TypeScript compiles, lint clean
+- [x] Refresh token bug fixed (rejects expired tokens before refreshing)
+- [x] Regression test: expired token refresh returns 401
+- [x] src/utils/token.ts deleted
+- [x] No dead imports remaining
+- [x] /simplify: 1 fix applied (stale re-export cleanup)
+- [x] Full suite: 45 tests, all passing
+- [x] TypeScript compiles, lint clean
 
 All phases complete.
 ```
@@ -226,14 +234,14 @@ You: /validate docs/plans/2026-02-22-auth-refactor.md
 ```
 Claude: Running validation...
 
-- ✅ Phase 1: AuthService exists with full test coverage
-- ✅ Phase 2: All routes migrated, no inline role checks remaining
-- ✅ Phase 3: Old token utils removed, refresh bug fixed
-- ✅ TypeScript: No errors
-- ✅ Lint: Clean
-- ✅ Tests: 45/45 passing
-- ✅ No references to old utils/token.ts anywhere in codebase
-- ✅ grep for inline role checks: 0 results
+- [x] Phase 1: AuthService exists with full test coverage
+- [x] Phase 2: All routes migrated, no inline role checks remaining
+- [x] Phase 3: Old token utils removed, refresh bug fixed
+- [x] TypeScript: No errors
+- [x] Lint: Clean
+- [x] Tests: 45/45 passing
+- [x] No references to old utils/token.ts anywhere in codebase
+- [x] grep for inline role checks: 0 results
 
 Suggestion: manually test the refresh token flow with an expired token
 to confirm the fix works end-to-end through the HTTP layer.

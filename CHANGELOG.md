@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## Unreleased
 
+### Added
+
+- **`/simplify` integration** — Anthropic's native code quality command (reuse, quality, efficiency) integrated into the RPI workflow. Runs after reviewer approval in `/implement`, recommended after `/pre-launch` audit, and suggested by `/validate` for quality findings. Added to the atomic loop, agent-design catalog, and quick-reference rules (39, 42).
+- **`/batch` integration** — Anthropic's native parallel execution command integrated into the planning and implementation workflow. Plans now mark independent phases as `[batch-eligible]`, and `/implement` offers `/batch` for parallel phase execution. Added to agent-design catalog and quick-reference rules (40, 41).
+- **Two-layer review model** — Implementation phases now separate plan-compliance review (reviewer subagent) from code-quality review (`/simplify`). Documented in `four-phases.md`, `agent-design.md`, and `CLAUDE.md.template`.
+- **Batch eligibility assessment** — Plans must evaluate phase independence and mark `[batch-eligible]` where applicable. Added to plan completion criteria in `four-phases.md` and example in `implementation-plan.md`.
+- **Rules #39–#42** in `quick-reference.md` — Native Command Rules covering `/simplify` and `/batch` usage patterns.
+
 ## [1.2.0] - 2026-02-23
 
 ### Added

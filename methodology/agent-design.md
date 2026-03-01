@@ -86,15 +86,49 @@ All subagent roles mapped to Claude Code's `Task` tool parameters:
 | Docs Analyzer | `Explore` or `general-purpose` | Research | No | Extract INSIGHTS from docs |
 | Web Researcher | `general-purpose` | Research | No | Find external documentation |
 | Implementer | `general-purpose` | Implement | Yes | Write code per plan |
-| Reviewer | `general-purpose` | Implement | Yes (tests/plan only) | Review implementation quality |
+| Reviewer | `general-purpose` | Implement | Yes (tests/plan only) | Review plan compliance |
 | Specialist (audit) | `general-purpose` | Pre-launch | No | Domain-specific audit (security, performance, etc.) |
 | Teammate | Agent Teams (native) | Any | Yes | Independent parallel worker with own context |
+| `/simplify` (native) | Anthropic skill | Implement, Validate, Pre-launch | Yes | 3 parallel agents: code reuse, code quality, efficiency |
+| `/batch` (native) | Anthropic skill | Implement, Standalone | Yes | Decompose work into 5-30 units, parallel worktree execution |
 
 **Key distinctions:**
 - `Explore` agents are fast, read-only, and optimized for codebase navigation. Use for all research tasks.
 - `general-purpose` agents have full tool access including web search. Use when the task needs writing, shell commands, or web access.
 - `Bash` agents are command-execution specialists. Use for CI monitoring, build scripts, and shell-heavy tasks.
 - **Teammates** (via Agent Teams) are full independent Claude Code sessions, not subagents. They don't inherit conversation history and communicate via mailbox.
+
+### Anthropic-Native Commands
+
+These are bundled slash commands maintained by Anthropic. They improve automatically with Claude Code updates — prefer them over custom equivalents.
+
+#### `/simplify`
+
+**Purpose:** Review changed code for reuse, quality, and efficiency, then fix issues found.
+
+**Mechanics:** Spawns 3 parallel review agents — one for code reuse, one for code quality, one for efficiency. Aggregates findings and applies fixes automatically. Optional focus text: `/simplify focus on memory efficiency`.
+
+**Where it runs in RPI:**
+- **Implement (Phase 3)** — after the reviewer subagent approves plan compliance, before automated verification. This separates concerns: reviewer checks "does the code match the plan?", `/simplify` checks "is the code good?"
+- **Pre-launch** — after the audit report, as the first fix action for code quality blockers/warnings
+- **Validate (Phase 4)** — when code quality findings surface
+- **Standalone** — anytime after significant code changes
+
+**Relationship to our reviewer subagent:** Complementary, not a replacement. The reviewer checks plan compliance (did you implement what was specified?). `/simplify` checks code quality (is the implementation clean?). Run the reviewer first, then `/simplify`.
+
+#### `/batch`
+
+**Purpose:** Orchestrate large-scale parallel changes across a codebase.
+
+**Mechanics:** Takes an instruction, researches the codebase, decomposes work into 5-30 independent units, presents a plan for approval. Once approved, spawns one background agent per unit in an isolated git worktree. Each agent implements its unit, runs tests, and opens a PR. Requires a git repository.
+
+**Where it runs in RPI:**
+- **Implement (Phase 3)** — when the plan marks phases as `[batch-eligible]` (independent, no file overlap, no dependency on another phase's output), `/batch` executes them all in parallel instead of sequential phase-by-phase
+- **Standalone** — for migrations, bulk refactors, multi-issue sprints, and any parallelizable work that doesn't need the full RPI cycle (e.g., `/batch migrate all test files from Jest to Vitest`)
+
+**Relationship to Agent Teams:** `/batch` is higher-level. It handles decomposition, worktree isolation, and PR creation automatically. Agent Teams give you lower-level control (shared task list, direct messaging between agents). Use `/batch` when the work is clearly decomposable; use Agent Teams when agents need to coordinate.
+
+---
 
 ### Detailed Role Definitions
 

@@ -164,8 +164,12 @@ The shell script reads update instructions from cc-rpi at runtime, so when cc-rp
 - [ ] Always `/research` before `/plan`
 - [ ] Always `/plan` before `/implement`
 - [ ] Always review plans before approving
+- [ ] Mark independent plan phases as `[batch-eligible]` during `/plan`
 - [ ] Never skip the human confirmation gate between implementation phases
+- [ ] Always run `/simplify` after reviewer approval during `/implement`
+- [ ] Use `/batch` for independent phases and bulk migrations
 - [ ] Use `/validate` after implementation
+- [ ] Run `/simplify` after `/pre-launch` audit to fix code quality findings
 - [ ] Use `/clear` between unrelated tasks to reset context
 - [ ] Run each RPI phase in its own conversation
 - [ ] Research and plan on the default branch; implement in worktrees

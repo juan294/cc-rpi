@@ -131,15 +131,18 @@ Claude: Reading the plan... Starting Phase 1: Rate limiting infrastructure
 [creates src/config/rateLimits.ts — centralized config]
 [adds ioredis to dependencies]
 [writes unit tests for the middleware factory]
+[reviewer: plan compliance PASS]
+[/simplify: clean]
 [runs typecheck, lint, tests]
 
 Phase 1 complete:
-- ✅ rateLimiter middleware factory created
-- ✅ Redis-backed sliding window counter
-- ✅ Fail-open behavior when Redis is unavailable
-- ✅ Configurable limits per route
-- ✅ 6 unit tests passing
-- ✅ TypeScript compiles, lint clean
+- [x] rateLimiter middleware factory created
+- [x] Redis-backed sliding window counter
+- [x] Fail-open behavior when Redis is unavailable
+- [x] Configurable limits per route
+- [x] 6 unit tests passing
+- [x] /simplify: clean
+- [x] TypeScript compiles, lint clean
 
 Ready for Phase 2?
 ```
@@ -153,14 +156,17 @@ Claude: Starting Phase 2: Apply to login endpoint + integration tests
 
 [adds rate limiter to login route in src/routes/auth.ts]
 [writes integration tests with supertest + redis mock]
+[reviewer: plan compliance PASS]
+[/simplify: found 1 reuse opportunity — extracted shared config lookup. Fixed.]
 [runs full test suite]
 
 Phase 2 complete:
-- ✅ Login endpoint rate limited: 5 attempts / 15 min per IP
-- ✅ Returns 429 with Retry-After header when exceeded
-- ✅ Fail-open test: works when Redis is down
-- ✅ 4 new integration tests (under/at/over limit + Redis failure)
-- ✅ Full suite: 47 tests, all passing
+- [x] Login endpoint rate limited: 5 attempts / 15 min per IP
+- [x] Returns 429 with Retry-After header when exceeded
+- [x] Fail-open test: works when Redis is down
+- [x] 4 new integration tests (under/at/over limit + Redis failure)
+- [x] /simplify: 1 fix applied (config lookup reuse)
+- [x] Full suite: 47 tests, all passing
 
 All phases complete.
 ```
@@ -176,13 +182,13 @@ You: /validate docs/plans/2026-02-22-rate-limiting.md
 ```
 Claude: Running validation...
 
-- ✅ Phase 1: All success criteria met
-- ✅ Phase 2: All success criteria met
-- ✅ TypeScript: No errors
-- ✅ Lint: Clean
-- ✅ Tests: 47/47 passing
-- ✅ Rate limiter factory is reusable for other endpoints
-- ✅ Fail-open behavior verified
+- [x] Phase 1: All success criteria met
+- [x] Phase 2: All success criteria met
+- [x] TypeScript: No errors
+- [x] Lint: Clean
+- [x] Tests: 47/47 passing
+- [x] Rate limiter factory is reusable for other endpoints
+- [x] Fail-open behavior verified
 
 One note: You may want to manually test the 429 response format
 matches what your frontend expects. The integration tests verify

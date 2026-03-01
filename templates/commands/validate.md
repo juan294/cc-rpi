@@ -13,3 +13,5 @@ Process:
    - Code review findings (matches, deviations, issues)
    - Manual testing required (only if automation impossible — explain WHY)
    - Recommendations
+5. If code quality issues are found (reuse opportunities, inefficiencies,
+   dead code), recommend running `/simplify` to fix them in one pass.

@@ -90,6 +90,16 @@ These rules must be internalized before starting any work. They prevent the most
 
 38. **launchd plist must NOT run project scripts directly** — `<string>/project/scripts/agent.sh</string>` in ProgramArguments causes Claude CLI to crash with "Unexpected" when the script is inside a directory with `.claude/`. Use `/bin/bash -c "exec /bin/bash <script>"` wrapper instead. Exit code is 0 despite the error, so preflight checks silently pass.
 
+## Native Command Rules
+
+39. **Always run `/simplify` after reviewer approval during `/implement`** — it catches code reuse, quality, and efficiency issues that the plan-compliance reviewer doesn't check.
+
+40. **Mark independent plan phases as `[batch-eligible]`** — during `/plan`, identify phases with no file overlap and no dependency on another phase's output. `/batch` can execute these in parallel (one worktree per phase, each opens a PR).
+
+41. **Use `/batch` for bulk changes outside the RPI cycle** — migrations, multi-issue sprints, and repetitive refactors across many files are `/batch` territory. Don't manually iterate through 20 files when `/batch` can parallelize them.
+
+42. **After `/pre-launch` audit, run `/simplify` first** — it fixes the bulk of architect and performance-eng findings (dead code, duplicates, inefficiencies) in one automated pass. Then address security, infrastructure, and accessibility findings manually.
+
 ---
 
 For detailed symptoms, root causes, and examples, see [agent-errors.md](agent-errors.md).

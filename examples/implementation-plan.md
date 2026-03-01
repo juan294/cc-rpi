@@ -46,7 +46,7 @@ risk: clock skew across replicas
   - [ ] Linting passes: `pnpm run lint`
 - Manual: None
 
-### Phase 2 — Middleware Integration + Tests
+### Phase 2 — Middleware Integration + Tests `[depends on Phase 1]`
 **File:** `docs/plans/2025-12-16-rate-limiting-phases/phase-2.md`
 
 ```
@@ -72,7 +72,7 @@ fail: malformed body -> skip email limit (IP-only)
   - [ ] TypeScript compiles: `pnpm run typecheck`
 - Manual: None
 
-### Phase 3 — Route Wiring + E2E Verification
+### Phase 3 — Route Wiring + E2E Verification `[depends on Phase 1 + 2]`
 **File:** `docs/plans/2025-12-16-rate-limiting-phases/phase-3.md`
 
 ```
@@ -112,3 +112,9 @@ risk: middleware ordering (rate limit must run before body parsing if body-depen
 | `src/routes/auth.ts:12` | Add rate limit middleware to login route |
 | `src/config/auth.ts` | Add rate limit configuration (limits, window size) |
 | `.env.example` | Add `RATE_LIMIT_*` variables |
+
+## Batch Eligibility
+
+No phases are `[batch-eligible]` — each phase depends on the previous:
+- Phase 2 uses `RateLimiter` created in Phase 1
+- Phase 3 wires the middleware built in Phase 2

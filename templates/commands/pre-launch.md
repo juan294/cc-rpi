@@ -47,9 +47,19 @@ After all 6 complete, collect results into a single report at `docs/agents/pre-l
 ### 6. UX/Accessibility (ux-reviewer) — GREEN/YELLOW/RED
 ```
 
+### After the Audit
+
+If the verdict is CONDITIONAL or NOT READY with code quality findings (dead code, duplicates,
+inefficiencies, reuse opportunities), recommend running `/simplify` as the first fix action.
+`/simplify` spawns 3 specialized agents (code reuse, code quality, efficiency) and applies
+fixes automatically — it handles the bulk of architect and performance-eng findings in one pass.
+
+For findings that `/simplify` can't address (security, infrastructure, accessibility), those
+require manual implementation or a targeted `/implement` cycle.
+
 ### Rules
 
 - **Read-only.** No specialist modifies files — they audit and report.
 - **Parallel.** All 6 run simultaneously.
-- **Do NOT auto-fix.** Present the full audit to the user. The user decides what to fix and what to accept as risk.
+- **Do NOT auto-fix during the audit.** Specialists are read-only — present the full audit to the user. The user decides what to fix and what to accept as risk. After review, `/simplify` may be used as a first fix step (see "After the Audit" above).
 - **Verdict thresholds:** Any blocker = NOT READY. Warnings only = CONDITIONAL. Clean = READY.

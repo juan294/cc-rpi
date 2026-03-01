@@ -19,7 +19,9 @@ User
  │
  ├── /implement  ─────► Implementation Orchestrator
  │                       ├── Implementer subagents (up to 3)
- │                       └── Reviewer subagent
+ │                       ├── Reviewer subagent (plan compliance)
+ │                       ├── /simplify (native — code quality)
+ │                       └── /batch (native — parallel phases)
  │
  ├── /validate  ──────► Validation Orchestrator
  │                       └── Research subagents (for verification)
@@ -257,6 +259,7 @@ A plan is **NOT done** if:
 - A phase modifies more than 5-7 files (split it)
 - Dependencies between phases are not documented
 - Manual testing is listed without explaining why automation is impossible
+- Independent phases exist but aren't marked `[batch-eligible]` (check for `/batch` opportunities)
 
 ---
 
@@ -281,14 +284,20 @@ A plan is **NOT done** if:
 **The atomic loop:**
 ```
 Implement (atomic change)
-    → Review (subagent)
+    → Review (subagent — plan compliance)
     → Fix if needed
     → Re-review
     → Approve
+    → /simplify (Anthropic-native code quality pass)
     → Run verification
     → Mark complete
     → STOP — wait for human
 ```
+
+**Native command integration:**
+
+- **`/simplify`** — runs after the reviewer approves plan compliance. Spawns 3 parallel agents (code reuse, code quality, efficiency) and applies fixes automatically. This separates concerns: reviewer checks plan compliance, `/simplify` handles code quality. Because `/simplify` is Anthropic-maintained, it improves without blueprint changes.
+- **`/batch`** — when the plan marks phases as `[batch-eligible]` (independent, no file overlap), `/batch` can execute them all in parallel. Each phase runs in its own git worktree and opens a PR. Use this instead of sequential phase-by-phase when phases are truly independent.
 
 **If stuck:**
 - Get help from subagents for targeted debugging.
@@ -307,8 +316,9 @@ Implement (atomic change)
 
 An implementation phase is **done** when:
 - [ ] All files listed in the phase plan are created/modified
+- [ ] The reviewer subagent approves plan compliance (no open fix requests)
+- [ ] `/simplify` has been run on changed files (code quality pass)
 - [ ] Every automated success criterion passes (typecheck, lint, tests)
-- [ ] The reviewer subagent approves (no open fix requests)
 - [ ] Checkboxes in the plan file are updated
 - [ ] No unrelated changes are included (atomic scope)
 - [ ] Human has confirmed and approved before next phase
@@ -316,6 +326,7 @@ An implementation phase is **done** when:
 An implementation phase is **NOT done** if:
 - Any automated check fails (even if the failure "looks unrelated")
 - The reviewer subagent identified issues that weren't addressed
+- `/simplify` was skipped (always run it — it's fast and catches real issues)
 - The phase modified files not listed in the plan (scope creep)
 
 ---

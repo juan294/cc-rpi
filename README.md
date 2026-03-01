@@ -42,7 +42,7 @@ The full Research-Plan-Implement pattern adapted for Claude Code, based on Human
 - **Philosophy** — Core tenets, error amplification principle, mental alignment
 - **Context Engineering** — The foundational discipline: compaction, context quality, settings & permissions
 - **Four Phases** — Research, Plan, Implement, Validate with detailed processes
-- **Agent Design** — Documentarian rule, tool restrictions, subagent catalog, agent teams, autonomy principles
+- **Agent Design** — Documentarian rule, tool restrictions, subagent catalog, Anthropic-native commands (`/simplify`, `/batch`), agent teams, autonomy principles
 - **Pseudocode Notation** — Compact notation for writing implementation plans
 - **Testing** — Automated-first verification hierarchy, TDD protocol
 - **Push Accountability** — Post-push CI ownership, background polling, fix-and-repush cycle
@@ -72,7 +72,7 @@ Ready-to-use starting points for new projects:
 - **README header template** — Standard project README structure with badges, Chapa embed, and divider
 - **settings.json template** — `.claude/settings.json` with Agent Teams, hooks, and permissions
 - **Setup checklist** — Step-by-step guide including pre-commit hooks, CI setup, push accountability, and scheduled agents
-- **Slash commands** — `/bootstrap`, `/adopt`, `/update`, `/research`, `/plan`, `/implement`, `/validate`, `/describe-pr`, `/pre-launch`
+- **Slash commands** — `/bootstrap`, `/adopt`, `/update`, `/research`, `/plan`, `/implement`, `/validate`, `/describe-pr`, `/pre-launch` — plus integration with Anthropic-native `/simplify` and `/batch`
 - **Scheduled agent scripts** — Nightly blueprint sync agent (`cc-rpi-update-agent.sh`) with retry logic and launchd/cron templates
 
 ## Adding New Patterns

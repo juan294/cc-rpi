@@ -147,14 +147,16 @@ The agent reads the plan and starts with Phase 1 only:
 Claude: Starting Phase 1: Database schema + Prisma setup
 
 [installs prisma, creates schema, runs migration, writes seed script]
+[reviewer: plan compliance PASS]
+[/simplify: clean]
 [runs typecheck, lint, tests]
 
 Phase 1 complete. All checks pass:
-- ✅ Prisma schema created with Todo model
-- ✅ Migration applied successfully
-- ✅ Seed script works
-- ✅ TypeScript compiles
-- ✅ Tests pass (3 new tests for database connection and model)
+- [x] Prisma schema created with Todo model
+- [x] Migration applied successfully
+- [x] Seed script works
+- [x] TypeScript compiles
+- [x] Tests pass (3 new tests for database connection and model)
 
 Ready for Phase 2?
 ```
@@ -169,12 +171,15 @@ You: Good, continue.
 Claude: Starting Phase 2: CRUD endpoints with input validation
 
 [creates routes, controllers, validation middleware]
+[reviewer: plan compliance PASS]
+[/simplify: extracted duplicated validation pattern into shared helper. Fixed.]
 [runs typecheck, lint, tests]
 
 Phase 2 complete. All checks pass:
-- ✅ GET /todos, GET /todos/:id, POST /todos, PUT /todos/:id, DELETE /todos/:id
-- ✅ Input validation with express-validator
-- ✅ 12 new tests (endpoint + validation)
+- [x] GET /todos, GET /todos/:id, POST /todos, PUT /todos/:id, DELETE /todos/:id
+- [x] Input validation with express-validator
+- [x] /simplify: 1 fix applied (validation pattern reuse)
+- [x] 12 new tests (endpoint + validation)
 
 Ready for Phase 3?
 ```
@@ -187,13 +192,15 @@ You: Continue.
 Claude: Starting Phase 3: Error handling + integration tests
 
 [creates error middleware, adds integration tests with supertest]
+[reviewer: plan compliance PASS]
+[/simplify: clean]
 [runs full test suite]
 
 Phase 3 complete. All checks pass:
-- ✅ Centralized error handling middleware
-- ✅ 8 integration tests covering happy paths and error cases
-- ✅ Full suite: 23 tests, all passing
-- ✅ TypeScript compiles, lint clean
+- [x] Centralized error handling middleware
+- [x] 8 integration tests covering happy paths and error cases
+- [x] Full suite: 23 tests, all passing
+- [x] TypeScript compiles, lint clean
 
 All phases complete.
 ```
@@ -209,13 +216,13 @@ You: /validate docs/plans/2026-02-22-todo-api.md
 ```
 Claude: Running validation against the plan...
 
-- ✅ Phase 1: All success criteria met
-- ✅ Phase 2: All success criteria met
-- ✅ Phase 3: All success criteria met
-- ✅ TypeScript: No errors
-- ✅ Lint: Clean
-- ✅ Tests: 23/23 passing
-- ✅ No TODO/FIXME markers left in code
+- [x] Phase 1: All success criteria met
+- [x] Phase 2: All success criteria met
+- [x] Phase 3: All success criteria met
+- [x] TypeScript: No errors
+- [x] Lint: Clean
+- [x] Tests: 23/23 passing
+- [x] No TODO/FIXME markers left in code
 
 Verdict: All plan objectives achieved. Ready for PR.
 ```

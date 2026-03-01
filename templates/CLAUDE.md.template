@@ -42,7 +42,9 @@ All significant changes go through four phases:
 
 ### Rules for Implementation
 
-- Follow the atomic loop: implement → review → fix → approve.
+- Follow the atomic loop: implement → review (plan compliance) → fix → approve → `/simplify` (code quality) → verify.
+- Run `/simplify` after reviewer approval — it handles code reuse, quality, and efficiency in one native pass.
+- Check for `[batch-eligible]` phases in the plan — use `/batch` to execute independent phases in parallel.
 - Run ALL automated verification after each phase.
 - STOP after each phase and wait for human confirmation.
 - Never auto-proceed to the next phase.

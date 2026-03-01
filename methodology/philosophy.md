@@ -55,7 +55,7 @@ Research documents and plans become the primary mechanism for keeping team membe
 
 3. **Separating locators from analyzers** prevents bloated, unfocused research results. Finding WHERE and understanding HOW are different cognitive tasks.
 
-4. **The reviewer subagent in implementation** catches issues that the implementer misses. The reviewer can also add tests, which is a powerful quality mechanism.
+4. **The two-layer review in implementation** catches different classes of issues. The reviewer subagent checks plan compliance, then Anthropic's `/simplify` handles code quality (reuse, efficiency). The reviewer can also add tests, which is a powerful quality mechanism.
 
 5. **Phase gates with human confirmation** prevent runaway implementations that drift from intent. The cost of stopping is low; the cost of an incorrect multi-phase implementation is high.
 
