@@ -112,6 +112,14 @@ After completing the migration:
 
 This ensures the next session doesn't start from zero — the agent already knows the project context, the rules, and the migration decisions.
 
+## Recommended Next Step
+
+After adoption is complete, suggest the user run `/pre-launch` in a new session to baseline their codebase quality. `/pre-launch` spawns 6 specialist agents (architect, QA, security, performance, UX, devops) that audit the entire codebase and produce a report with blockers, warnings, and recommendations.
+
+For code quality findings (dead code, duplicates, inefficiencies), `/simplify` handles the bulk of fixes automatically. Security, infrastructure, and accessibility findings require manual implementation or a targeted `/implement` cycle.
+
+This is optional but recommended — it gives adopters a clear picture of their codebase health under the new methodology.
+
 ## Rules for This Process
 
 - **Audit first, change nothing.** Phase 2 and 3 are entirely read-only. No files are modified until the user approves the plan.
