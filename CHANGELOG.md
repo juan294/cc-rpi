@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## Unreleased
 
+## [1.3.0] - 2026-03-01
+
 ### Added
 
 - **`/simplify` integration** — Anthropic's native code quality command (reuse, quality, efficiency) integrated into the RPI workflow. Runs after reviewer approval in `/implement`, recommended after `/pre-launch` audit, and suggested by `/validate` for quality findings. Added to the atomic loop, agent-design catalog, and quick-reference rules (39, 42).
@@ -13,12 +15,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - **Two-layer review model** — Implementation phases now separate plan-compliance review (reviewer subagent) from code-quality review (`/simplify`). Documented in `four-phases.md`, `agent-design.md`, and `CLAUDE.md.template`.
 - **Batch eligibility assessment** — Plans must evaluate phase independence and mark `[batch-eligible]` where applicable. Added to plan completion criteria in `four-phases.md` and example in `implementation-plan.md`.
 - **Rules #39–#42** in `quick-reference.md` — Native Command Rules covering `/simplify` and `/batch` usage patterns.
+- **Post-adoption baseline audit** — `/adopt` now recommends running `/pre-launch` after setup for a full codebase quality baseline, followed by `/simplify` for auto-fixes.
 - **Errors #39–#43** — five new agent error patterns added to `agent-errors.md` and `quick-reference.md` (rules #43–#47):
   - **#39:** `gh` CLI fails with "Projects (classic) deprecated" GraphQL error — upgrade `gh` to latest version
   - **#40:** Agent uses bare `python3` instead of `uv run python` — bypasses venv, causes ModuleNotFoundError
   - **#41:** Over-escaping `!=` as `\!=` in inline Python — SyntaxError from line continuation character
   - **#42:** Python script fails with ModuleNotFoundError — package-relative imports need `-m` flag
   - **#43:** Agent indexes JSON list with string key — TypeError from assuming dict structure
+
+### Changed
+
 - **Emoji removal** — all emoji characters removed from documentation, replaced with text equivalents.
 
 ## [1.2.0] - 2026-02-23
