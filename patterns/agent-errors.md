@@ -1326,3 +1326,172 @@ The `exec` replaces the initial shell process, so the agent script still runs as
 ```
 
 **Key detail:** This error has zero debug output — `--debug-file` is never written because the CLI crashes before reaching the debug initialization. The exit code is 0 despite the error, which means auth preflight checks (`if ! claude -p "echo ok" >/dev/null 2>&1`) silently pass, masking the problem. Combined with [Error #37](#error-37-scheduled-agent-silently-fails-under-macos-launchd), a working launchd agent plist requires four fixes: resource limits, env vars, setup-token auth, and the `-c exec` ProgramArguments wrapper.
+
+---
+
+## Error #39: `gh` CLI fails with "Projects (classic) deprecated" GraphQL error
+
+**Symptom:** `gh issue view`, `gh pr edit`, `gh pr view`, or other `gh` commands fail with: "GraphQL: Projects (classic) is being deprecated in favor of the new Projects experience, see: https://github.blog/changelog/2024-05-23-sunset-notice-projects-classic/. (repository.issue.projectCards)" or similar `(repository.pullRequest.projectCards)`.
+
+**Root cause:** The installed `gh` CLI version uses GraphQL queries that reference the deprecated `projectCards` and `projectColumns` fields. GitHub removed classic Projects from the API, so older `gh` versions break on any command that touches project metadata.
+
+**Correct approach — always do this:**
+```bash
+# Upgrade gh CLI to latest version:
+brew upgrade gh
+# or:
+gh upgrade
+
+# Verify the version is recent enough:
+gh --version
+```
+
+**Never do this:**
+```bash
+# Don't retry the same command — it will keep failing:
+gh issue view 17     # ← fails with GraphQL error
+gh issue view 17     # ← same error, upgrading is the only fix
+
+# Don't try to work around it with --json (same API, same error):
+gh pr edit 2 --title "..." --body "..."  # ← still hits projectCards
+```
+
+**Key detail:** The error looks like a permissions or API issue but is actually a client version problem. The `gh` CLI embeds GraphQL queries at build time — no amount of authentication or flag changes will fix it. The only fix is upgrading.
+
+---
+
+## Error #40: Agent uses `python3` instead of `uv run python` — bypasses venv
+
+**Symptom:** `ModuleNotFoundError: No module named 'openai'` (or any project dependency) when the agent runs `python3 -c "from openai import OpenAI..."` or `export $(grep -v '^#' .env | xargs) && python3 -c "..."`. The dependency is installed in the project's venv but not in the system Python.
+
+**Root cause:** The agent uses bare `python3` instead of `uv run python`, bypassing the virtual environment entirely. The project manages dependencies with `uv` (or `pip` in a venv), but the system Python has no access to them.
+
+**Correct approach — always do this:**
+```bash
+# Always use uv run to execute within the project's venv:
+uv run python -c "from openai import OpenAI; print('ok')"
+uv run python scripts/my_script.py
+
+# For environment variables, source .env inside uv run:
+uv run bash -c 'source .env && python -c "from openai import OpenAI; print(\"ok\")"'
+
+# Or use dotenv support if available:
+uv run --env-file .env python scripts/my_script.py
+```
+
+**Never do this:**
+```bash
+# Don't use bare python3 in projects with a venv:
+python3 -c "from openai import OpenAI"              # ← ModuleNotFoundError
+export $(grep -v '^#' .env | xargs) && python3 ...  # ← env vars loaded but wrong Python
+
+# Don't assume system Python has project dependencies:
+python3 scripts/my_script.py                         # ← works on your machine != works correctly
+```
+
+**Key detail:** This applies to any venv-based project, not just `uv`. If the project uses `poetry`, use `poetry run python`. If it uses `pipenv`, use `pipenv run python`. The pattern is: always invoke Python through the project's dependency manager.
+
+---
+
+## Error #41: Over-escaping `!=` as `\!=` in inline Python — SyntaxError
+
+**Symptom:** Running inline Python in a shell command produces `SyntaxError: unexpected character after line continuation character` pointing at `\!=`:
+```
+if batch.status \!= 'completed':
+                ^
+SyntaxError: unexpected character after line continuation character
+```
+
+**Root cause:** Same root cause as [Error #17](#error-17-jq-syntax-error--shell-escaping-corrupts-filter-expressions) (jq over-escaping), but in Python. The agent escapes `!=` as `\!=` inside a shell command that runs Python. In Python, `\` is a line continuation character, so `\!` is invalid syntax. Inside single-quoted shell strings, `!` is literal and needs no escaping.
+
+**Correct approach — always do this:**
+```bash
+# Use single quotes for inline Python — no escaping needed:
+python3 -c '
+if batch.status != "completed":
+    print("still running")
+'
+
+# For complex scripts, write to a temp file instead of inline:
+uv run python scripts/check_status.py
+```
+
+**Never do this:**
+```bash
+# Don't escape operators inside single-quoted strings:
+python3 -c 'if batch.status \!= "completed": ...'  # ← SyntaxError
+
+# Don't use double quotes for inline Python (fragile escaping):
+python3 -c "if batch.status != 'completed': ..."    # ← works but breaks with $variables
+```
+
+**Key detail:** This is the Python variant of Error #17. The rule is universal: inside single-quoted shell strings (`'...'`), ALL characters are literal — no escaping is needed or wanted. This applies to jq, Python, awk, sed, and any other language embedded in shell commands.
+
+---
+
+## Error #42: Python script fails — package-relative imports without `-m` flag
+
+**Symptom:** `ModuleNotFoundError: No module named 'scripts'` when running `uv run python scripts/ab_testing/scorer.py`, even though the file exists and the import `from scripts.ab_testing.config import MANIFEST_PATH` is valid.
+
+**Root cause:** Running a script directly with `python scripts/foo.py` sets `scripts/` as the script's directory, not a package. Python doesn't add the parent directory to `sys.path`, so `from scripts.ab_testing.config import ...` fails because `scripts` isn't recognized as an importable package.
+
+**Correct approach — always do this:**
+```bash
+# Use -m flag to run as a module (treats parent dir as the package root):
+uv run python -m scripts.ab_testing.scorer
+
+# Or ensure the project is installed in development mode:
+uv pip install -e .
+uv run python scripts/ab_testing/scorer.py  # ← now works because package is installed
+
+# Or run from the project root with PYTHONPATH set:
+PYTHONPATH=. uv run python scripts/ab_testing/scorer.py
+```
+
+**Never do this:**
+```bash
+# Don't run scripts directly when they use package-relative imports:
+uv run python scripts/ab_testing/scorer.py                    # ← ModuleNotFoundError
+python scripts/ab_testing/scorer.py                           # ← same error
+cd scripts/ab_testing && uv run python scorer.py              # ← even worse
+```
+
+**Key detail:** If a Python file uses `from package.module import ...` (dotted package path), it expects to be run as part of a package. Check the imports at the top of the file before deciding how to invoke it. If you see dotted imports from the project root, use `-m`.
+
+---
+
+## Error #43: Agent indexes JSON list with string key — TypeError
+
+**Symptom:** `TypeError: list indices must be integers or slices, not str` when parsing JSON inline with `python3 -c "..."`. The agent assumes the JSON structure is a dict (object) when it's actually a list (array).
+
+**Root cause:** The agent guesses the shape of JSON data without inspecting it first. Common when parsing API responses, config files, or command output where the top-level type varies (some endpoints return arrays, others return objects).
+
+**Correct approach — always do this:**
+```bash
+# Inspect the structure first:
+uv run python -c "import json; data = json.load(open('file.json')); print(type(data)); print(data[:2] if isinstance(data, list) else list(data.keys())[:5])"
+
+# Handle both shapes defensively:
+uv run python -c "
+import json
+data = json.load(open('file.json'))
+if isinstance(data, list):
+    for item in data:
+        print(item.get('name', 'unknown'))
+else:
+    print(data['name'])
+"
+```
+
+**Never do this:**
+```bash
+# Don't assume dict when structure is unknown:
+python3 -c "import json; data = json.load(open('f.json')); print(data['papers'])"
+# ← TypeError if data is a list, not a dict
+
+# Don't chain access without checking:
+python3 -c "import json; d = json.load(open('f.json')); print(d['results'][0]['name'])"
+# ← could fail at any level if the structure differs from expectations
+```
+
+**Key detail:** When working with unfamiliar JSON (API responses, generated files, command output), always inspect `type(data)` and a sample of the contents before writing access code. A 5-second check prevents cryptic TypeErrors.

@@ -100,6 +100,18 @@ These rules must be internalized before starting any work. They prevent the most
 
 42. **After `/pre-launch` audit, run `/simplify` first** — it fixes the bulk of architect and performance-eng findings (dead code, duplicates, inefficiencies) in one automated pass. Then address security, infrastructure, and accessibility findings manually.
 
+## Environment & Language Rules
+
+43. **`gh` fails with "Projects (classic) deprecated" GraphQL error** — upgrade `gh` CLI (`brew upgrade gh`). Older versions query removed `projectCards` fields. No flag or auth change fixes it.
+
+44. **Always use `uv run python` (or project's venv runner) — never bare `python3`** — system Python doesn't have project dependencies. Use `uv run python`, `poetry run python`, or `pipenv run python`.
+
+45. **Don't escape `!=` inside single-quoted shell strings** — `\!=` breaks Python (`SyntaxError: unexpected character after line continuation`) and jq (`INVALID_CHARACTER`). Inside `'...'`, all characters are literal.
+
+46. **Use `python -m` for scripts with package-relative imports** — `python scripts/foo.py` fails with `ModuleNotFoundError` if the script uses `from scripts.bar import ...`. Use `python -m scripts.foo` instead.
+
+47. **Inspect JSON structure before indexing** — `data['key']` on a list gives `TypeError: list indices must be integers`. Check `type(data)` first when working with unfamiliar JSON.
+
 ---
 
 For detailed symptoms, root causes, and examples, see [agent-errors.md](agent-errors.md).
