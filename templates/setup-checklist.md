@@ -4,13 +4,12 @@ Use this when setting up a new project to follow cc-rpi best practices.
 
 ## README Header
 
-- [ ] Structure every project README with the standard header (adapt from `templates/README-header.md`):
+- [ ] Structure the project README with a standard header:
   1. `# Project Name — Tagline`
   2. GitHub badges (CI, Security Scan, Secret Scanning, stack versions, and optionally license if open source)
   3. One-line project description
-  4. Chapa badge: `![Chapa Badge](https://chapa.thecreativetoken.com/u/[OWNER]/badge.svg)`
-  5. Horizontal divider (`---`)
-  6. Rest of the README content below the divider
+  4. Horizontal divider (`---`)
+  5. Rest of the README content below the divider
 - [ ] Adjust badge URLs to match the project's GitHub owner/repo
 - [ ] Add or remove stack badges as relevant (TypeScript, Node.js, Next.js, Python, etc.)
 

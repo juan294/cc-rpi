@@ -57,7 +57,6 @@ cc-rpi/
 │   └── agent-errors.md               # Detailed error catalog with solutions
 └── templates/                        # Files to adapt for new projects
     ├── CLAUDE.md.template            # Starting point for project CLAUDE.md
-    ├── README-header.md              # Standard README header (badges, Chapa, divider)
     ├── settings.json.template        # .claude/settings.json (Agent Teams, hooks, permissions)
     ├── setup-checklist.md            # Step-by-step new project setup
     ├── commands/                     # Slash command templates

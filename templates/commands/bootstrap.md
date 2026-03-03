@@ -17,8 +17,6 @@ Read these files to understand what you'll be creating:
 4. `templates/setup-checklist.md` — This is your step-by-step guide. You'll execute it in Phase 3.
 5. `templates/CLAUDE.md.template` — The starting point for this project's CLAUDE.md.
 6. `templates/settings.json.template` — The starting point for .claude/settings.json.
-7. `templates/README-header.md` — The standard README header structure.
-
 ## Phase 3: Set Up This Project
 
 Now execute the setup checklist against THIS project. Work through it section by section:

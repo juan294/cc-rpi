@@ -87,7 +87,7 @@ Propose a phased order for the migration. Always start with the highest-leverage
 3. Slash commands (affects daily workflow)
 4. docs/ directory structure (affects research/plan storage)
 5. Pre-commit hooks and CI (affects quality enforcement)
-6. README header, logging, scheduled agents (polish)
+6. Logging, scheduled agents (polish)
 
 ## Phase 4: Get Approval and Execute
 
