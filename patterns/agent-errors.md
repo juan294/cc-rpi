@@ -1495,3 +1495,66 @@ python3 -c "import json; d = json.load(open('f.json')); print(d['results'][0]['n
 ```
 
 **Key detail:** When working with unfamiliar JSON (API responses, generated files, command output), always inspect `type(data)` and a sample of the contents before writing access code. A 5-second check prevents cryptic TypeErrors.
+
+---
+
+## Error #44: `git push --tags` pushes ALL local tags — old tags cause push failure
+
+**Symptom:** `git push origin main --tags` exits non-zero with `! [rejected] v1.0 -> v1.0 (already exists)`. The new commits and new tags pushed fine, but the agent sees exit code 1 and treats the entire push as failed.
+
+**Root cause:** `--tags` pushes every local tag to the remote, not just tags created in this session. If any tag was previously pushed, recreated locally, or already exists on the remote, git rejects it — and the non-zero exit code makes the agent think nothing was pushed. The agent then retries or panics, wasting turns.
+
+**Correct approach — always do this:**
+```bash
+# Push commits and a specific tag by name:
+git push origin main && git push origin v1.3.0
+
+# Or use --follow-tags (only pushes annotated tags reachable from pushed commits):
+git push origin main --follow-tags
+```
+
+**Never do this:**
+```bash
+# Don't push all tags blindly:
+git push origin main --tags
+# ← pushes EVERY local tag, fails if any already exists on remote
+
+# Don't use --force to fix it:
+git push origin main --tags --force
+# ← force-pushes all tags, potentially overwriting remote tag history
+```
+
+**Key detail:** `--tags` and `--follow-tags` are very different. `--tags` pushes all refs under `refs/tags/`. `--follow-tags` only pushes annotated tags that point to commits being pushed. Use `--follow-tags` for release workflows, or push specific tags by name.
+
+---
+
+## Error #45: Agent fabricates filesystem paths — "No such file or directory"
+
+**Symptom:** `git -C /Users/juan/Documents/GenAI_Projects/cc-rpi pull --rebase` fails with `fatal: cannot change to '/Users/juan/Documents/GenAI_Projects/cc-rpi': No such file or directory`. The actual path was `/Users/juan/Documents/code/cc-rpi`.
+
+**Root cause:** The agent guesses or hallucinates a plausible filesystem path instead of using the known working directory or discovering the path. Common fabrications include inventing parent directory names (`Projects`, `GenAI_Projects`, `repos`, `workspace`), getting the nesting level wrong, or mixing up similar project names. This is the filesystem equivalent of Error #23 (fabricating GitHub identifiers).
+
+**Correct approach — always do this:**
+```bash
+# Use the project's working directory (provided by the environment):
+git -C /Users/juan/Documents/code/cc-rpi pull --rebase
+
+# If you need to find another project, discover it:
+ls /Users/juan/Documents/code/
+# Then use the actual name from the listing
+
+# Or ask the user for the path if it's not discoverable
+```
+
+**Never do this:**
+```bash
+# Don't guess directory names:
+git -C /Users/juan/Documents/GenAI_Projects/cc-rpi pull --rebase
+# ← "GenAI_Projects" is fabricated — the real dir is "code"
+
+# Don't assume paths from previous sessions are still valid:
+cd /Users/juan/projects/old-name/src
+# ← directories may have been renamed, moved, or deleted
+```
+
+**Key detail:** The working directory is always available from the environment. For cross-project operations, use `ls` or Glob to discover paths — never guess directory names. Even plausible-sounding names like `Projects` or `repos` are often wrong.

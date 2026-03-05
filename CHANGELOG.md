@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## Unreleased
 
+### Added
+
+- **Errors #44–#45** — two new agent error patterns added to `agent-errors.md` and `quick-reference.md` (rules #48–#49):
+  - **#44:** `git push --tags` pushes ALL local tags — old tags cause push failure. Use specific tag names or `--follow-tags`.
+  - **#45:** Agent fabricates filesystem paths — guesses directory names like `GenAI_Projects` instead of using working directory or discovering with `ls`.
+
 ## [1.3.0] - 2026-03-01
 
 ### Added

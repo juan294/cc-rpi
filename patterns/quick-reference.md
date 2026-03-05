@@ -112,6 +112,10 @@ These rules must be internalized before starting any work. They prevent the most
 
 47. **Inspect JSON structure before indexing** — `data['key']` on a list gives `TypeError: list indices must be integers`. Check `type(data)` first when working with unfamiliar JSON.
 
+48. **Use `git push origin <tag>` instead of `--tags`** — `--tags` pushes ALL local tags. If any old tag already exists on the remote, git exits non-zero even though commits and new tags pushed fine. Push specific tags by name, or use `--follow-tags` for annotated tags reachable from pushed commits.
+
+49. **Don't fabricate filesystem paths — use the working directory or discover with `ls`** — the agent invents plausible directory names (`Projects`, `GenAI_Projects`, `repos`) that don't exist. Use the environment's working directory for the current project, and `ls`/Glob to discover paths for other projects.
+
 ---
 
 For detailed symptoms, root causes, and examples, see [agent-errors.md](agent-errors.md).
