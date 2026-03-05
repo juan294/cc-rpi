@@ -78,6 +78,27 @@ Adjust file paths in each command to match your project's docs directory.
 
 **Slash commands vs skills:** Commands (`.claude/commands/`) are user-invoked workflows. Skills (`.claude/skills/`) are knowledge + workflows that Claude can also auto-detect. Use commands for RPI phases; use skills for domain conventions and reusable task patterns.
 
+## Agent Tool Hooks
+
+- [ ] Create `.claude/hooks/` directory
+- [ ] Copy `guard-bash.sh` from `templates/hooks/guard-bash.sh` to `.claude/hooks/guard-bash.sh`
+- [ ] Verify `jq` is installed (`brew install jq` on macOS)
+- [ ] Configure the hook in `.claude/settings.json` (already in the template):
+  ```json
+  {
+    "hooks": {
+      "PreToolUse": [
+        {
+          "matcher": "Bash",
+          "command": "bash .claude/hooks/guard-bash.sh"
+        }
+      ]
+    }
+  }
+  ```
+- [ ] Test by running `echo '{"tool_name":"Bash","tool_input":{"command":"git pull --rebase"}}' | bash .claude/hooks/guard-bash.sh` in a repo with uncommitted changes (should block)
+- [ ] Add project-specific guards to the bottom of the script (e.g., bare `python3` for uv projects)
+
 ## Pre-Commit Hooks
 
 - [ ] Install a hook framework (e.g., Husky for Node.js, pre-commit for Python)

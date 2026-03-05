@@ -59,6 +59,8 @@ cc-rpi/
     ├── CLAUDE.md.template            # Starting point for project CLAUDE.md
     ├── settings.json.template        # .claude/settings.json (Agent Teams, hooks, permissions)
     ├── setup-checklist.md            # Step-by-step new project setup
+    ├── hooks/                        # PreToolUse enforcement hooks
+    │   └── guard-bash.sh             # Blocks known-bad Bash patterns (Error #33, #44)
     ├── commands/                     # Slash command templates
     │   ├── bootstrap.md              # /bootstrap — new project setup (user-level)
     │   ├── adopt.md                  # /adopt — existing project migration (user-level)

@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Added
 
+- **Three-tier error prevention model** — documented in `methodology/ci-and-guardrails.md`. Rules graduate from Document (advisory) to Prompt (command recipes) to Enforce (hooks). Addresses the core architectural flaw: passive rules in CLAUDE.md don't prevent errors the agent has already been told about.
+- **Agent tool hooks (Level 0 enforcement)** — `templates/hooks/guard-bash.sh` PreToolUse hook that blocks known-bad Bash patterns before execution. Currently enforces Error #33 (git pull --rebase with uncommitted changes) and Error #44 (git push --tags). Configured in `settings.json.template`.
+- **Git command recipes** in `CLAUDE.md.template` — compound command sequences the agent copies as a unit instead of composing individual commands. Covers push sequence, first push, tag push, and worktree cleanup.
 - **Errors #44–#45** — two new agent error patterns added to `agent-errors.md` and `quick-reference.md` (rules #48–#49):
   - **#44:** `git push --tags` pushes ALL local tags — old tags cause push failure. Use specific tag names or `--follow-tags`.
   - **#45:** Agent fabricates filesystem paths — guesses directory names like `GenAI_Projects` instead of using working directory or discovering with `ls`.

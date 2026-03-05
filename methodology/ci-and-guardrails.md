@@ -5,6 +5,12 @@ Guardrails are automated enforcement layers that catch mistakes before they reac
 ## The Enforcement Stack
 
 ```
+Level 0: Agent-time (PreToolUse hooks)
+├── Intercepts commands BEFORE they execute
+├── Blocks known-bad patterns (dirty pull, --tags, fabricated paths)
+├── Agent sees the block reason and self-corrects
+└── Most reliable layer — prevents errors, not just consequences
+
 Level 1: Editor-time (hooks on file edit)
 ├── Formatter runs on save (Prettier, Black, rustfmt)
 ├── Linter runs on save (ESLint, Ruff, clippy)
@@ -26,6 +32,56 @@ Level 3: Push-time (CI workflows)
 ```
 
 Each level catches progressively harder-to-detect issues. The goal: **no broken code ever reaches the shared branch.**
+
+## Agent Tool Hooks (Level 0)
+
+PreToolUse hooks intercept agent commands before they execute. Unlike CLAUDE.md rules (which are advisory), hooks are deterministic — they always run, they can't be forgotten, and they block the command with an explanation.
+
+### Why Hooks Beat Rules
+
+Documented rules fail because of a fundamental mismatch: LLMs don't have procedural memory. A rule read 200 turns ago has near-zero influence on the decision being made right now. In one observed batch of 16 agent errors, 10 were duplicates of already-documented patterns — the rules existed, the agent "knew" them, and it violated them anyway. Error #33 (commit before git pull --rebase) alone appeared 6 times despite being documented since v1.0.
+
+Hooks fix this by moving enforcement from "remember the rule" to "the command is blocked." The agent doesn't need to remember — the system prevents the mistake.
+
+### Setup
+
+Configure in `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "command": "bash .claude/hooks/guard-bash.sh"
+      }
+    ]
+  }
+}
+```
+
+The guard script (`.claude/hooks/guard-bash.sh`) receives the command as JSON on stdin, checks for known-bad patterns, and exits non-zero with a message to block. Exit 0 allows the command through. Copy from `templates/hooks/guard-bash.sh` and add project-specific guards.
+
+### What to Enforce via Hooks
+
+Only promote a rule to hook enforcement when:
+1. **Observed 3+ times** despite being documented
+2. **Mechanically detectable** — a shell script can identify the bad pattern
+3. **Has a clear fix** — the block message tells the agent exactly what to do instead
+
+The current guard script enforces:
+- **Error #33**: `git pull --rebase` with uncommitted changes (checks `git status --porcelain`)
+- **Error #44**: `git push --tags` instead of specific tag names (pattern match)
+
+### Three-Tier Error Prevention Model
+
+| Tier | Mechanism | Reliability | When to Use |
+|------|-----------|-------------|-------------|
+| **Enforce** | PreToolUse hooks, pre-commit hooks, CI | High — mechanically prevented | Top repeat offenders. Rules that keep getting violated despite documentation. |
+| **Prompt** | Command recipes in CLAUDE.md | Medium — agent copies the pattern | Frequent operations. Give compound commands to copy instead of compose. |
+| **Document** | agent-errors.md, quick-reference.md | Low — advisory only | Long tail. Reference for when things go wrong. |
+
+Rules graduate upward: a pattern documented in tier 3 that keeps recurring gets promoted to tier 2 (recipe in CLAUDE.md) or tier 1 (hook). The error processing routine should track repeat offenders across batches and promote accordingly.
 
 ## Pre-Commit Hooks
 
