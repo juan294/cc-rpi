@@ -83,20 +83,8 @@ Adjust file paths in each command to match your project's docs directory.
 - [ ] Create `.claude/hooks/` directory
 - [ ] Copy `guard-bash.sh` from `templates/hooks/guard-bash.sh` to `.claude/hooks/guard-bash.sh`
 - [ ] Verify `jq` is installed (`brew install jq` on macOS)
-- [ ] Configure the hook in `.claude/settings.json` (already in the template):
-  ```json
-  {
-    "hooks": {
-      "PreToolUse": [
-        {
-          "matcher": "Bash",
-          "command": "bash .claude/hooks/guard-bash.sh"
-        }
-      ]
-    }
-  }
-  ```
-- [ ] Test by running `echo '{"tool_name":"Bash","tool_input":{"command":"git pull --rebase"}}' | bash .claude/hooks/guard-bash.sh` in a repo with uncommitted changes (should block)
+- [ ] Hooks configuration is already in `settings.json.template` — verify it was copied to `.claude/settings.json`
+- [ ] Test: make a trivial edit, then run `echo '{"tool_name":"Bash","tool_input":{"command":"git pull --rebase"}}' | bash .claude/hooks/guard-bash.sh` (should print BLOCKED)
 - [ ] Add project-specific guards to the bottom of the script (e.g., bare `python3` for uv projects)
 
 ## Pre-Commit Hooks

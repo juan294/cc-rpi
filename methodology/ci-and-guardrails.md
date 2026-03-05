@@ -7,7 +7,7 @@ Guardrails are automated enforcement layers that catch mistakes before they reac
 ```
 Level 0: Agent-time (PreToolUse hooks)
 ├── Intercepts commands BEFORE they execute
-├── Blocks known-bad patterns (dirty pull, --tags, fabricated paths)
+├── Blocks known-bad patterns (dirty pull, --tags)
 ├── Agent sees the block reason and self-corrects
 └── Most reliable layer — prevents errors, not just consequences
 
@@ -85,7 +85,7 @@ Rules graduate upward: a pattern documented in tier 3 that keeps recurring gets 
 
 ## Pre-Commit Hooks
 
-Pre-commit hooks are the first line of defense. They run automatically before every commit and reject the commit if any check fails.
+Pre-commit hooks run automatically before every commit and reject the commit if any check fails.
 
 ### Setup
 

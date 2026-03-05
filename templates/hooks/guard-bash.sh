@@ -10,6 +10,10 @@
 #
 # Add project-specific guards at the bottom of this file.
 
+# Intentionally no `set -e` — this script is fail-open by design.
+# If any check fails unexpectedly (jq missing, git not in PATH, etc.),
+# execution falls through to exit 0 and the command is allowed.
+# A guard hook must never block legitimate work due to its own bugs.
 set -uo pipefail
 
 # Require jq for JSON parsing — allow through if unavailable
@@ -17,15 +21,18 @@ if ! command -v jq &>/dev/null; then
   exit 0
 fi
 
-INPUT=$(cat)
+read -r -d '' INPUT || true
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
 [[ -z "$COMMAND" ]] && exit 0
+
+# Fast path: skip all guards for non-git commands (~90% of invocations)
+[[ "$COMMAND" != *git* ]] && exit 0
 
 
 # ─── Guard: git pull --rebase with uncommitted changes (Error #33) ────────
 # The #1 most-repeated agent error (37% of all observed errors in one batch).
 # Agent edits files, then runs git pull --rebase without committing first.
-if echo "$COMMAND" | grep -q 'git pull' && echo "$COMMAND" | grep -q -- '--rebase'; then
+if [[ "$COMMAND" == *"git pull"* ]] && [[ "$COMMAND" == *"--rebase"* ]]; then
   if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
     echo "BLOCKED by guard-bash.sh — Error #33: uncommitted changes"
     echo ""
@@ -42,7 +49,7 @@ fi
 # ─── Guard: git push --tags pushes ALL local tags (Error #44) ─────────────
 # Agent uses --tags to push a release tag, but --tags pushes EVERY local tag.
 # Old tags that already exist on remote cause a non-zero exit code.
-if echo "$COMMAND" | grep -q 'git push' && echo "$COMMAND" | grep -q -- '--tags' && ! echo "$COMMAND" | grep -q -- '--follow-tags'; then
+if [[ "$COMMAND" == *"git push"* ]] && [[ "$COMMAND" == *"--tags"* ]] && [[ "$COMMAND" != *"--follow-tags"* ]]; then
   echo "BLOCKED by guard-bash.sh — Error #44: --tags pushes all local tags"
   echo ""
   echo "--tags pushes every tag, not just new ones. Old tags cause failures."
@@ -57,7 +64,7 @@ fi
 # ─── Project-specific guards below this line ──────────────────────────────
 
 # Example: block bare python3 (uncomment for Python/uv projects)
-# if echo "$COMMAND" | grep -qE '^python3?\s' && ! echo "$COMMAND" | grep -qE 'uv run|poetry run|pipenv run'; then
+# if [[ "$COMMAND" =~ ^python3?[[:space:]] ]] && [[ "$COMMAND" != *"uv run"* ]] && [[ "$COMMAND" != *"poetry run"* ]]; then
 #   echo "BLOCKED — use 'uv run python' instead of bare 'python3'"
 #   echo "System Python doesn't have project dependencies."
 #   exit 2

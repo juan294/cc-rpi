@@ -124,8 +124,6 @@ git worktree remove --force <path>; git branch -D <branch>
 ### Git Operations
 - Run typecheck/lint BEFORE committing (pre-commit hooks run the same checks)
 - Remove worktrees BEFORE merging PRs with `--delete-branch`
-- `git worktree remove --force` (always use --force)
-- Use `;` not `&&` for multiple cleanup operations
 - Never fabricate filesystem paths — use the working directory or discover with `ls`
 
 ### GitHub CLI
