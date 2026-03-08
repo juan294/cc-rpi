@@ -78,6 +78,51 @@ gh run list --branch develop --limit 3 --json conclusion,status,name,databaseId
 gh run view <run-id> --log-failed 2>&1 | tail -100
 ```
 
+## Self-Healing CI
+
+Push accountability's background fix loop handles simple CI failures — a single failing test, a lint error, a type mismatch. But when CI fails with multiple unrelated failures (common after config changes, dependency updates, or multi-agent work), a more aggressive approach is needed.
+
+### The Pattern
+
+Instead of fixing failures sequentially, spawn parallel fix agents — one per failure category:
+
+```
+1. Get CI failure logs
+   └─> gh run view <run-id> --log-failed
+
+2. Parse into failure categories
+   ├─ Type errors (N files)
+   ├─ Lint errors (N files)
+   ├─ Test failures (N tests)
+   └─ Build errors
+
+3. Spawn parallel fix agents (one per category)
+   ├─ Agent 1: Fix type errors
+   ├─ Agent 2: Fix lint errors
+   ├─ Agent 3: Fix test failures (one sub-agent per failing test)
+   └─ Agent 4: Fix build errors
+
+4. Combine fixes, run full suite locally
+
+5. If new failures → repeat (max 3 cycles)
+
+6. Commit and push when green
+```
+
+### Rules
+
+1. **Never weaken a test to make it pass.** Fix the source code, not the test. Deleting or weakening a test to pass CI defeats the purpose.
+2. **Fix agents read both the test and the source.** A fix agent that only reads the error message will produce shallow fixes. It must understand the intent of the failing test.
+3. **Run the full suite after combining fixes.** Individual fix agents verify their own changes, but the combined result may introduce new failures. Always run a full verification pass.
+4. **Retry budget: 3 cycles.** If the suite isn't green after 3 fix-and-verify cycles, stop and report what remains broken. Infinite loops are worse than a failing CI.
+5. **Never push to production from a fix loop.** Self-healing operates on the development branch only.
+
+### Slash Command
+
+The `/fix-ci` command (see `templates/commands/fix-ci.md`) implements this pattern as a single invocation. It gets the latest CI failure, parses it, spawns fix agents, and iterates until green or the retry budget is exhausted.
+
+---
+
 ## Integration with RPI
 
 Push accountability sits between the Implement and Validate phases:

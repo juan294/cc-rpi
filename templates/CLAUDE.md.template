@@ -81,6 +81,8 @@ Chain with `&&` or `;`: `pnpm run typecheck 2>&1; pnpm run lint 2>&1`
 3. Release to production via PR: `develop` → `main`
 4. Always run checks before committing (pre-commit hooks enforce this)
 5. Always commit before pulling — `git pull --rebase` requires a clean tree (hook enforced)
+6. **Before any commit, verify the current branch** — run `git branch --show-current` and confirm it matches your intent. If the user hasn't specified a branch, ask. (hook blocks push to main/master)
+7. After config, dependency, or infrastructure changes, **immediately run the full test suite** before proceeding to the next task
 
 ### Commit Messages
 
@@ -139,6 +141,7 @@ git worktree remove --force <path>; git branch -D <branch>
 - When creating a team: break work so each teammate owns different files (avoid conflicts)
 - Teammates don't inherit conversation history — include full context in spawn prompts
 - Use subagents for focused tasks (result is all that matters); use teams for collaborative work requiring discussion
+- **Only the main agent handles git commit/push.** Sub-agents and teammates write changes to their working directories. The main agent reviews the changes, runs tests, and commits centrally. This prevents wrong-branch pushes and merge conflicts from parallel agents.
 
 ## Push Accountability
 

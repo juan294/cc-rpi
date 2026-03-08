@@ -126,6 +126,8 @@ That's it. Those four commands are 90% of your interaction with the methodology.
 |---------|-------------|-------------|
 | `/describe-pr` | Generates a PR description from the current branch's diff and commit history. | Before opening or updating a PR. |
 | `/pre-launch` | Spawns 6 parallel specialist agents (QA, security, performance, architecture, UX, devops) for a production audit. | Before any production release. Run `/simplify` after to fix code quality findings. |
+| `/status` | Quick 5-line project orientation: branch, last commit, working tree, CI status, open items. | Start of session. Quick check without starting a full task. |
+| `/fix-ci` | Self-healing CI: gets failure logs, spawns parallel fix agents per failure category, iterates until green or retry budget exhausted. | When CI is red. Automates the diagnose-fix-verify loop. |
 
 ### Native Claude Code Commands Used in the Workflow
 
@@ -219,7 +221,7 @@ This sounds restrictive, but it's the single most impactful rule for research qu
 
 ### Error Prevention
 
-The blueprint includes 51 operational rules learned from real sessions. These aren't theoretical — they're patterns that caused actual failures and wasted time. Examples:
+The blueprint includes 54 operational rules learned from real sessions. These aren't theoretical — they're patterns that caused actual failures and wasted time. Examples:
 
 - Never run verification commands in parallel (they interfere with each other)
 - Always use absolute paths in worktree commands (relative paths resolve to the wrong directory)
@@ -263,7 +265,9 @@ your-project/
 │   │   ├── implement.md         # /implement
 │   │   ├── validate.md          # /validate
 │   │   ├── describe-pr.md       # /describe-pr
-│   │   └── pre-launch.md        # /pre-launch
+│   │   ├── pre-launch.md        # /pre-launch
+│   │   ├── status.md            # /status
+│   │   └── fix-ci.md            # /fix-ci
 │   └── skills/                  # Domain-specific knowledge (optional)
 ├── docs/
 │   ├── research/                # Research documents
@@ -333,8 +337,8 @@ The blueprint repository contains detailed documentation on every topic mentione
 | Plan notation | `methodology/pseudocode-notation.md` | How to write and read implementation plans |
 | Testing approach | `methodology/testing.md` | TDD protocol, verification hierarchy |
 | CI ownership | `methodology/push-accountability.md` | Background CI monitoring, fix-and-repush |
-| Error patterns | `patterns/agent-errors.md` | 47 documented errors with symptoms and solutions |
-| Operational rules | `patterns/quick-reference.md` | 51 rules to prevent known mistakes |
+| Error patterns | `patterns/agent-errors.md` | 50 documented errors with symptoms and solutions |
+| Operational rules | `patterns/quick-reference.md` | 54 rules to prevent known mistakes |
 | Worked examples | `examples/README.md` | Sample research docs, plans, logs, pseudocode |
 
 ## Credits

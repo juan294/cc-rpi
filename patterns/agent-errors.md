@@ -1627,3 +1627,104 @@ curl -s "$URL" | jq '.results[0].name'
 ```
 
 **Key detail:** This is especially common with API keys passed via environment variables (`$API_KEY`). If the variable is unset or expired, the API returns an auth error in HTML/text format, and the JSON parser produces a confusing traceback that doesn't mention the actual auth problem. Always validate the response before parsing.
+
+---
+
+## Error #48: Agent commits or pushes to the wrong branch
+
+**Symptom:** Agent pushes code to `main`, `master`, or a feature branch other than the intended target. The user discovers the wrong-branch push after the fact, requiring manual branch surgery: cherry-picking commits, resetting branches, and force-pushing to fix the history.
+
+**Root cause:** The agent doesn't verify the current branch before committing. It assumes it's on the right branch based on conversation context, but the actual git state may differ — especially after switching tasks, resuming sessions, or when sub-agents operate in parallel. This is the git equivalent of "measure twice, cut once" — the agent cuts without measuring.
+
+**Correct approach — always do this:**
+```bash
+# ALWAYS verify branch before any commit:
+git branch --show-current   # Confirm this is the branch you intend to commit to
+
+# If unsure, ask the user which branch to target.
+# Then commit and push:
+git add <files> && git commit -m "msg" && git pull --rebase && git push
+```
+
+**Never do this:**
+```bash
+# Don't commit without checking the branch:
+git add . && git commit -m "feat: add feature" && git push
+# ← May push to main, master, or wrong feature branch
+
+# Don't assume the branch from conversation context:
+# User said "push to develop" 50 messages ago — verify git state NOW
+```
+
+**Key detail:** This is especially damaging when pushing to `main`/`master` (production). The guard hook (`guard-bash.sh`) blocks direct pushes to protected branches, but the agent should also verify before committing to any branch. Sub-agents are particularly prone to this — they don't inherit the parent's conversation context about which branch to target.
+
+**Prevention tiers:**
+- **Tier 1 (Enforce):** `guard-bash.sh` blocks `git push origin main/master`
+- **Tier 2 (Prompt):** CLAUDE.md rule: "Before any commit, verify the current branch"
+- **Tier 3 (Document):** This entry
+
+---
+
+## Error #49: Sub-agents create git conflicts from parallel work
+
+**Symptom:** Multiple sub-agents or teammates make changes in parallel. When the main agent tries to commit their combined work, there are merge conflicts, overlapping file edits, or orphaned references. In one observed case, 10 parallel agents all succeeded individually but left behind overlapping test files and broken cross-references that required a full cleanup session.
+
+**Root cause:** Sub-agents operate in isolated contexts and don't see each other's changes. When two agents edit the same file (or files that reference each other), the results conflict. The orchestrating agent doesn't enforce file ownership boundaries or centralize git operations.
+
+**Correct approach — always do this:**
+```
+When orchestrating parallel agents:
+1. Break work so each agent owns DISTINCT files — no overlap
+2. Only the main agent handles git commit/push
+3. Sub-agents write changes to working directories or /tmp/agent-<name>/
+4. Main agent reviews all changes for conflicts before committing
+5. Run the full test suite AFTER combining all agent output
+```
+
+**Never do this:**
+```
+# Don't let sub-agents commit independently:
+Sub-agent 1: git add . && git commit -m "fix: agent-1 changes" && git push
+Sub-agent 2: git add . && git commit -m "fix: agent-2 changes" && git push
+# ← Race condition, merge conflicts, overlapping edits
+
+# Don't assume parallel agents produce compatible output:
+# Even if each agent's changes pass tests individually,
+# the COMBINED changes may conflict
+```
+
+**Key detail:** Agent Teams are particularly susceptible because teammates are fully independent Claude Code sessions. They can each commit and push without coordination. The CLAUDE.md rule "only the main agent handles git commit/push" prevents this. For Agent Teams, use the shared task list to track file ownership and prevent teammates from claiming overlapping work.
+
+---
+
+## Error #50: Agent skips test suite after config or infrastructure changes
+
+**Symptom:** Agent modifies configuration files (tsconfig, eslint config, package.json, environment variables, database config, CI workflows) and immediately proceeds to the next task without running tests. Later in the session — or in a subsequent session — tests fail due to the config change. The agent then burns multiple rounds debugging failures that could have been caught immediately.
+
+**Root cause:** The agent treats config changes as "not code" and doesn't apply the same verify-after-change discipline it uses for source code. But config changes often have broader blast radius than code changes — a single tsconfig modification can break hundreds of files, and a dependency update can introduce incompatibilities across the entire test suite.
+
+**Correct approach — always do this:**
+```bash
+# After ANY config or infrastructure change, immediately run the full suite:
+pnpm run typecheck 2>&1; pnpm run lint 2>&1; pnpm run test 2>&1
+
+# This applies to ALL of these:
+# - tsconfig.json, eslint.config.*, prettier.config.*
+# - package.json (dependencies, scripts, engines)
+# - .env files, environment variable changes
+# - Database migrations, schema changes
+# - CI/CD workflow files
+# - Docker/container configuration
+# - Build configuration (vite.config, next.config, webpack.config)
+```
+
+**Never do this:**
+```bash
+# Don't modify config and move on without testing:
+# Edit tsconfig.json to add strict mode
+# Edit next.config.js to change build output
+# → Immediately start writing new feature code
+# ← Tests are now broken but you won't find out until much later
+```
+
+**Key detail:** Config changes have a multiplicative failure pattern — they can break files the agent never touched. Running the test suite immediately after a config change costs minutes but saves the multi-round debug cycles that happen when failures are discovered later with more changes stacked on top.

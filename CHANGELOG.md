@@ -8,9 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Added
 
-- **Errors #46–#47** — two new agent error patterns added to `agent-errors.md` and `quick-reference.md` (rules #50–#51):
+- **Errors #46–#50** — five new agent error patterns added to `agent-errors.md` and `quick-reference.md` (rules #50–#54):
   - **#46:** Scaffolding tool fails on non-empty directory — `create-next-app` and similar tools abort when CLAUDE.md or `.claude/` already exists. Scaffold first, configure second.
   - **#47:** Piping API response to JSON parser without error checking — `curl | jq` crashes with unhelpful parse errors when API returns non-JSON. Save response and check HTTP status first.
+  - **#48:** Agent commits or pushes to the wrong branch — doesn't verify current branch before committing. Guard hook now blocks direct push to main/master.
+  - **#49:** Sub-agents create git conflicts from parallel work — overlapping file edits and orphaned references. Central commit rule: only the main agent handles git commit/push.
+  - **#50:** Agent skips test suite after config changes — config changes have broader blast radius than code. Always run full suite immediately after config/infrastructure changes.
+- **`/status` command** — quick 5-line project orientation (branch, last commit, working tree, CI status, open items). Addresses the ~40% empty session problem by giving users a fast check without starting a full task.
+- **`/fix-ci` command** — self-healing CI that parses failure logs, spawns parallel fix agents per failure category, and iterates until green (max 3 cycles). Automates the manual diagnose-fix-verify loop.
+- **Protected branch guard** in `guard-bash.sh` — blocks `git push origin main/master` unless it's a release flow with `--follow-tags`. Enforces Error #48 at Tier 1.
+- **Git Protocol for Multi-Agent Work** section in `agent-design.md` — central commit rule, branch verification, file ownership for parallel agents, and branch strategy for agent orchestration.
+- **Self-Healing CI** section in `push-accountability.md` — parallel fix agent pattern for multi-failure CI with retry budget and rules.
+- **Branch verification and post-config test rules** in `CLAUDE.md.template` — two new Git Workflow rules and a sub-agent git centralization rule.
 
 ## [1.4.0] - 2026-03-05
 

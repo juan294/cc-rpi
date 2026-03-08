@@ -221,6 +221,55 @@ These are bundled slash commands maintained by Anthropic. They improve automatic
 
 ---
 
+## Git Protocol for Multi-Agent Work
+
+When multiple agents operate in parallel (sub-agents, teammates, or `/batch` units), git operations are the primary source of conflicts. These rules prevent wrong-branch pushes, merge conflicts, and orphaned references.
+
+### Central Commit Rule
+
+**Only the orchestrating agent (main session or team lead) handles git commit and push.** Sub-agents and teammates write code but do not commit.
+
+| Agent Role | Can Edit Files | Can git commit | Can git push |
+|------------|:-:|:-:|:-:|
+| Main session / Team lead | Yes | Yes | Yes |
+| Sub-agent (Task tool) | Yes | No | No |
+| Teammate (Agent Teams) | Yes | No — write to task output | No |
+| `/batch` unit | Yes (in worktree) | Yes (isolated branch) | Yes (opens PR) |
+
+`/batch` is the exception — it creates isolated worktrees with their own branches, so each unit can safely commit and push without conflicts.
+
+### Branch Verification Before Every Commit
+
+Before any `git commit`, the agent must run `git branch --show-current` and verify the result matches the intended target. This applies even when the user said "push to develop" earlier in the conversation — git state is the source of truth, not conversation memory.
+
+The `guard-bash.sh` hook blocks `git push origin main/master` as a last line of defense, but verification should happen before the commit, not after.
+
+### File Ownership for Parallel Agents
+
+When spawning parallel agents, assign distinct file sets to each:
+
+```
+Agent 1: src/auth/*.ts, tests/auth/*.ts
+Agent 2: src/api/*.ts, tests/api/*.ts
+Agent 3: src/utils/*.ts, tests/utils/*.ts
+```
+
+If two agents must touch the same file, run them sequentially or have the second agent read the first agent's output before starting.
+
+### Branch Strategy for Agent Orchestration
+
+For complex multi-agent work beyond `/batch`:
+
+1. Each agent creates a branch: `agent/<task-slug>`
+2. Each agent completes work with passing tests on its branch
+3. The orchestrator merges agent branches into the target branch sequentially
+4. After each merge, run the full test suite — if it breaks, fix before proceeding
+5. Delete agent branches after successful merge
+
+This pattern is more complex than central commit but necessary when agents need full git access (e.g., agents running in separate worktrees).
+
+---
+
 ## Claude Code Extension Points
 
 Beyond subagent prompting, Claude Code provides three mechanisms for extending agent capabilities. These map to different levels of the progressive disclosure hierarchy (see [context-engineering.md](context-engineering.md)).

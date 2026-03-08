@@ -120,6 +120,14 @@ These rules must be internalized before starting any work. They prevent the most
 
 51. **Never pipe `curl` directly to a JSON parser** — `curl | jq` or `curl | python3 json.load()` crashes with unhelpful parse errors when the API returns non-JSON (HTML error pages, auth failures, rate limits). Save the response first and check HTTP status, or use `curl -sf` to fail on errors.
 
+## Branch & Multi-Agent Rules
+
+52. **Always verify the current branch before committing** — run `git branch --show-current` before any `git commit`. Don't assume the branch from conversation context — git state may have changed. If the user hasn't specified a branch, ask. Hook blocks push to main/master.
+
+53. **Only the main agent handles git commit/push** — sub-agents and teammates write changes to their working directories. The main agent reviews all changes, runs tests, and commits centrally. This prevents wrong-branch pushes and merge conflicts from parallel agents.
+
+54. **Run the full test suite after config or infrastructure changes** — config changes (tsconfig, eslint, package.json, .env, migrations, CI workflows) have broader blast radius than code changes. A single tsconfig modification can break hundreds of files. Always run `typecheck; lint; test` immediately after config changes, before proceeding.
+
 ---
 
 For detailed symptoms, root causes, and examples, see [agent-errors.md](agent-errors.md).

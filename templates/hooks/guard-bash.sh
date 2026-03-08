@@ -46,18 +46,42 @@ if [[ "$COMMAND" == *"git pull"* ]] && [[ "$COMMAND" == *"--rebase"* ]]; then
 fi
 
 
-# ─── Guard: git push --tags pushes ALL local tags (Error #44) ─────────────
-# Agent uses --tags to push a release tag, but --tags pushes EVERY local tag.
-# Old tags that already exist on remote cause a non-zero exit code.
-if [[ "$COMMAND" == *"git push"* ]] && [[ "$COMMAND" == *"--tags"* ]] && [[ "$COMMAND" != *"--follow-tags"* ]]; then
-  echo "BLOCKED by guard-bash.sh — Error #44: --tags pushes all local tags"
-  echo ""
-  echo "--tags pushes every tag, not just new ones. Old tags cause failures."
-  echo "Push specific tags or use --follow-tags:"
-  echo ""
-  echo "  git push origin main && git push origin v1.0.0"
-  echo "  git push origin main --follow-tags"
-  exit 2
+# ─── Guards: git push risks (Error #44, Error #48) ───────────────────────
+# Consolidated: both guards share the outer "git push" check.
+if [[ "$COMMAND" == *"git push"* ]]; then
+
+  # Error #44: --tags pushes ALL local tags, not just the new one.
+  # Old tags that already exist on remote cause a non-zero exit code.
+  if [[ "$COMMAND" == *"--tags"* ]] && [[ "$COMMAND" != *"--follow-tags"* ]]; then
+    echo "BLOCKED by guard-bash.sh — Error #44: --tags pushes all local tags"
+    echo ""
+    echo "--tags pushes every tag, not just new ones. Old tags cause failures."
+    echo "Push specific tags or use --follow-tags:"
+    echo ""
+    echo "  git push origin main && git push origin v1.0.0"
+    echo "  git push origin main --follow-tags"
+    exit 2
+  fi
+
+  # Error #48: direct push to main/master instead of the development branch.
+  # Matches "main" or "master" anywhere in the push args (handles flags like -u
+  # appearing before the remote name: git push -u origin main).
+  # Allows --follow-tags (release flow).
+  if [[ "$COMMAND" =~ (^|[[:space:]])(main|master)($|[[:space:]]|:) ]] \
+     && [[ "$COMMAND" != *"--follow-tags"* ]]; then
+    echo "BLOCKED by guard-bash.sh — Error #48: direct push to protected branch"
+    echo ""
+    echo "Pushing directly to main/master is a high-stakes action."
+    echo "If this is intentional (e.g., a release), ask the user first."
+    echo ""
+    echo "For normal development, push to the development branch:"
+    echo "  git push origin develop"
+    echo ""
+    echo "For releases with tags:"
+    echo "  git push origin main --follow-tags"
+    exit 2
+  fi
+
 fi
 
 

@@ -60,7 +60,7 @@ cc-rpi/
     ├── settings.json.template        # .claude/settings.json (Agent Teams, hooks, permissions)
     ├── setup-checklist.md            # Step-by-step new project setup
     ├── hooks/                        # PreToolUse enforcement hooks
-    │   └── guard-bash.sh             # Blocks known-bad Bash patterns (Error #33, #44)
+    │   └── guard-bash.sh             # Blocks known-bad Bash patterns (Error #33, #44, #48)
     ├── commands/                     # Slash command templates
     │   ├── bootstrap.md              # /bootstrap — new project setup (user-level)
     │   ├── adopt.md                  # /adopt — existing project migration (user-level)
@@ -70,7 +70,9 @@ cc-rpi/
     │   ├── implement.md              # /implement — phased execution
     │   ├── validate.md               # /validate — verification
     │   ├── describe-pr.md            # /describe-pr — PR description
-    │   └── pre-launch.md             # /pre-launch — multi-agent production audit
+    │   ├── pre-launch.md             # /pre-launch — multi-agent production audit
+    │   ├── status.md                 # /status — quick project orientation
+    │   └── fix-ci.md                 # /fix-ci — self-healing CI fix loop
     └── scripts/                      # Scheduled agent shell script templates
         └── cc-rpi-update-agent.sh    # Nightly blueprint sync agent
 ```
