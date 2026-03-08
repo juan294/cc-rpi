@@ -1,7 +1,7 @@
 # cc-rpi — Claude Code Reference & Project Intelligence
 
 [![CI](https://github.com/juan294/cc-rpi/actions/workflows/validate.yml/badge.svg)](https://github.com/juan294/cc-rpi/actions/workflows/validate.yml)
-[![Version: v1.3.0](https://img.shields.io/badge/Version-v1.3.0-orange.svg)](https://github.com/juan294/cc-rpi/releases/tag/v1.3.0)
+[![Version: v1.5.0](https://img.shields.io/badge/Version-v1.5.0-orange.svg)](https://github.com/juan294/cc-rpi/releases/tag/v1.5.0)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Status: Active](https://img.shields.io/badge/Status-Active-brightgreen.svg)]()
 [![Claude Code](https://img.shields.io/badge/Built%20for-Claude%20Code-blueviolet.svg)](https://docs.anthropic.com/en/docs/claude-code)
@@ -69,7 +69,7 @@ Ready-to-use starting points for new projects:
 - **CLAUDE.md template** — Comprehensive project configuration with all operational rules baked in
 - **settings.json template** — `.claude/settings.json` with Agent Teams, hooks, and permissions
 - **Setup checklist** — Step-by-step guide including pre-commit hooks, CI setup, push accountability, and scheduled agents
-- **Slash commands** — `/bootstrap`, `/adopt`, `/update`, `/research`, `/plan`, `/implement`, `/validate`, `/describe-pr`, `/pre-launch` — plus integration with Anthropic-native `/simplify` and `/batch`
+- **Slash commands** — `/bootstrap`, `/adopt`, `/update`, `/research`, `/plan`, `/implement`, `/validate`, `/describe-pr`, `/pre-launch`, `/status`, `/fix-ci` — plus integration with Anthropic-native `/simplify` and `/batch`
 - **Scheduled agent scripts** — Nightly blueprint sync agent (`cc-rpi-update-agent.sh`) with retry logic and launchd/cron templates
 
 ## Adding New Patterns
