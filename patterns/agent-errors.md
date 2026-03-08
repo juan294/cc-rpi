@@ -1558,3 +1558,72 @@ cd /Users/juan/projects/old-name/src
 ```
 
 **Key detail:** The working directory is always available from the environment. For cross-project operations, use `ls` or Glob to discover paths — never guess directory names. Even plausible-sounding names like `Projects` or `repos` are often wrong.
+
+---
+
+## Error #46: Scaffolding tool fails on non-empty directory
+
+**Symptom:** `pnpm create next-app@latest .` fails with "The directory contains files that could conflict: .claude/, CLAUDE.md, README.md". The scaffolder lists the conflicting files and aborts without creating the project.
+
+**Root cause:** Project scaffolding tools (`create-next-app`, `create-react-app`, `create-vite`, `create-astro`, etc.) require an empty or nearly-empty directory. The agent creates project configuration files (CLAUDE.md, `.claude/`, README.md, `.gitignore`) BEFORE running the scaffolder, then the scaffolder detects existing files and refuses to proceed. This commonly happens during `/bootstrap` when the agent sets up the RPI config files as a first step instead of last.
+
+**Correct approach — always do this:**
+```bash
+# 1. Run the scaffolding tool FIRST in a clean directory:
+pnpm create next-app@latest . --typescript --tailwind --eslint --app --src-dir
+
+# 2. THEN add project config files after scaffolding completes:
+# (CLAUDE.md, .claude/, etc.)
+```
+
+**Never do this:**
+```bash
+# Don't create config files before scaffolding:
+mkdir -p .claude/commands
+echo "# Project" > CLAUDE.md           # ← directory is no longer empty
+pnpm create next-app@latest . ...       # ← fails: "files that could conflict"
+
+# Don't try to force-scaffold over existing files:
+# Most scaffolders don't have a --force flag, and the ones that do may overwrite your config
+```
+
+**Key detail:** This applies to ALL project scaffolding tools — they all expect a clean target directory. The rule is simple: scaffold first, configure second. If the directory already has a git repo with initial commits, use a temporary directory to scaffold, then copy the result back (excluding `.git`).
+
+---
+
+## Error #47: Piping API response to JSON parser without error checking
+
+**Symptom:** `curl ... | python3 -c "import sys, json; data = json.load(sys.stdin)"` fails with `json.decoder.JSONDecodeError`. Similarly, `curl ... | jq '.'` fails with "parse error: Invalid numeric literal." The API returned a non-JSON response (HTML error page, plain text error, empty body) but the agent piped it directly to a JSON parser.
+
+**Root cause:** The agent builds `curl | parser` pipelines that assume the API always returns valid JSON. When the API returns an error — auth failure (401/403), rate limit (429), wrong endpoint (404), server error (500) — the response body is HTML, plain text, or empty. The JSON parser crashes with an unhelpful traceback that hides the actual error message. The agent then debugs the JSON parsing instead of seeing the real problem.
+
+**Correct approach — always do this:**
+```bash
+# Save response with HTTP status, then check before parsing:
+response=$(curl -s -w "\n%{http_code}" "https://api.example.com/endpoint" -H "Authorization: Bearer $TOKEN")
+http_code=$(echo "$response" | tail -1)
+body=$(echo "$response" | sed '$d')
+if [ "$http_code" -ge 200 ] && [ "$http_code" -lt 300 ]; then
+  echo "$body" | jq '.'
+else
+  echo "API error (HTTP $http_code): $body"
+fi
+
+# Or use curl -f to fail on HTTP errors (simpler, less diagnostic):
+curl -sf "https://api.example.com/endpoint" -H "..." | jq '.'
+# -f exits non-zero on 4xx/5xx, -s suppresses progress bar
+```
+
+**Never do this:**
+```bash
+# Don't pipe curl directly to a JSON parser:
+curl -s "https://api.example.com/endpoint" -H "xi-api-key: $API_KEY" \
+  | python3 -c "import sys, json; data = json.load(sys.stdin)"
+# ← JSONDecodeError if API returns HTML/text error
+
+# Don't assume API calls succeed:
+curl -s "$URL" | jq '.results[0].name'
+# ← cryptic jq error if response is not JSON
+```
+
+**Key detail:** This is especially common with API keys passed via environment variables (`$API_KEY`). If the variable is unset or expired, the API returns an auth error in HTML/text format, and the JSON parser produces a confusing traceback that doesn't mention the actual auth problem. Always validate the response before parsing.
