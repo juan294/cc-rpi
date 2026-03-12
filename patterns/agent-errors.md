@@ -1776,3 +1776,43 @@ gh run list --branch branch-1 --branch branch-2 --limit 10
 ```
 
 **Key detail:** The savings compound with retries. If each of 8 agents pushes 3 times (initial + 2 fixes), that's 24 push events x 4 workflows = 96 CI runs. With batch push, the main agent pushes once (8 branches), monitors, and re-pushes only the 2 that failed = 10 push events x 4 workflows = 40 CI runs. The pattern also eliminates the class of bugs where an agent pushes to the wrong branch because only one agent touches the remote.
+
+---
+
+## Error #52: Agent assumes GitHub labels exist when creating issues
+
+**Symptom:** `gh issue create --label "chore"` (or `"security"`, `"bug"`, `"enhancement"`, etc.) fails with `could not add label: 'chore' not found`. When multiple issues are created as parallel sibling tool calls, the first failure cascades via Error #1 and kills all remaining issue creations.
+
+**Root cause:** The agent assumes standard label names exist on the repository. GitHub repos start with no labels by default (or a small default set). Custom repos, forks, and newly created repos often have none of the labels the agent expects. The agent never checks what labels are available before using them.
+
+**Correct approach — always do this:**
+```bash
+# Check what labels exist before using them:
+gh label list
+
+# If the label doesn't exist, create it first:
+gh label create "chore" --description "Maintenance tasks" --color "ededed"
+
+# Or omit labels on creation and add them after:
+gh issue create --title "..." --body "..."
+# Then add labels if they exist:
+gh issue edit <number> --add-label "chore" 2>/dev/null || true
+
+# When creating multiple issues, do it sequentially (Error #1):
+gh issue create --title "Issue 1" --body "..." && \
+gh issue create --title "Issue 2" --body "..."
+```
+
+**Never do this:**
+```bash
+# Don't assume labels exist:
+gh issue create --title "fix: auth bug" --label "bug" --label "security"
+# ← fails if either label is missing
+
+# Don't create multiple issues as parallel sibling tool calls:
+# Tool call 1: gh issue create --label "chore" ...  ← fails, kills siblings
+# Tool call 2: gh issue create --label "security" ... ← cancelled
+# Tool call 3: gh issue create --label "bug" ... ← cancelled
+```
+
+**Key detail:** This error is especially common after `/pre-launch` audits, where the agent tries to create multiple issues for findings and assigns category labels. The fix is to either create all needed labels upfront (`gh label create`), or omit labels entirely and let the user categorize. When creating multiple issues, always do it sequentially to avoid the parallel cancellation cascade.

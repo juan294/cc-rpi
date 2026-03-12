@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 ### Added
 
 - **Error #51: CI explosion from parallel agent pushes** — when N agents push independently, every push triggers M CI workflows (N x M x retries runs). New rule: worktree agents commit locally, main agent batch-pushes all branches in one command, creates all PRs, and monitors CI centrally. Added to `agent-errors.md` (Error #51), `quick-reference.md` (Rule #55), and `agent-design.md` (Parallel Agent Push Strategy section + worktree agent row in Central Commit Rule table).
+- **Error #52: Agent assumes GitHub labels exist when creating issues** — `gh issue create --label "chore"` fails if label doesn't exist. Check with `gh label list` or create first. Especially common after `/pre-launch` audits creating multiple issues with category labels.
 
 ## [1.5.0] - 2026-03-08
 

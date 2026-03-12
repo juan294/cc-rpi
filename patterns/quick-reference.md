@@ -130,6 +130,8 @@ These rules must be internalized before starting any work. They prevent the most
 
 55. **Only the main agent pushes — worktree agents commit locally** — when N agents work in parallel worktrees, each independent push triggers N x M CI runs (branches x workflows). Agents commit locally, main agent batch-pushes all branches in one command (`git push origin branch-1 branch-2 ...`), creates all PRs, and monitors CI centrally. Saves runner minutes (especially 10x macOS) and eliminates wrong-branch pushes.
 
+56. **Don't assume GitHub labels exist — check or create first** — `gh issue create --label "chore"` fails if the label doesn't exist on the repo. Run `gh label list` first, or create needed labels with `gh label create`. When creating multiple issues, do it sequentially (not as parallel tool calls) to avoid Error #1 cancellation cascade.
+
 ---
 
 For detailed symptoms, root causes, and examples, see [agent-errors.md](agent-errors.md).
