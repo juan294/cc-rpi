@@ -292,6 +292,7 @@ When N agents each push independently, every push triggers M workflow runs (CI m
 | Main agent batches | N (once) | N x M (once) | None — single point of control |
 
 **Key benefits:**
+
 - Fewer CI runs — agents debugging locally don't trigger CI on every attempt
 - Lower API usage — no redundant GitHub API calls from parallel agents
 - No wrong-branch pushes — only the main agent touches remote
