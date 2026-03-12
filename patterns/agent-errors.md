@@ -1728,3 +1728,51 @@ pnpm run typecheck 2>&1; pnpm run lint 2>&1; pnpm run test 2>&1
 ```
 
 **Key detail:** Config changes have a multiplicative failure pattern — they can break files the agent never touched. Running the test suite immediately after a config change costs minutes but saves the multi-round debug cycles that happen when failures are discovered later with more changes stacked on top.
+
+---
+
+## Error #51: CI explosion from parallel agent pushes
+
+**Symptom:** N agents working in parallel worktrees each push their branch independently. Every push triggers M CI workflows (test matrix, dependency review, CodeQL, etc.), resulting in N x M x retries workflow runs that compete for runner minutes. When agents debug and re-push, the runs multiply further. macOS runners (10x cost multiplier) amplify the bill. Additionally, agents pushing independently risk wrong-branch pushes and merge conflicts.
+
+**Root cause:** Each agent autonomously pushes on commit, triggering CI. No central coordination of push timing. The agent treats "commit and push" as a single atomic operation instead of separating local commits from remote pushes.
+
+**Correct approach — always do this:**
+```bash
+# 1. Spawn agents in worktrees (each gets its own branch)
+# Main agent creates worktrees or uses isolation: "worktree"
+
+# 2. Agents commit locally only — never push or create PRs
+# Agent deliverable is a local commit on their branch
+
+# 3. Main agent reviews all worktrees after agents complete
+git -C /path/to/worktree-1 log --oneline -3
+git -C /path/to/worktree-2 log --oneline -3
+
+# 4. Batch push all branches in one command
+git push origin branch-1 branch-2 branch-3
+
+# 5. Create all PRs sequentially
+gh pr create --head branch-1 --title "..." --body "..."
+gh pr create --head branch-2 --title "..." --body "..."
+
+# 6. Single background agent monitors all CI runs
+gh run list --branch branch-1 --branch branch-2 --limit 10
+```
+
+**Never do this:**
+```bash
+# Don't let each agent push independently:
+# Agent 1: git push origin branch-1  ← triggers CI
+# Agent 1: (fix) git push origin branch-1  ← triggers CI again
+# Agent 2: git push origin branch-2  ← triggers CI
+# Agent 2: (fix) git push origin branch-2  ← triggers CI again
+# = 4 push events × M workflows each = CI explosion
+
+# Don't let agents create their own PRs:
+# Agent 1: gh pr create --head branch-1
+# Agent 2: gh pr create --head branch-2
+# ← No central review, wrong-branch risk, API rate limits
+```
+
+**Key detail:** The savings compound with retries. If each of 8 agents pushes 3 times (initial + 2 fixes), that's 24 push events x 4 workflows = 96 CI runs. With batch push, the main agent pushes once (8 branches), monitors, and re-pushes only the 2 that failed = 10 push events x 4 workflows = 40 CI runs. The pattern also eliminates the class of bugs where an agent pushes to the wrong branch because only one agent touches the remote.

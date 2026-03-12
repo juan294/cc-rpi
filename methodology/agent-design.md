@@ -233,6 +233,7 @@ When multiple agents operate in parallel (sub-agents, teammates, or `/batch` uni
 |------------|:-:|:-:|:-:|
 | Main session / Team lead | Yes | Yes | Yes |
 | Sub-agent (Task tool) | Yes | No | No |
+| Worktree agent (`isolation: "worktree"`) | Yes | Yes (local only) | No — main agent batches |
 | Teammate (Agent Teams) | Yes | No — write to task output | No |
 | `/batch` unit | Yes (in worktree) | Yes (isolated branch) | Yes (opens PR) |
 
@@ -267,6 +268,35 @@ For complex multi-agent work beyond `/batch`:
 5. Delete agent branches after successful merge
 
 This pattern is more complex than central commit but necessary when agents need full git access (e.g., agents running in separate worktrees).
+
+### Parallel Agent Push Strategy
+
+When N agents each push independently, every push triggers M workflow runs (CI matrix + auxiliary workflows like Dependency Review, CodeQL). For 8 agents x 4 workflows = 32 workflow runs, most of which queue simultaneously and compete for runner minutes. On macOS runners (10x cost multiplier), this burns through Actions minutes fast.
+
+**Strategy: agents commit locally, main agent pushes in batch.**
+
+| Step | Who | What |
+|------|-----|------|
+| 1. Spawn | Main agent | Creates worktrees — each agent gets its own branch via `git worktree add` or `isolation: "worktree"` |
+| 2. Implement | Worktree agents | Write code, run tests, commit — but never push or create PRs. Deliverable is a local commit on their branch |
+| 3. Review | Main agent | Verifies each worktree has clean commits. Optionally runs cross-branch checks (type conflicts, shared file edits) |
+| 4. Push | Main agent | Pushes all branches in one burst: `git push origin branch-1 branch-2 ... branch-N` |
+| 5. PRs | Main agent | Creates all PRs sequentially via `gh pr create`, linking to corresponding issues |
+| 6. Monitor | Background agent | Watches all CI runs: `gh run list --branch branch-1 --branch branch-2 ... --limit N`. If any fail, main agent fixes and re-pushes just that branch |
+
+**Why it matters:**
+
+| Approach | Pushes | CI triggers | Risk |
+|----------|--------|-------------|------|
+| Each agent pushes | N x retries | N x M x retries | Wrong-branch pushes, merge conflicts |
+| Main agent batches | N (once) | N x M (once) | None — single point of control |
+
+**Key benefits:**
+- Fewer CI runs — agents debugging locally don't trigger CI on every attempt
+- Lower API usage — no redundant GitHub API calls from parallel agents
+- No wrong-branch pushes — only the main agent touches remote
+- No merge conflicts — main agent can detect shared-file edits before pushing
+- Cheaper GitHub Actions minutes — especially on macOS runners (10x cost multiplier)
 
 ---
 

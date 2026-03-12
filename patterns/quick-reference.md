@@ -128,6 +128,8 @@ These rules must be internalized before starting any work. They prevent the most
 
 54. **Run the full test suite after config or infrastructure changes** — config changes (tsconfig, eslint, package.json, .env, migrations, CI workflows) have broader blast radius than code changes. A single tsconfig modification can break hundreds of files. Always run `typecheck; lint; test` immediately after config changes, before proceeding.
 
+55. **Only the main agent pushes — worktree agents commit locally** — when N agents work in parallel worktrees, each independent push triggers N x M CI runs (branches x workflows). Agents commit locally, main agent batch-pushes all branches in one command (`git push origin branch-1 branch-2 ...`), creates all PRs, and monitors CI centrally. Saves runner minutes (especially 10x macOS) and eliminates wrong-branch pushes.
+
 ---
 
 For detailed symptoms, root causes, and examples, see [agent-errors.md](agent-errors.md).
