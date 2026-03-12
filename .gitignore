@@ -5,6 +5,12 @@
 .claude/tasks/
 .claude/debug/
 
+# Internal working docs (research, plans, agent reports)
+docs/research/
+docs/plans/
+docs/decisions/
+docs/reports/
+
 # OS files
 .DS_Store
 Thumbs.db
