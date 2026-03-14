@@ -64,23 +64,13 @@ if [[ "$COMMAND" == *"git push"* ]]; then
   fi
 
   # Error #48: direct push to main/master instead of the development branch.
-  # Matches "main" or "master" anywhere in the push args (handles flags like -u
-  # appearing before the remote name: git push -u origin main).
-  # Allows --follow-tags (release flow).
-  if [[ "$COMMAND" =~ (^|[[:space:]])(main|master)($|[[:space:]]|:) ]] \
-     && [[ "$COMMAND" != *"--follow-tags"* ]]; then
-    echo "BLOCKED by guard-bash.sh — Error #48: direct push to protected branch"
-    echo ""
-    echo "Pushing directly to main/master is a high-stakes action."
-    echo "If this is intentional (e.g., a release), ask the user first."
-    echo ""
-    echo "For normal development, push to the development branch:"
-    echo "  git push origin develop"
-    echo ""
-    echo "For releases with tags:"
-    echo "  git push origin main --follow-tags"
-    exit 2
-  fi
+  # DISABLED for cc-rpi — this project uses main-only workflow (no develop branch).
+  # The template at templates/hooks/guard-bash.sh keeps this guard for other projects.
+  # if [[ "$COMMAND" =~ (^|[[:space:]])(main|master)($|[[:space:]]|:) ]] \
+  #    && [[ "$COMMAND" != *"--follow-tags"* ]]; then
+  #   echo "BLOCKED by guard-bash.sh — Error #48: direct push to protected branch"
+  #   exit 2
+  # fi
 
 fi
 

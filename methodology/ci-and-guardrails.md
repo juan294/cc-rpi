@@ -53,7 +53,12 @@ Configure in `.claude/settings.json`:
     "PreToolUse": [
       {
         "matcher": "Bash",
-        "command": "bash .claude/hooks/guard-bash.sh"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/guard-bash.sh"
+          }
+        ]
       }
     ]
   }
