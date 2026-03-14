@@ -130,7 +130,15 @@ That's it. Those four commands are 90% of your interaction with the methodology.
 | `/describe-pr` | Generates a PR description from the current branch's diff and commit history. | Before opening or updating a PR. |
 | `/pre-launch` | Spawns 6 parallel specialist agents (QA, security, performance, architecture, UX, devops) for a production audit. | Before any production release. Run `/simplify` after to fix code quality findings. |
 | `/status` | Quick 5-line project orientation: branch, last commit, working tree, CI status, open items. | Start of session. Quick check without starting a full task. |
+| `/update-docs` | Spawns 4 parallel discovery agents, then updates all documentation, Mermaid diagrams, version references, and inline code docs based on changes since last release. | After features/fixes are done, before releasing. Refreshes everything in one pass. |
+| `/release` | Detects project type and branching strategy, bumps versions everywhere, generates CHANGELOG entry, creates release commit and tag, publishes GitHub release, advises on registry publish. | When ready to cut a new version. Run `/update-docs` first. |
 | `/fix-ci` | Self-healing CI: gets failure logs, spawns parallel fix agents per failure category, iterates until green or retry budget exhausted. | When CI is red. Automates the diagnose-fix-verify loop. |
+
+The recommended pre-release sequence:
+
+```
+/pre-launch -> fix findings -> /update-docs -> /release
+```
 
 ### Native Claude Code Commands Used in the Workflow
 
@@ -270,7 +278,9 @@ your-project/
 │   │   ├── describe-pr.md       # /describe-pr
 │   │   ├── pre-launch.md        # /pre-launch
 │   │   ├── status.md            # /status
-│   │   └── fix-ci.md            # /fix-ci
+│   │   ├── fix-ci.md            # /fix-ci
+│   │   ├── update-docs.md       # /update-docs
+│   │   └── release.md           # /release
 │   └── skills/                  # Domain-specific knowledge (optional)
 ├── docs/
 │   ├── research/                # Research documents

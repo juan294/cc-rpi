@@ -59,6 +59,15 @@ All significant changes go through four phases:
 npx markdownlint '**/*.md' --ignore node_modules --ignore .claude 2>&1
 ```
 
+### Pre-Release Workflow
+
+```
+/pre-launch -> fix findings -> /update-docs -> /release
+```
+
+- `/update-docs` -- refreshes all documentation, diagrams, version references, and inline code docs
+- `/release` -- version bump, CHANGELOG, tag, GitHub release, registry publish advisory
+
 ### CRITICAL: Run verification commands sequentially, NEVER in parallel
 
 Never run verification commands as parallel sibling Bash tool calls.
@@ -157,8 +166,10 @@ cc-rpi/
     ├── setup-checklist.md            # Step-by-step new project setup
     ├── hooks/guard-bash.sh           # Hook template (source for .claude/hooks/)
     ├── commands/                     # Command templates (source for .claude/commands/)
-    │   └── detach.md                 # /detach -- clean removal of cc-rpi (user-level)
-    └── scripts/                      # Scheduled agent shell script templates
+    │   ├── release.md               # /release -- version release automation
+    │   ├── update-docs.md           # /update-docs -- comprehensive docs refresh
+    │   └── detach.md                # /detach -- clean removal of cc-rpi (user-level)
+    └── scripts/                     # Scheduled agent shell script templates
 ```
 
 ## Project File Locations
