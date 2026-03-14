@@ -132,6 +132,8 @@ These rules must be internalized before starting any work. They prevent the most
 
 56. **Don't assume GitHub labels exist — check or create first** — `gh issue create --label "chore"` fails if the label doesn't exist on the repo. Run `gh label list` first, or create needed labels with `gh label create`. When creating multiple issues, do it sequentially (not as parallel tool calls) to avoid Error #1 cancellation cascade.
 
+57. **Check for existing PRs before `gh pr create`** — `gh pr create` fails if a PR already exists for the head-to-base branch pair. Check with `gh pr list --head <branch> --base <base>` first; if one exists, use `gh pr edit` to update it instead.
+
 ---
 
 For detailed symptoms, root causes, and examples, see [agent-errors.md](agent-errors.md).

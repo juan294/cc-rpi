@@ -1816,3 +1816,34 @@ gh issue create --title "fix: auth bug" --label "bug" --label "security"
 ```
 
 **Key detail:** This error is especially common after `/pre-launch` audits, where the agent tries to create multiple issues for findings and assigns category labels. The fix is to either create all needed labels upfront (`gh label create`), or omit labels entirely and let the user categorize. When creating multiple issues, always do it sequentially to avoid the parallel cancellation cascade.
+
+---
+
+## Error #53: Agent runs `gh pr create` without checking for existing PR
+
+**Symptom:** `gh pr create --base main --head develop --title "Release v0.3.0"` fails with `a pull request for branch "develop" into branch "main" already exists: https://github.com/.../pull/36`. The agent then tries to recover by editing or recreating the PR, wasting turns.
+
+**Root cause:** The agent doesn't check whether a PR already exists for the head-to-base branch pair before attempting to create one. This commonly happens during release workflows where a develop-to-main PR may already be open from a previous push, or when a previous agent session created the PR but didn't finish its workflow.
+
+**Correct approach — always do this:**
+```bash
+# Check if a PR already exists for the branch pair:
+EXISTING_PR=$(gh pr list --head develop --base main --json number --jq '.[0].number')
+
+if [ -n "$EXISTING_PR" ]; then
+  # Update the existing PR:
+  gh pr edit "$EXISTING_PR" --title "Release v0.3.0" --body "..."
+else
+  # Create a new PR:
+  gh pr create --base main --head develop --title "Release v0.3.0" --body "..."
+fi
+```
+
+**Never do this:**
+```bash
+# Don't blindly create without checking:
+gh pr create --base main --head develop --title "Release v0.3.0" --body "..."
+# ← fails if PR already exists for develop → main
+```
+
+**Key detail:** This is especially common in gitflow-style workflows where a develop-to-main PR persists across multiple release cycles, and in CI/CD pipelines where automated agents create PRs. The same pattern applies to any repeated workflow — release PRs, dependency update PRs, sync PRs. Always check first and update if one exists.
