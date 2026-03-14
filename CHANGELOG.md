@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.7.0] - 2026-03-14
+
+### Added
+
+- **`/detach` command** -- clean removal of cc-rpi from a project. Inventories all blueprint artifacts in 4 tiers (scaffolding files, CLAUDE.md sections, configuration entries, user work products), previews exactly what will be removed, asks for confirmation, then executes in a single atomic commit. Preserves project-specific config and research/plan documents by default. Flags customized files for review before deletion. User-level command installed in `~/.claude/commands/detach.md`.
+
 ## [1.6.2] - 2026-03-14
 
 ### Fixed
