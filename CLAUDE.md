@@ -157,6 +157,7 @@ cc-rpi/
     ├── setup-checklist.md            # Step-by-step new project setup
     ├── hooks/guard-bash.sh           # Hook template (source for .claude/hooks/)
     ├── commands/                     # Command templates (source for .claude/commands/)
+    │   └── detach.md                 # /detach -- clean removal of cc-rpi (user-level)
     └── scripts/                      # Scheduled agent shell script templates
 ```
 

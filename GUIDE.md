@@ -56,17 +56,19 @@ mkdir -p ~/.claude/commands
 cp cc-rpi/templates/commands/bootstrap.md ~/.claude/commands/bootstrap.md
 cp cc-rpi/templates/commands/adopt.md ~/.claude/commands/adopt.md
 cp cc-rpi/templates/commands/update.md ~/.claude/commands/update.md
+cp cc-rpi/templates/commands/detach.md ~/.claude/commands/detach.md
 ```
 
-Edit all three files to set the correct path to where you cloned cc-rpi on your machine.
+Edit all four files to set the correct path to where you cloned cc-rpi on your machine.
 
-Now you have three commands available everywhere:
+Now you have four commands available everywhere:
 
 | Command | Use Case |
 |---------|----------|
 | `/bootstrap` | **New project.** Empty or freshly created repo. Sets everything up from scratch. |
 | `/adopt` | **Existing project.** Already has code, maybe some practices in place. Audits what exists and migrates incrementally. |
 | `/update` | **Keep in sync.** Pulls latest cc-rpi changes and updates your project's commands, rules, and settings. Run manually or schedule nightly. |
+| `/detach` | **Part ways.** Cleanly removes all cc-rpi artifacts while preserving your project-specific config and work products. |
 
 ### Step 2: Set Up Your Project
 
@@ -110,6 +112,7 @@ That's it. Those four commands are 90% of your interaction with the methodology.
 | `/bootstrap` | Reads the cc-rpi blueprint, asks about your project, creates CLAUDE.md, settings, slash commands, and full directory structure. | New projects. Run once at the start. |
 | `/adopt` | Reads the blueprint, audits the existing project with parallel agents, presents a gap report, then migrates what you approve. | Existing projects you want to bring up to standard. |
 | `/update` | Pulls latest cc-rpi, diffs changes since last sync, updates commands and blueprint-managed CLAUDE.md sections, adds new settings. | Manually or via nightly scheduled agent. |
+| `/detach` | Inventories all cc-rpi artifacts, previews what will be removed, asks for confirmation, then cleanly removes commands, hooks, CLAUDE.md sections, and sync metadata. Preserves project config and work products. | When you want to stop using the RPI methodology and remove all blueprint artifacts. |
 
 ### The Core Four
 
@@ -296,13 +299,14 @@ your-project/
 
 ## Advanced Setup
 
-### User-Level Commands: `/bootstrap`, `/adopt`, and `/update`
+### User-Level Commands: `/bootstrap`, `/adopt`, `/update`, and `/detach`
 
-These three commands live in `~/.claude/commands/` so they're available in every project. Install them as described in "Getting Started" above. All three reference the cc-rpi repository path — update that path in each file to match where you cloned the repo on your machine.
+These four commands live in `~/.claude/commands/` so they're available in every project. Install them as described in "Getting Started" above. All four reference the cc-rpi repository path — update that path in each file to match where you cloned the repo on your machine.
 
 - **`/bootstrap`** reads the blueprint and creates everything from scratch. It asks you about your project type and stack before generating anything.
 - **`/adopt`** reads the blueprint, then runs a full audit of the existing project (configuration, infrastructure, workflow) before proposing any changes. It presents a prioritized report and only migrates what you approve.
 - **`/update`** pulls the latest cc-rpi, diffs changes since the last sync, and updates the project's commands, blueprint-managed CLAUDE.md sections, and settings. It tracks sync state in `.claude/cc-rpi-sync.json` so nightly runs are incremental and efficient. Works both interactively and headlessly.
+- **`/detach`** cleanly removes all cc-rpi artifacts from a project. It inventories everything in four tiers (scaffolding files, CLAUDE.md sections, configuration entries, user work products), previews exactly what will be removed, asks for confirmation, then executes in a single atomic commit. Project-specific config and your research/plan documents are preserved by default. Customized files are flagged for review before deletion.
 
 You can also run `/adopt` on a project that was previously bootstrapped — it works as a health check to verify everything is still aligned with the latest blueprint practices.
 
