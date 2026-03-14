@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.6.2] - 2026-03-14
+
+### Fixed
+
+- **Hooks schema in settings.json.template** -- PreToolUse entries used a flat `"command"` field instead of the required nested `"hooks"` array with `{"type": "command", "command": "..."}`. Every project bootstrapped since v1.4.0 had an invalid hook config that was silently ignored. Fixed in `templates/settings.json.template` and `methodology/ci-and-guardrails.md`.
+
+### Added
+
+- **Self-adoption** -- cc-rpi now follows its own RPI methodology. Added `.claude/commands/` (8 workflow commands), `.claude/hooks/guard-bash.sh` (Tier 1 enforcement), `.claude/settings.json`, and `docs/research/` + `docs/plans/` directories. CLAUDE.md rewritten to serve as both repo description and operational rules. Error #48 guard disabled in the local hook copy (main-only workflow).
+
 ## [1.6.1] - 2026-03-14
 
 ### Added
