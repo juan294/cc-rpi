@@ -135,14 +135,7 @@ After user approval, implement all action items.
    git commit -m "chore: commit overnight agent reports [YYYY-MM-DD]"
    ```
 
-2. **Second commit -- code fixes** (if any were made):
-
-   ```bash
-   git add <changed-files>
-   git commit -m "fix: resolve agent report findings [triage]"
-   ```
-
-3. **Append triage entry to shared-context.md:**
+2. **Append triage entry to shared-context.md:**
 
    ```markdown
    <!-- ENTRY:START agent=triage timestamp=ISO -->
@@ -155,14 +148,14 @@ After user approval, implement all action items.
    <!-- ENTRY:END -->
    ```
 
-4. **Third commit -- shared-context update:**
+3. **Second commit -- code fixes + shared-context update** (if any fixes were made):
 
    ```bash
-   git add docs/agents/shared-context.md
-   git commit -m "chore: update shared context after triage [YYYY-MM-DD]"
+   git add <changed-files> docs/agents/shared-context.md
+   git commit -m "fix: resolve agent report findings [triage]"
    ```
 
-5. **Push to remote. Monitor CI:**
+4. **Push to remote. Monitor CI:**
 
    ```bash
    git push
@@ -217,5 +210,4 @@ Present the report summary to the user.
 - **shared-context.md integration.** Read before analysis, append triage entry after completion.
 - **CI accountability.** Push is not done until CI is green. Max 3 fix iterations.
 - **Branch verification before every commit.** Run `git branch --show-current` first (Error #33).
-- **Check for existing PRs** before creating with `gh pr create` (Error #53).
 - Run verification commands sequentially, never as parallel Bash calls.

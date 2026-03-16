@@ -1,5 +1,5 @@
 #!/bin/bash
-# scripts/agents/morning-triage.sh
+# templates/scripts/morning-triage.sh
 #
 # Multi-project morning triage orchestrator.
 # Runs /triage in each configured project directory sequentially.
@@ -206,7 +206,7 @@ Important: this is a non-interactive scheduled run.
 3. Read every new/modified report in docs/agents/ completely
 4. Implement ALL action items from every report — fix everything
 5. Commit reports: git add docs/agents/ && git commit -m 'chore: commit overnight agent reports [$TODAY]'
-6. Commit fixes: git add -A && git commit -m 'fix: resolve agent report findings [triage]'
+6. Commit fixes: git add <changed-files> && git commit -m 'fix: resolve agent report findings [triage]'
 7. Push and verify CI
 
 Write your final summary as your text output."
