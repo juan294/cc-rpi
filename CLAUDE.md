@@ -2,7 +2,7 @@
 
 ## One-liner
 
-Blueprint repository for Claude Code projects. Contains the RPI methodology, 53 known agent error patterns, 57 operational rules, and templates for CLAUDE.md, slash commands, and project setup.
+Blueprint repository for Claude Code projects. Contains the RPI methodology, 53 known agent error patterns, 58 operational rules, and templates for CLAUDE.md, slash commands, and project setup.
 
 ## Stack
 
@@ -62,9 +62,10 @@ npx markdownlint '**/*.md' --ignore node_modules --ignore .claude 2>&1
 ### Pre-Release Workflow
 
 ```
-/pre-launch -> fix findings -> /update-docs -> /release
+/pre-launch -> /remediate -> /update-docs -> /release
 ```
 
+- `/remediate` -- resolve all pre-launch findings with parallel TDD agents, CI verification
 - `/update-docs` -- refreshes all documentation, diagrams, version references, and inline code docs
 - `/release` -- version bump, CHANGELOG, tag, GitHub release, registry publish advisory
 
@@ -95,7 +96,7 @@ release: vX.Y.Z         # Version bumps
 
 ## Agent Operational Rules
 
-Read `patterns/quick-reference.md` for the full rule set (57 rules).
+Read `patterns/quick-reference.md` for the full rule set (58 rules).
 Read `patterns/agent-errors.md` for detailed error patterns (53 errors).
 
 These files ARE the source of truth -- they live in this repo. Do not duplicate their content here.
@@ -158,7 +159,7 @@ cc-rpi/
 ├── methodology/                      # The RPI approach (11 files)
 ├── examples/                         # Sample documents and workflow walkthroughs
 ├── patterns/                         # Operational knowledge
-│   ├── quick-reference.md            # 57 rules to internalize before any work
+│   ├── quick-reference.md            # 58 rules to internalize before any work
 │   └── agent-errors.md               # 53 errors with symptoms and solutions
 └── templates/                        # Files to adapt for new projects
     ├── CLAUDE.md.template            # Starting point for project CLAUDE.md
@@ -166,10 +167,14 @@ cc-rpi/
     ├── setup-checklist.md            # Step-by-step new project setup
     ├── hooks/guard-bash.sh           # Hook template (source for .claude/hooks/)
     ├── commands/                     # Command templates (source for .claude/commands/)
+    │   ├── remediate.md             # /remediate -- fix all pre-launch findings
+    │   ├── triage.md               # /triage -- morning agent report processing
     │   ├── release.md               # /release -- version release automation
     │   ├── update-docs.md           # /update-docs -- comprehensive docs refresh
     │   └── detach.md                # /detach -- clean removal of cc-rpi (user-level)
-    └── scripts/                     # Scheduled agent shell script templates
+    ├── scripts/                     # Scheduled agent shell script templates
+    │   ├── cc-rpi-update-agent.sh   # Nightly blueprint sync
+    │   └── morning-triage.sh        # Multi-project morning triage
 ```
 
 ## Project File Locations

@@ -128,16 +128,26 @@ That's it. Those four commands are 90% of your interaction with the methodology.
 | Command | What It Does | When to Use |
 |---------|-------------|-------------|
 | `/describe-pr` | Generates a PR description from the current branch's diff and commit history. | Before opening or updating a PR. |
-| `/pre-launch` | Spawns 6 parallel specialist agents (QA, security, performance, architecture, UX, devops) for a production audit. | Before any production release. Run `/simplify` after to fix code quality findings. |
+| `/pre-launch` | Spawns 6 parallel specialist agents (QA, security, performance, architecture, UX, devops) for a production audit. | Before any production release. Run `/remediate` after to fix all findings. |
+| `/remediate` | Parses the pre-launch report, creates GitHub issues for every finding, spawns parallel TDD agents in worktrees, merges sequentially, verifies CI, runs `/simplify` twice. | After `/pre-launch` when findings exist. Automates the full fix cycle. |
+| `/triage` | Discovers all overnight agent reports exhaustively, checks for agent failures in logs, synthesizes findings, proposes action plan for all items, implements fixes, commits reports for history. | Every morning. First command of the day for each project. |
 | `/status` | Quick 5-line project orientation: branch, last commit, working tree, CI status, open items. | Start of session. Quick check without starting a full task. |
 | `/update-docs` | Spawns 4 parallel discovery agents, then updates all documentation, Mermaid diagrams, version references, and inline code docs based on changes since last release. | After features/fixes are done, before releasing. Refreshes everything in one pass. |
 | `/release` | Detects project type and branching strategy, bumps versions everywhere, generates CHANGELOG entry, creates release commit and tag, publishes GitHub release, advises on registry publish. | When ready to cut a new version. Run `/update-docs` first. |
 | `/fix-ci` | Self-healing CI: gets failure logs, spawns parallel fix agents per failure category, iterates until green or retry budget exhausted. | When CI is red. Automates the diagnose-fix-verify loop. |
 
+The recommended daily workflow:
+
+```
+/triage -> fix all findings -> continue development
+```
+
+For multi-project orchestration, use `morning-triage.sh` to run `/triage` across all projects automatically.
+
 The recommended pre-release sequence:
 
 ```
-/pre-launch -> fix findings -> /update-docs -> /release
+/pre-launch -> /remediate -> /update-docs -> /release
 ```
 
 ### Native Claude Code Commands Used in the Workflow
@@ -232,7 +242,7 @@ This sounds restrictive, but it's the single most impactful rule for research qu
 
 ### Error Prevention
 
-The blueprint includes 57 operational rules learned from real sessions. These aren't theoretical — they're patterns that caused actual failures and wasted time. Examples:
+The blueprint includes 58 operational rules learned from real sessions. These aren't theoretical — they're patterns that caused actual failures and wasted time. Examples:
 
 - Never run verification commands in parallel (they interfere with each other)
 - Always use absolute paths in worktree commands (relative paths resolve to the wrong directory)
@@ -259,7 +269,7 @@ Before any production release, you can run `/pre-launch` to spawn 6 specialist a
 5. **UX Reviewer** — Accessibility, keyboard navigation, error states
 6. **DevOps** — CI status, environment variables, build verification
 
-They all run simultaneously, read-only, and produce a combined report with a verdict: READY, CONDITIONAL, or NOT READY. No auto-fixing — you decide what to address. When you're ready to fix code quality findings (dead code, duplicates, inefficiencies), run `/simplify` first — it handles the bulk of architect and performance-eng findings in one automated pass.
+They all run simultaneously, read-only, and produce a combined report with a verdict: READY, CONDITIONAL, or NOT READY. No auto-fixing — you decide what to address. When findings exist, run `/remediate` to resolve them all — it creates GitHub issues, spawns parallel TDD agents in worktrees, merges sequentially, verifies CI, and runs `/simplify` twice (per-agent and final).
 
 ## Project Structure After Setup
 
@@ -277,6 +287,8 @@ your-project/
 │   │   ├── validate.md          # /validate
 │   │   ├── describe-pr.md       # /describe-pr
 │   │   ├── pre-launch.md        # /pre-launch
+│   │   ├── remediate.md         # /remediate
+│   │   ├── triage.md            # /triage
 │   │   ├── status.md            # /status
 │   │   ├── fix-ci.md            # /fix-ci
 │   │   ├── update-docs.md       # /update-docs
@@ -352,7 +364,7 @@ The blueprint repository contains detailed documentation on every topic mentione
 | Testing approach | `methodology/testing.md` | TDD protocol, verification hierarchy |
 | CI ownership | `methodology/push-accountability.md` | Background CI monitoring, fix-and-repush |
 | Error patterns | `patterns/agent-errors.md` | 53 documented errors with symptoms and solutions |
-| Operational rules | `patterns/quick-reference.md` | 57 rules to prevent known mistakes |
+| Operational rules | `patterns/quick-reference.md` | 58 rules to prevent known mistakes |
 | Worked examples | `examples/README.md` | Sample research docs, plans, logs, pseudocode |
 
 ## Credits

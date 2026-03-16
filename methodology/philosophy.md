@@ -10,6 +10,7 @@
 6. **Atomic changes with review loops.** Implement, review, fix, approve, then move on. Never batch multiple unreviewed phases.
 7. **Context is your only lever.** At every turn, a coding agent is a stateless function: context window in, next action out. The quality of the context window is the ONLY thing you can control to affect output quality.
 8. **Specs are the new code.** Plans and research documents are the real "source code" of AI-assisted development. The generated code is more like a compiled artifact. Treat specs with the same rigor you'd treat source files.
+9. **Fix everything.** Categorize by severity, but fix 100%. With AI agents, the cost of fixing is near-zero — the old prioritization model (defer low-priority items) exists because human developer time is expensive. That constraint no longer applies. Never tell the user "nothing urgent" or suggest deferring findings to a later session. The quality bar is the highest possible, always.
 
 ## The Error Amplification Principle
 
@@ -80,3 +81,5 @@ Research documents and plans become the primary mechanism for keeping team membe
 15. **Specs are the new code.** In AI-assisted development, the plans and research documents ARE the source code. Treat specs with the same rigor you'd treat source files.
 
 16. **Deep engagement is required.** You must actively read and critically evaluate every research document and every plan. Blindly approving output defeats the entire purpose.
+
+17. **Fix everything, always.** Traditional prioritization exists because human developer time is expensive — you can't fix everything, so you triage. With AI agents, fixing takes seconds. Categorize findings by severity (that's useful information), but the attitude is always "let me get to work on all of them." Never suggest deferring items or say "nothing urgent." The quality bar is 100%.

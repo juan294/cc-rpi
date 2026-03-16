@@ -370,6 +370,20 @@ The shared context file (`docs/agents/shared-context.md`) is a cross-agent intel
 2. **Cross-agent recommendations are mandatory.** If findings affect another agent's domain, say so explicitly.
 3. **Be specific.** "Security looks fine" is useless. "No injection vectors found — all user input escaped via `sanitize()`" is useful.
 
+## Morning Triage
+
+After scheduled agents finish their overnight runs, use `/triage` to process all reports:
+
+1. Discovers every new/modified report in `docs/agents/` exhaustively
+2. Checks `logs/` for agent failures (a missing report might mean a crashed agent)
+3. Reads all reports and shared-context.md
+4. Synthesizes findings and drafts an action plan
+5. Implements all fixes (fix everything — Rule #58)
+6. Commits reports for historical record, then code fixes separately
+7. Updates shared-context.md with triage results
+
+For multi-project orchestration, the `morning-triage.sh` script template (in `templates/scripts/`) runs `/triage` across all configured projects sequentially, producing a cross-project summary.
+
 ## Prerequisites
 
 - Claude CLI installed and authenticated (`claude --version`)

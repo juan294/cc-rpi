@@ -73,6 +73,8 @@ Copy and adapt from `templates/commands/`:
 - [ ] `/implement` — Phase-by-phase execution with review gates
 - [ ] `/validate` — Post-implementation verification
 - [ ] `/describe-pr` — PR description generation
+- [ ] `/remediate` — Fix all pre-launch findings with parallel TDD agents
+- [ ] `/triage` — Morning agent report processing and action
 
 Adjust file paths in each command to match your project's docs directory.
 
@@ -166,6 +168,8 @@ The shell script reads update instructions from cc-rpi at runtime, so when cc-rp
 - [ ] Test with `launchctl start` (macOS) — don't test from a terminal, it masks launchd issues
 - [ ] Verify the agent produces a report in `docs/agents/`
 - [ ] Add `/pre-launch` slash command for multi-agent production audit
+- [ ] Add `/triage` slash command for morning agent report processing
+- [ ] (Optional) Set up `morning-triage.sh` for multi-project orchestration
 
 ## Workflow Habits
 
@@ -177,7 +181,8 @@ The shell script reads update instructions from cc-rpi at runtime, so when cc-rp
 - [ ] Always run `/simplify` after reviewer approval during `/implement`
 - [ ] Use `/batch` for independent phases and bulk migrations
 - [ ] Use `/validate` after implementation
-- [ ] Run `/simplify` after `/pre-launch` audit to fix code quality findings
+- [ ] Run `/remediate` after `/pre-launch` to fix all findings with parallel agents
+- [ ] Run `/triage` every morning to process overnight agent reports
 - [ ] Use `/clear` between unrelated tasks to reset context
 - [ ] Run each RPI phase in its own conversation
 - [ ] Research and plan on the default branch; implement in worktrees

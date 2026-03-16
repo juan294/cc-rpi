@@ -69,7 +69,7 @@ Ready-to-use starting points for new projects:
 - **CLAUDE.md template** — Comprehensive project configuration with all operational rules baked in
 - **settings.json template** — `.claude/settings.json` with Agent Teams, hooks, and permissions
 - **Setup checklist** — Step-by-step guide including pre-commit hooks, CI setup, push accountability, and scheduled agents
-- **Slash commands** — `/bootstrap`, `/adopt`, `/update`, `/research`, `/plan`, `/implement`, `/validate`, `/describe-pr`, `/pre-launch`, `/status`, `/fix-ci` — plus integration with Anthropic-native `/simplify` and `/batch`
+- **Slash commands** — `/bootstrap`, `/adopt`, `/update`, `/research`, `/plan`, `/implement`, `/validate`, `/describe-pr`, `/pre-launch`, `/remediate`, `/triage`, `/status`, `/fix-ci` — plus integration with Anthropic-native `/simplify` and `/batch`
 - **Scheduled agent scripts** — Nightly blueprint sync agent (`cc-rpi-update-agent.sh`) with retry logic and launchd/cron templates
 
 ## Adding New Patterns
