@@ -307,29 +307,7 @@ Beyond subagent prompting, Claude Code provides three mechanisms for extending a
 
 ### Skills (`.claude/skills/`)
 
-Skills are on-demand knowledge files that Claude loads when relevant, without bloating every conversation. Use skills for domain knowledge, API conventions, and reusable workflows.
-
-```
-.claude/skills/
-├── api-conventions/
-│   └── SKILL.md          # REST API patterns for this project
-├── database-patterns/
-│   └── SKILL.md          # Query patterns, migration conventions
-└── fix-issue/
-    └── SKILL.md          # Workflow: analyze and fix a GitHub issue
-```
-
-**SKILL.md format:**
-```markdown
----
-name: api-conventions
-description: REST API design conventions for our services
----
-# API Conventions
-- Use kebab-case for URL paths
-- Use camelCase for JSON properties
-- Always include pagination for list endpoints
-```
+Skills are on-demand knowledge that Claude loads when relevant, without bloating every conversation. A skill is a **folder**, not just a markdown file — it can include scripts, reference code, assets, templates, and data that the agent discovers and uses.
 
 **When to use skills vs CLAUDE.md:**
 - Universal across ALL tasks → CLAUDE.md
@@ -337,6 +315,91 @@ description: REST API design conventions for our services
 - Workflow with side effects the user triggers manually → Skill with `disable-model-invocation: true`
 
 Invoke skills with `/skill-name` or let Claude auto-detect relevance from the `description` field.
+
+#### Skill Folder Structure
+
+```
+.claude/skills/
+├── api-conventions/
+│   ├── SKILL.md              # Entry point — loaded when skill activates
+│   ├── references/
+│   │   ├── endpoints.md      # Full endpoint catalog
+│   │   └── error-codes.md    # Error code reference
+│   └── examples/
+│       └── pagination.ts     # Reference implementation
+├── checkout-verifier/
+│   ├── SKILL.md              # Verification workflow instructions
+│   └── scripts/
+│       ├── run-checkout.sh   # Drives the checkout flow
+│       └── assert-state.py   # Programmatic state assertions
+└── new-migration/
+    ├── SKILL.md              # Migration scaffolding instructions
+    └── assets/
+        └── template.sql      # Migration file template to copy
+```
+
+Use the file system for progressive disclosure: SKILL.md tells Claude what's available, and Claude reads deeper files when needed. This keeps initial context lean while giving the agent access to rich reference material.
+
+#### SKILL.md Format
+
+```markdown
+---
+name: api-conventions
+description: When writing or modifying REST API endpoints, handlers, or middleware
+---
+# API Conventions
+- Use kebab-case for URL paths
+- Use camelCase for JSON properties
+- Always include pagination for list endpoints
+
+## Gotchas
+- The `X-Request-Id` header is required on all responses — middleware adds it,
+  but test helpers don't. Always use `createTestApp()` for integration tests.
+- Rate limiting is per-user, not per-IP. Don't add IP-based rate limits.
+
+## References
+See `references/` for the full endpoint catalog and error codes.
+See `examples/pagination.ts` for the canonical pagination pattern.
+```
+
+#### Writing Effective Skills
+
+**The description field is for triggering, not summarizing.** Claude scans skill descriptions to decide relevance. Write it as a condition: "When writing or modifying REST API endpoints" — not "REST API design conventions for our services."
+
+**Lead with gotchas.** The highest-signal content in any skill is what Claude gets wrong without it. Build a gotchas section from real failures and keep adding to it over time. If Claude consistently makes a mistake in your domain, that mistake belongs in a skill.
+
+**Don't state the obvious.** Claude already knows how to code. Focus on what pushes it out of its defaults — your team's specific conventions, internal library quirks, and domain-specific patterns that differ from common practice.
+
+**Avoid railroading.** Give Claude the information it needs but let it adapt to the situation. Describe constraints and goals, not step-by-step procedures. Over-specified skills break when the situation doesn't match the script exactly.
+
+**Include scripts and reference code.** Giving Claude composable helper functions lets it spend turns on composition rather than reconstructing boilerplate. A data analysis skill with a library of query helpers is far more powerful than one with just prose instructions.
+
+#### Skill Categories
+
+Use this taxonomy to identify which skills your project needs:
+
+| Category | Purpose | Examples |
+|----------|---------|---------|
+| **Library/API reference** | How to correctly use internal or tricky external libraries | billing-lib gotchas, design system usage, internal CLI docs |
+| **Product verification** | How to test that code actually works end-to-end | signup flow driver, checkout verifier, CLI smoke test |
+| **Data fetching** | How to connect to your data/monitoring stacks | funnel queries, cohort comparison, Grafana dashboard lookup |
+| **Business process** | Automate repetitive team workflows | standup post, ticket creation, weekly recap |
+| **Code scaffolding** | Generate framework boilerplate for your codebase | new service template, migration file, internal app scaffold |
+| **Code quality** | Enforce org-specific quality standards | adversarial review, code style enforcement, testing practices |
+| **CI/CD** | Fetch, push, deploy, and monitor | PR babysitter, deploy pipeline, cherry-pick workflow |
+| **Runbooks** | Investigate symptoms and produce structured reports | service debugging, oncall runner, log correlator |
+| **Infrastructure ops** | Routine maintenance with guardrails | orphan cleanup, dependency management, cost investigation |
+
+Not every project needs all categories. Start with library reference and code quality (highest immediate value), then add verification and scaffolding as patterns emerge.
+
+#### On-Demand Hooks
+
+Skills can register hooks that activate only when the skill is invoked and last for the session. Use this for guardrails that would be too restrictive as permanent hooks:
+
+- `/careful` — blocks `rm -rf`, `DROP TABLE`, force-push, `kubectl delete` via PreToolUse matcher. Activate when touching production.
+- `/freeze` — blocks Edit/Write outside a specific directory. Activate when debugging to prevent accidental "fixes" to unrelated code.
+
+This extends the three-tier enforcement model (see [ci-and-guardrails.md](ci-and-guardrails.md)) with a context-sensitive layer: permanent hooks for always-on protection, on-demand hooks for situational guardrails.
 
 ### Custom Agent Definitions (`.claude/agents/`)
 

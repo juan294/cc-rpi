@@ -9,6 +9,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 ### Added
 
 - **Rule #59: Wrap context-specific CLAUDE.md sections in `<important if="condition">` tags** -- as CLAUDE.md grows, conditional blocks give the agent explicit activation signals so domain-specific rules (testing, deployment, CI) only fire when relevant. Keeps universal content unwrapped. Added to `patterns/quick-reference.md` (Rule #59) and `templates/CLAUDE.md.template` (new "Conditional Blocks" section with examples and authoring guidance).
+- **Session stability and prompt caching guidance** in `methodology/context-engineering.md` -- don't switch models mid-session (cache is per-model, switching to Haiku mid-Opus-session is more expensive, not less -- use subagents instead) and don't add/remove MCP tools mid-session (tools are part of the cached prefix, loading/unloading invalidates the cache). Both are counterintuitive behaviors that silently increase cost and latency.
+- **Expanded skills authoring guide** in `methodology/agent-design.md` -- skills are folders (not just markdown files) with scripts, references, assets, and examples. Covers folder structure with progressive disclosure, SKILL.md format with gotchas section, 5 authoring principles (description for triggering, lead with gotchas, don't state the obvious, avoid railroading, include scripts), 9-category skill taxonomy (library reference, product verification, data fetching, business process, code scaffolding, code quality, CI/CD, runbooks, infrastructure ops), and on-demand hooks for situational guardrails. Updated `templates/setup-checklist.md` to reference the taxonomy and folder pattern.
 
 ## [1.9.0] - 2026-03-16
 

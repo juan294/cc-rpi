@@ -88,6 +88,8 @@ The current guard script enforces:
 
 Rules graduate upward: a pattern documented in tier 3 that keeps recurring gets promoted to tier 2 (recipe in CLAUDE.md) or tier 1 (hook). The error processing routine should track repeat offenders across batches and promote accordingly.
 
+Skills can extend this model with **on-demand hooks** — guardrails that activate only when a specific skill is invoked and last for the session. Use these for rules too restrictive to run permanently but essential in certain contexts (e.g., blocking destructive commands when touching production). See [agent-design.md](agent-design.md) "On-Demand Hooks" for examples.
+
 ## Pre-Commit Hooks
 
 Pre-commit hooks run automatically before every commit and reject the commit if any check fails.

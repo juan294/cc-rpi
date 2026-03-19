@@ -20,7 +20,9 @@ Use this when setting up a new project to follow cc-rpi best practices.
   - Keep it lean: only universally applicable instructions
 - [ ] Create `.claude/commands/` and copy slash commands from `templates/commands/`
 - [ ] Create `.claude/skills/` for domain-specific knowledge (loaded on demand):
-  - e.g., `api-conventions/SKILL.md`, `database-patterns/SKILL.md`
+  - Each skill is a **folder** with a `SKILL.md` entry point, plus optional `references/`, `scripts/`, `examples/`, `assets/` subdirectories
+  - Start with library reference and code quality skills (highest immediate value)
+  - See `methodology/agent-design.md` "Skill Categories" for the full taxonomy
   - Skills keep CLAUDE.md lean while giving Claude access to specialized knowledge
 - [ ] Create `.claude/agents/` for custom subagent definitions (optional):
   - e.g., `security-reviewer.md`, `performance-analyzer.md`

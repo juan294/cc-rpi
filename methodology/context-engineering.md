@@ -304,6 +304,16 @@ Different tasks benefit from different models. Use `--model` or configure per-ag
 
 In custom agent definitions (`.claude/agents/`), set the `model` field to match the task complexity.
 
+### Session Stability and Prompt Caching
+
+Claude Code uses prompt caching to reuse computation from previous turns — the API caches everything from the start of the request as a prefix. This makes long sessions dramatically cheaper and faster, but the cache is fragile: any change to the prefix invalidates it.
+
+Two common actions silently break the cache:
+
+**Don't switch models mid-conversation.** Prompt caches are per-model. If you're 100k tokens into an Opus session and switch to Haiku for a "quick question," Haiku must rebuild the entire cache from scratch — making it *more* expensive than letting Opus answer. Use subagents for cheaper models instead: Opus prepares a focused handoff, the subagent runs on Haiku in its own context, and only the result returns.
+
+**Don't add or remove MCP tools mid-session.** Tools are part of the cached prefix. Loading or unloading an MCP server during a conversation invalidates the cache for everything after it. Configure your MCP servers before starting work. If you need a tool you didn't load, it's cheaper to start a new session with the right tools than to add one and pay for a full cache rebuild.
+
 ## You Need a Domain Expert
 
 For complex codebases, at least one person on the team should be an expert in the codebase (or the relevant area). The RPI pattern amplifies expert knowledge — it doesn't replace it. When both participants are unfamiliar with the codebase, research tends to miss critical dependency chains and architectural constraints.
