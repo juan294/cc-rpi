@@ -138,6 +138,10 @@ These rules must be internalized before starting any work. They prevent the most
 
 58. **Fix everything, always** — categorize findings by severity (that's useful), but fix 100% of them. With AI agents, the cost of fixing is near-zero. Never suggest deferring items, say "nothing urgent," or recommend leaving low-priority items for a later session. The quality bar is the highest possible.
 
+## CLAUDE.md Authoring Rules
+
+59. **Wrap context-specific CLAUDE.md sections in `<important if="condition">` tags** — as CLAUDE.md grows, the agent must judge relevance for every line. Conditional blocks give explicit activation signals so testing rules only fire when writing tests, deployment rules only fire when deploying, etc. Keep universal content (stack, structure, git workflow) unwrapped. Make conditions specific — `"you are writing tests"` not `"you are writing code"`.
+
 ---
 
 For detailed symptoms, root causes, and examples, see [agent-errors.md](agent-errors.md).

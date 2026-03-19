@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Rule #59: Wrap context-specific CLAUDE.md sections in `<important if="condition">` tags** -- as CLAUDE.md grows, conditional blocks give the agent explicit activation signals so domain-specific rules (testing, deployment, CI) only fire when relevant. Keeps universal content unwrapped. Added to `patterns/quick-reference.md` (Rule #59) and `templates/CLAUDE.md.template` (new "Conditional Blocks" section with examples and authoring guidance).
+
 ## [1.9.0] - 2026-03-16
 
 ### Added

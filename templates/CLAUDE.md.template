@@ -6,6 +6,8 @@ For domain-specific knowledge, use .claude/skills/ (loaded on demand).
 For detailed architecture docs, use docs/ or agent_docs/ (agent reads when relevant).
 Budget: ~150 usable instruction slots. System prompt uses ~50. Don't waste them.
 Test: "Would removing this line cause Claude to make mistakes?" If not, cut it.
+
+CONDITIONAL BLOCKS: See the "Conditional Blocks" section below for the pattern.
 -->
 
 ## One-liner
@@ -108,6 +110,23 @@ docs: description
 
 ## Deployment
 [Describe your deployment pipeline — which branch deploys where]
+
+## Conditional Blocks for Context-Specific Rules
+
+As this file grows, wrap domain-specific sections in `<important if="condition">` tags.
+The agent activates these only when the condition matches the current task, reducing noise.
+Keep universal content (stack, structure, git workflow) unwrapped.
+
+```markdown
+<important if="you are writing or modifying tests">
+- Use `createTestApp()` helper for integration tests
+- Mock database with `dbMock` from `packages/db/test`
+- Test fixtures live in `__fixtures__/` directories
+</important>
+```
+
+- **Be specific.** `"you are writing tests"` is good. `"you are writing code"` matches everything and defeats the purpose.
+- **Group by domain.** One block per domain (testing, deployment, database) — don't wrap individual lines.
 
 ## Agent Operational Rules
 
