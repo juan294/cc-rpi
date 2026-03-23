@@ -142,6 +142,12 @@ These rules must be internalized before starting any work. They prevent the most
 
 59. **Wrap context-specific CLAUDE.md sections in `<important if="condition">` tags** — as CLAUDE.md grows, the agent must judge relevance for every line. Conditional blocks give explicit activation signals so testing rules only fire when writing tests, deployment rules only fire when deploying, etc. Keep universal content (stack, structure, git workflow) unwrapped. Make conditions specific — `"you are writing tests"` not `"you are writing code"`.
 
+## Git Conflict Resolution Rules
+
+60. **`git checkout --` doesn't work on unmerged files — use `--ours`/`--theirs` or abort** — during a merge/rebase/cherry-pick conflict, files are "unmerged" and plain `git checkout -- <file>` fails. Use `git checkout --ours <file>` or `git checkout --theirs <file>` to pick a side, or `git merge --abort` / `git rebase --abort` to cancel entirely. Check `git status` first to see the conflict state.
+
+61. **Remove conflicting untracked files before `git merge`** — if untracked files exist at the same paths as files in the branch being merged, git aborts with "untracked working tree files would be overwritten." Delete or move the untracked copies first, then merge. Common in multi-agent workflows where the main repo and worktree agents create files at the same paths.
+
 ---
 
 For detailed symptoms, root causes, and examples, see [agent-errors.md](agent-errors.md).

@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Error #54: `git checkout --` fails on unmerged (conflicted) files** -- agent tries to discard changes with `git checkout --` during a merge/rebase/cherry-pick conflict; files are "unmerged" so plain checkout fails. Solution: use `--ours`/`--theirs` to pick a side, or abort the operation.
+- **Error #55: `git merge` blocked by untracked working tree files** -- untracked files at the same paths as files in the branch being merged cause git to abort. Common in multi-agent workflows where main repo and worktree agents create files at the same paths. Solution: delete or move untracked copies before merging.
+- **Rule #60** and **Rule #61** -- corresponding quick-reference rules for the new error patterns.
+
 ## [1.10.0] - 2026-03-19
 
 ### Added

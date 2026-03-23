@@ -1847,3 +1847,96 @@ gh pr create --base main --head develop --title "Release v0.3.0" --body "..."
 ```
 
 **Key detail:** This is especially common in gitflow-style workflows where a develop-to-main PR persists across multiple release cycles, and in CI/CD pipelines where automated agents create PRs. The same pattern applies to any repeated workflow — release PRs, dependency update PRs, sync PRs. Always check first and update if one exists.
+
+---
+
+## Error #54: `git checkout --` fails on unmerged (conflicted) files
+
+**Symptom:** `git checkout -- src/components/chat/chat-interface.tsx src/components/onboarding/onboarding-flow.tsx ...` fails with `error: path 'src/components/chat/chat-interface.tsx' is unmerged` for every file listed. The agent was trying to discard changes during a merge or rebase conflict, but `git checkout --` doesn't work on files in a conflicted state.
+
+**Root cause:** During a merge, rebase, or cherry-pick that hits conflicts, affected files enter an "unmerged" state. `git checkout -- <file>` is designed to restore a file to its last committed version, but it can't do that for unmerged files because git doesn't know which version to restore to — there are multiple candidates (ours, theirs, base). The agent treats `git checkout --` as a universal "discard changes" command without considering the conflict state.
+
+**Correct approach — always do this:**
+```bash
+# If you want to keep YOUR version of conflicted files:
+git checkout --ours src/components/chat/chat-interface.tsx
+git add src/components/chat/chat-interface.tsx
+
+# If you want to keep THEIR version of conflicted files:
+git checkout --theirs src/components/chat/chat-interface.tsx
+git add src/components/chat/chat-interface.tsx
+
+# If you want to abort the entire merge/rebase/cherry-pick:
+git merge --abort       # during a merge
+git rebase --abort      # during a rebase
+git cherry-pick --abort # during a cherry-pick
+
+# To check what state you're in:
+git status  # Shows "Unmerged paths" section with conflicted files
+
+# For bulk resolution (all ours or all theirs):
+git checkout --ours -- . && git add -A     # keep all our versions
+git checkout --theirs -- . && git add -A   # keep all their versions
+```
+
+**Never do this:**
+```bash
+# Don't use plain checkout -- on conflicted files:
+git checkout -- src/components/chat/chat-interface.tsx
+# ← "error: path '...' is unmerged"
+
+# Don't retry the same command on more files:
+git checkout -- file1.tsx file2.tsx file3.tsx
+# ← same error for every file, all are unmerged
+```
+
+**Key detail:** The error message "is unmerged" means you're in the middle of a conflicted merge/rebase/cherry-pick. Before trying to discard changes, check `git status` to see the conflict state. The three options are: resolve the conflicts (edit + `git add`), pick a side (`--ours`/`--theirs`), or abort the operation entirely. Plain `git checkout --` is only for non-conflicted files.
+
+---
+
+## Error #55: `git merge` blocked by untracked working tree files
+
+**Symptom:** `git merge worktree-agent-a923fd5a --no-edit` fails with `error: The following untracked working tree files would be overwritten by merge:` followed by a list of files, then `Please move or remove them before you merge. Aborting. Merge with strategy ort failed.`
+
+**Root cause:** The branch being merged contains files that also exist as untracked files in the current working tree. Git refuses to merge because it would overwrite the untracked copies with no way to recover them. This commonly happens when an agent creates files in the main repo (plans, docs, reports) while a parallel worktree agent independently creates the same files on its branch. When the main agent tries to merge the worktree branch, the duplicate untracked files block the merge.
+
+**Correct approach — always do this:**
+```bash
+# 1. Check what untracked files would conflict:
+git merge --no-commit --no-ff <branch> 2>&1 | grep "error:"
+# Or just attempt the merge and read the error output
+
+# 2. Remove or move the conflicting untracked files:
+rm docs/plans/2024-03-22-scoring-accuracy--fixes-phases/phase2.md
+rm docs/plans/2024-03-22-scoring-accuracy--fixes-phases/phase3.md
+# Or move them to a backup:
+mkdir -p /tmp/merge-backup && mv <conflicting-files> /tmp/merge-backup/
+
+# 3. Then retry the merge:
+git merge <branch> --no-edit
+
+# Alternative: stash untracked files (Git 1.7.7+):
+git stash --include-untracked
+git merge <branch> --no-edit
+git stash pop  # may conflict — resolve manually if needed
+
+# Prevention: when orchestrating worktree agents, ensure the main repo
+# doesn't create files in the same paths the worktree agent will produce
+```
+
+**Never do this:**
+```bash
+# Don't retry the merge without removing the conflicting files:
+git merge <branch> --no-edit  # ← same error, files still there
+
+# Don't use git clean -fd blindly (may delete other needed files):
+git clean -fd && git merge <branch>
+# ← deletes ALL untracked files, not just the conflicting ones
+
+# Don't create the same files in both the main repo and a worktree branch:
+# Main repo: creates docs/plans/phase2.md (untracked)
+# Worktree agent: commits docs/plans/phase2.md to branch
+# ← merge will fail
+```
+
+**Key detail:** This is a coordination problem in multi-agent workflows. When the main agent and worktree agents work in parallel, they must not produce files at the same paths. The main agent should defer creating shared artifacts (plans, docs, reports) until after merging the worktree branch, or the worktree agent should create them in a distinct location. If the conflict occurs, the simplest fix is to delete the local untracked copies (the branch version will replace them on merge).
