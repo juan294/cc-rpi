@@ -6,17 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-03-25
+
 ### Added
 
+- **Deployment Safety & Resource Efficiency** -- new patterns file (`patterns/deployment-safety.md`) codifying lessons from a real production incident where an agent merged 7 Dependabot PRs to `main`, triggered 80+ CI runs and 21 Vercel deployments, and took down a live site for 2+ hours. Includes deployment topology awareness, dependency risk assessment, production recovery protocol, and resource efficiency patterns.
 - **Error #54: `git checkout --` fails on unmerged (conflicted) files** -- agent tries to discard changes with `git checkout --` during a merge/rebase/cherry-pick conflict; files are "unmerged" so plain checkout fails. Solution: use `--ours`/`--theirs` to pick a side, or abort the operation.
 - **Error #55: `git merge` blocked by untracked working tree files** -- untracked files at the same paths as files in the branch being merged cause git to abort. Common in multi-agent workflows where main repo and worktree agents create files at the same paths. Solution: delete or move untracked copies before merging.
-- **Rule #60** and **Rule #61** -- corresponding quick-reference rules for the new error patterns.
-- **Deployment Safety & Resource Efficiency** -- new patterns file (`patterns/deployment-safety.md`) codifying lessons from a real production incident where an agent merged 7 Dependabot PRs to `main`, triggered 80+ CI runs and 21 Vercel deployments, and took down a live site for 2+ hours. Includes deployment topology awareness, dependency risk assessment, production recovery protocol, and resource efficiency patterns.
 - **Error #56: Agent merges to `main` without understanding deployment topology** -- agent treats "clean up PRs" as "merge them" without checking that merging to `main` triggers production deployments. Dependabot PRs target `main` by default. Solution: cherry-pick to `develop`, close the Dependabot PR.
 - **Error #57: Sequential merge cascade wastes CI resources** -- merging N PRs one-by-one with "require up-to-date" branch protection creates O(n^2) rebase cascades. 7 PRs x 9 workflows = ~189 unnecessary CI runs. Solution: batch all updates into a single PR.
 - **Error #58: Agent deploys untested code to production** -- CI passing is not sufficient for framework upgrades. Build != Runtime. Local != Production. A Next.js minor bump crashed all Vercel serverless functions despite passing all CI checks. Solution: deploy to preview URL and verify before merging to `main`.
 - **Error #59: Agent improvises production recovery with repeated failed deployments** -- agent panic-deploys during an outage, each failed attempt extending the downtime and costing money. Solution: roll back immediately, investigate on non-production, fix forward on `develop`.
 - **Error #60: Agent treats all dependency updates as equal risk** -- applying uniform verification to framework upgrades and dev patches alike. A Next.js upgrade needs preview verification; a minimatch patch needs CI only. Solution: classify dependencies by risk level before merging.
+- **Rules #60-#61** -- git conflict resolution quick-reference rules.
 - **Rules #62-#67** -- deployment and resource efficiency rules covering: main=production, batch dependencies, cost awareness, preview verification, recovery protocol, and action justification. New "Deployment & Resource Efficiency Rules" section in quick-reference.md.
 - **Updated CLAUDE.md template** -- added deployment safety conditional block for projects with CI/CD deployment pipelines.
 
