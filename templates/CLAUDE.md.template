@@ -123,6 +123,18 @@ docs: description
 - **Justify every external action** — before any CI run, deployment, or API call: Is this needed? Is this justified? Is this verifiable? If any answer is "no," stop.
 </important>
 
+<important if="you are writing Supabase migrations or creating tables in Supabase">
+### Supabase Migration Rules
+
+- **Every migration that creates a public-facing table must include explicit grants:**
+  ```sql
+  GRANT SELECT ON table_name TO anon, authenticated;
+  ```
+- **Add `ALTER DEFAULT PRIVILEGES` in the initial setup migration** so all future tables automatically get anon SELECT. Never rely on Supabase dashboard-granted defaults for migration-created tables.
+- **Fallback data paths must log at ERROR level.** If a query fails and the code falls back to default/placeholder data, log `[TABLE_FALLBACK]` at ERROR — not INFO. Silent fallbacks hide permission bugs for days.
+- **Health endpoints must check actual data access**, not just connectivity. Return `"degraded"` if primary tables are inaccessible.
+</important>
+
 ## Conditional Blocks for Context-Specific Rules
 
 As this file grows, wrap domain-specific sections in `<important if="condition">` tags.

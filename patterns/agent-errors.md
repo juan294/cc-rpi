@@ -2170,3 +2170,72 @@ Verification by risk level:
 ```
 
 **Key detail:** The risk matrix is not just about the version number. A patch to a framework can be higher risk than a major bump to a dev dependency. The factors are: (1) is it in the runtime path? (2) how much of the app does it affect? (3) does the deployment platform have specific behaviors the dependency interacts with? Framework upgrades for Vercel/serverless projects are always high risk because the deployment runtime differs from local/CI environments.
+
+---
+
+## Error #61: Silent fallback masks production data failure
+
+**Symptom:** The app appears to work fine — pages load, no errors in the console, health checks pass. But users see stock/placeholder content instead of real data. The root cause is a backend failure (database permission error, API auth expiry, missing migration grant) that triggers a fallback code path. The fallback serves default data silently, with no logging, no alerting, and no health check degradation. Nobody knows production is broken until a user reports seeing wrong content.
+
+**Root cause:** The agent writes "resilient" code with graceful degradation — if the primary data fetch fails, return fallback data. This is good practice in theory, but the agent implements it without any observability: no error-level logging when the fallback activates, no health endpoint that detects degraded state, no metrics or alerts. The fallback becomes a silent failure mode that hides real production bugs.
+
+Real example: A Supabase migration created tables but didn't include `GRANT SELECT TO anon`. The `getStoriesServer()` function got a 403, silently fell back to `FALLBACK_STORIES` with stock images. The site looked "fine" — it just wasn't showing real content.
+
+**Correct approach — always do this:**
+
+```typescript
+// When implementing fallback behavior, ALWAYS add three layers:
+
+// 1. ERROR-LEVEL LOGGING when fallback activates
+async function getStoriesServer() {
+  const { data, error } = await supabase.from('stories').select('*');
+  if (error || !data?.length) {
+    // NOT console.log — this must be ERROR level, searchable, alertable
+    console.error('[STORIES_FALLBACK] Primary fetch failed, serving fallback data', {
+      error: error?.message,
+      code: error?.code,
+      timestamp: new Date().toISOString(),
+    });
+    return FALLBACK_STORIES;
+  }
+  return data;
+}
+
+// 2. HEALTH ENDPOINT that detects degraded state
+// GET /api/health should check actual data sources, not just "server is up"
+async function healthCheck() {
+  const stories = await supabase.from('stories').select('id').limit(1);
+  return {
+    status: stories.error ? 'degraded' : 'healthy',
+    stories: { status: stories.error ? 'fallback' : 'ok' },
+  };
+}
+
+// 3. ALERTING on the health endpoint or error logs
+// Configure your monitoring (Vercel, Datadog, etc.) to alert on:
+// - Health endpoint returning "degraded"
+// - [STORIES_FALLBACK] appearing in function logs
+```
+
+**Never do this:**
+
+```typescript
+// Don't create silent fallbacks:
+async function getStoriesServer() {
+  const { data, error } = await supabase.from('stories').select('*');
+  if (error || !data?.length) {
+    return FALLBACK_STORIES;  // ← silent! no logging, no alerting
+  }
+  return data;
+}
+
+// Don't write health checks that only test connectivity:
+async function healthCheck() {
+  return { status: 'ok' };  // ← always "ok", even when serving fallback data
+}
+
+// Don't log fallbacks at INFO/DEBUG level:
+console.log('Using fallback stories');  // ← invisible in production log noise
+```
+
+**Key detail:** The pattern applies to any code with fallback behavior — not just database queries. API clients with default responses, feature flags with hardcoded defaults, CDN fallbacks to origin, cache miss handlers that return stale data. Whenever you write a fallback path, ask: "If this fallback activates in production, will anyone know?" If the answer is no, add error logging and health check coverage before shipping.

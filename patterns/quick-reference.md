@@ -162,6 +162,8 @@ These rules must be internalized before starting any work. They prevent the most
 
 67. **Justify every external action before triggering** — before any CI run, deployment, or API call, answer: Is this needed? Is this justified? Is this verifiable? If any answer is "no," do not proceed. Track your deployment count during recovery — if you've deployed more than twice without success, stop and re-evaluate.
 
+68. **Every fallback path must be observable** — when writing code with fallback behavior (default data, cached responses, placeholder content), always add: (1) ERROR-level logging when the fallback activates, (2) health endpoint coverage that detects degraded state, (3) alerting or monitoring hooks. A silent fallback is a silent production bug. Ask: "If this fallback fires in production, will anyone know?"
+
 ---
 
 For detailed symptoms, root causes, and examples, see [agent-errors.md](agent-errors.md).

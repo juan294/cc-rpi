@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.11.1] - 2026-03-25
+
+### Added
+
+- **Error #61: Silent fallback masks production data failure** -- agent writes "resilient" code with graceful degradation (fallback data, default responses) but no observability. Fallback activates silently in production, serving placeholder content while hiding the real bug (e.g., missing database grants, expired API auth). Solution: every fallback path needs ERROR-level logging, health endpoint degraded state, and alerting.
+- **Rule #68: Every fallback path must be observable** -- when writing fallback behavior, always add error logging, health check coverage, and monitoring hooks. Silent fallbacks are silent production bugs.
+- **Supabase migration rules** in CLAUDE.md template conditional block -- every migration creating a public table must include `GRANT SELECT TO anon, authenticated`; `ALTER DEFAULT PRIVILEGES` belongs in the initial setup migration; fallback paths must log at ERROR level; health endpoints must check actual data access.
+
 ## [1.11.0] - 2026-03-25
 
 ### Added
