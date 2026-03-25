@@ -96,8 +96,9 @@ release: vX.Y.Z         # Version bumps
 
 ## Agent Operational Rules
 
-Read `patterns/quick-reference.md` for the full rule set (58 rules).
-Read `patterns/agent-errors.md` for detailed error patterns (53 errors).
+Read `patterns/quick-reference.md` for the full rule set (67 rules).
+Read `patterns/agent-errors.md` for detailed error patterns (60 errors).
+Read `patterns/deployment-safety.md` for deployment safety and resource efficiency rules.
 
 These files ARE the source of truth -- they live in this repo. Do not duplicate their content here.
 
@@ -159,8 +160,9 @@ cc-rpi/
 ├── methodology/                      # The RPI approach (11 files)
 ├── examples/                         # Sample documents and workflow walkthroughs
 ├── patterns/                         # Operational knowledge
-│   ├── quick-reference.md            # 58 rules to internalize before any work
-│   └── agent-errors.md               # 53 errors with symptoms and solutions
+│   ├── quick-reference.md            # 67 rules to internalize before any work
+│   ├── agent-errors.md               # 60 errors with symptoms and solutions
+│   └── deployment-safety.md          # Resource efficiency and production deployment rules
 └── templates/                        # Files to adapt for new projects
     ├── CLAUDE.md.template            # Starting point for project CLAUDE.md
     ├── settings.json.template        # .claude/settings.json template
@@ -185,6 +187,7 @@ Go directly to these paths -- never search the codebase for them.
 |-------|------|-------|
 | Error catalog | `patterns/agent-errors.md` | Full entries with symptoms, root cause, solution |
 | Operational rules | `patterns/quick-reference.md` | One-liner rules (source of truth) |
+| Deployment safety | `patterns/deployment-safety.md` | Resource efficiency and production deployment rules |
 | Methodology | `methodology/` | 11 files, reading order in `methodology/README.md` |
 | Templates | `templates/` | Source files adapted for new projects |
 | Command source | `templates/commands/` | Canonical command definitions |

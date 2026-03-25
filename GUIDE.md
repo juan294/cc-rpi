@@ -242,7 +242,7 @@ This sounds restrictive, but it's the single most impactful rule for research qu
 
 ### Error Prevention
 
-The blueprint includes 61 operational rules learned from real sessions. These aren't theoretical — they're patterns that caused actual failures and wasted time. Examples:
+The blueprint includes 67 operational rules learned from real sessions. These aren't theoretical — they're patterns that caused actual failures and wasted time. Examples:
 
 - Never run verification commands in parallel (they interfere with each other)
 - Always use absolute paths in worktree commands (relative paths resolve to the wrong directory)
@@ -363,8 +363,9 @@ The blueprint repository contains detailed documentation on every topic mentione
 | Plan notation | `methodology/pseudocode-notation.md` | How to write and read implementation plans |
 | Testing approach | `methodology/testing.md` | TDD protocol, verification hierarchy |
 | CI ownership | `methodology/push-accountability.md` | Background CI monitoring, fix-and-repush |
-| Error patterns | `patterns/agent-errors.md` | 55 documented errors with symptoms and solutions |
-| Operational rules | `patterns/quick-reference.md` | 61 rules to prevent known mistakes |
+| Error patterns | `patterns/agent-errors.md` | 60 documented errors with symptoms and solutions |
+| Operational rules | `patterns/quick-reference.md` | 67 rules to prevent known mistakes |
+| Deployment safety | `patterns/deployment-safety.md` | Resource efficiency and production deployment rules |
 | Worked examples | `examples/README.md` | Sample research docs, plans, logs, pseudocode |
 
 ## Credits

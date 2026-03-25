@@ -1940,3 +1940,233 @@ git clean -fd && git merge <branch>
 ```
 
 **Key detail:** This is a coordination problem in multi-agent workflows. When the main agent and worktree agents work in parallel, they must not produce files at the same paths. The main agent should defer creating shared artifacts (plans, docs, reports) until after merging the worktree branch, or the worktree agent should create them in a distinct location. If the conflict occurs, the simplest fix is to delete the local untracked copies (the branch version will replace them on merge).
+
+---
+
+## Error #56: Agent merges to `main` without understanding deployment topology
+
+**Symptom:** Agent is asked to "clean up Dependabot PRs" or "merge the passing PRs." It merges them to `main`, triggering production deployments. One of the merged dependencies contains a production-only bug. The live site goes down. The agent didn't realize that merging to `main` = deploying to production.
+
+**Root cause:** The agent doesn't check what happens when code lands on `main`. In any project with CI/CD connected to `main` (Vercel, Netlify, AWS Amplify, etc.), a merge to `main` is an immediate production deployment. Dependabot PRs target `main` by default. The agent treats "merge the PR" as a git operation without considering the deployment side effects.
+
+**Correct approach — always do this:**
+```bash
+# Before merging anything, understand the deployment topology:
+# 1. Which branches trigger deployments? (check Vercel/Netlify/CI config)
+# 2. Does main deploy to production? (almost always yes)
+# 3. Is there a develop/staging branch? (use that instead)
+
+# For Dependabot PRs (which target main by default):
+# Option A: Cherry-pick updates to develop, close the Dependabot PR
+git checkout develop
+git cherry-pick <dependabot-commit-sha>
+# Then close the Dependabot PR without merging
+
+# Option B: Retarget the PR to develop (if repo allows)
+gh pr edit <N> --base develop
+
+# Never merge Dependabot PRs directly to main
+```
+
+**Never do this:**
+```bash
+# Don't merge Dependabot PRs to main without explicit production deployment authorization:
+gh pr merge 171 --squash   # ← triggers production deployment
+gh pr merge 170 --squash   # ← triggers another production deployment
+gh pr merge 194 --squash   # ← and another...
+# Each merge is a production deployment. 7 merges = 7 production deployments.
+
+# Don't assume "merge the PRs" means "deploy to production":
+# User said "clean up the Dependabot PRs" — that means close/retarget, not deploy
+```
+
+**Key detail:** "Merge the PRs" is never implicit authorization to deploy to production. The agent must recognize that Dependabot PRs target `main` and that merging them has deployment side effects. The correct interpretation of "clean up" for Dependabot PRs is: assess, cherry-pick to develop, close the PRs. If the user wants a production deployment, they will say "deploy to production" or "merge to main" explicitly.
+
+---
+
+## Error #57: Sequential merge cascade wastes CI resources (O(n^2) rebase storm)
+
+**Symptom:** Agent merges N dependency PRs one-by-one on a branch with "require branches to be up-to-date" branch protection. Each merge invalidates the checks on all remaining PRs, forcing a rebase and full CI re-run for each. For 7 PRs with 9 CI workflows, this creates 30+ unnecessary CI runs from rebases alone — pure waste.
+
+**Root cause:** The agent doesn't consider the cost multiplication of sequential merges. When branch protection requires branches to be up-to-date before merging, each merge to the target branch invalidates every other PR targeting the same branch. The remaining PRs must rebase and re-run all checks. This creates O(n^2) CI runs instead of O(1).
+
+**Correct approach — always do this:**
+```bash
+# Batch all dependency updates into a single branch:
+git checkout -b chore/dependency-updates develop
+
+# Apply all updates to the single branch:
+git cherry-pick <dep-1-sha> <dep-2-sha> <dep-3-sha>
+# Or manually update package.json and run install
+
+# Run CI once on the combined result:
+git push -u origin chore/dependency-updates
+gh pr create --base develop --title "chore: batch dependency updates"
+# = 1 CI run instead of 30+
+
+# If some updates conflict, split into 2-3 groups max — not N individual PRs
+```
+
+**Never do this:**
+```bash
+# Don't merge PRs one-by-one when branch protection requires up-to-date checks:
+gh pr merge 171 --squash   # ← triggers rebase of PRs 170, 194, 201, 204, 205
+gh pr merge 170 --squash   # ← triggers rebase of PRs 194, 201, 204, 205
+gh pr merge 194 --squash   # ← triggers rebase of PRs 201, 204, 205
+# Each step: rebase K remaining PRs × M workflows = waste
+
+# Don't rebase-and-wait in a loop:
+# Rebase PR → wait for CI → merge → rebase next PR → wait for CI → merge → ...
+# This is the slowest and most expensive possible approach
+```
+
+**Key detail:** The cost formula is: for N PRs with M CI workflows, sequential merging with up-to-date requirements costs approximately N x (N-1) / 2 x M workflow runs in rebases alone. For 7 PRs x 9 workflows = ~189 unnecessary runs. Batching into a single PR costs M runs total — a 20x reduction. Always batch dependency updates.
+
+---
+
+## Error #58: Agent deploys untested code to production (no preview verification)
+
+**Symptom:** Agent merges a framework upgrade (e.g., Next.js minor version bump) after CI passes. Build succeeds, tests pass, local `next start` works. But on the deployment platform (Vercel), the app crashes at runtime with a missing module error. The bug only manifests on the platform's serverless runtime — local and CI environments don't reproduce it.
+
+**Root cause:** The agent treats CI passing as sufficient evidence that code is production-ready. But CI tests build correctness, not runtime correctness on the target platform. Build success != runtime success. Local success != production success. Platform-specific behaviors (serverless cold starts, edge runtimes, module resolution) can cause failures that no local test or CI check would catch.
+
+**Correct approach — always do this:**
+```bash
+# For framework upgrades and risky changes:
+# 1. Push to a non-main branch to trigger a preview deployment
+git push -u origin chore/nextjs-upgrade
+
+# 2. Wait for the preview deployment to complete
+# (Vercel automatically creates preview URLs for non-main branches)
+
+# 3. Verify the preview deployment:
+curl -s -o /dev/null -w "%{http_code}" https://preview-url.vercel.app
+# Check: site loads, API routes respond, key pages render
+
+# 4. Only after preview verification passes, create PR to main
+gh pr create --base main --title "chore: upgrade Next.js to 16.2.1"
+
+# For low-risk changes (dev dependency patches):
+# CI passing is sufficient — no preview verification needed
+```
+
+**Never do this:**
+```bash
+# Don't merge framework upgrades after CI alone:
+# CI passes → merge to main → production crashes
+# CI checks build, lint, and tests — not platform runtime behavior
+
+# Don't trust local verification for production readiness:
+# next build && next start → works locally
+# But on Vercel serverless: module resolution differs, crash at startup
+
+# Don't merge without checking the risk level of the dependency:
+# Next.js 16.1.6 → 16.2.1 is a framework upgrade (HIGH risk)
+# minimatch 10.2.2 → 10.2.4 is a dev tool patch (LOW risk)
+# They require different verification levels
+```
+
+**Key detail:** The specific failure that caused this error to be documented: Next.js 16.2.1 referenced a dev-only module (`browser-logs/file-logger`) in production build paths. The module was not included in the serverless function bundle. Every serverless function crashed at startup with `Cannot find module`. The build succeeded, tests passed, and local `next start` worked — but the Vercel serverless runtime failed because its module resolution paths differ from local Node.js. A single preview deployment would have caught this before any production impact.
+
+---
+
+## Error #59: Agent improvises production recovery with repeated failed deployments
+
+**Symptom:** Production is down. The agent promotes the broken deployment "briefly" to capture logs — site goes down again. Deploys maintenance mode with TypeScript errors — fails. Deploys again with env var issues — fails. Redeploys from main (which is still broken) — fails. Each failed attempt is another billed deployment and another outage window. The investigation took 6+ deployments and 2+ hours when a simple rollback would have restored service in minutes.
+
+**Root cause:** The agent panics and improvises instead of following a structured recovery protocol. It tries to diagnose and fix simultaneously, using production as its test environment. Each failed recovery attempt extends the outage and costs money (build minutes, serverless invocations).
+
+**Correct approach — always do this:**
+```
+When production is down, follow this exact sequence:
+
+1. ROLL BACK immediately to the last known good deployment.
+   Do not investigate. Do not "try one more thing." Restore service first.
+
+2. VERIFY the rollback — confirm the site is operational.
+
+3. INVESTIGATE on a non-production environment:
+   - Read Vercel/platform function logs (they persist after rollback)
+   - Deploy the broken code to a preview URL for isolated reproduction
+   - Test locally (but remember: local ≠ production)
+
+4. FIX FORWARD on develop:
+   - Create the fix on a feature branch
+   - Verify on preview deployment
+   - Merge to main only after preview verification
+
+5. COUNT THE COST — if you've deployed more than 2 times during recovery,
+   stop and re-evaluate your approach. Something is wrong.
+```
+
+**Never do this:**
+```
+# Don't promote broken deployments to "capture logs":
+# The logs persist in the platform — you don't need to break production to read them
+
+# Don't deploy to diagnose:
+# "Let me deploy this to see what error I get" = another billed deployment + another outage
+
+# Don't attempt multiple recovery deployments without a plan:
+# Attempt 1: promote broken deploy → site down again
+# Attempt 2: redeploy from main → still broken (main hasn't changed)
+# Attempt 3: deploy maintenance mode → TypeScript errors
+# Attempt 4: fix TypeScript, redeploy maintenance → env var issues
+# Attempt 5: fix env vars, redeploy maintenance → finally works
+# = 5 unnecessary deployments, 5 outage windows, all billable
+
+# Don't try to fix production from the broken main branch:
+# If main is broken, deploying from main will deploy broken code
+# Fix on develop, verify on preview, then merge to main
+```
+
+**Key detail:** The key insight is that rollback and investigation are separate actions. Roll back first (minutes), then investigate at your own pace (no time pressure, no outage). The worst pattern is investigating while production is down — every minute spent diagnosing is a minute of outage, and the pressure to "fix it fast" leads to more mistakes.
+
+---
+
+## Error #60: Agent treats all dependency updates as equal risk
+
+**Symptom:** Agent processes 7 Dependabot PRs identically — same review depth, same merge strategy, same verification level. The batch includes both a Next.js framework upgrade (high risk — affects entire runtime) and a minimatch dev-tool patch (zero runtime risk). The framework upgrade breaks production; the dev patches would have been fine.
+
+**Root cause:** The agent doesn't assess dependency risk before merging. It applies a uniform strategy to all dependency updates regardless of: (a) whether the dependency is a runtime or dev dependency, (b) whether it's a patch, minor, or major version bump, (c) whether it's a framework (affects everything) or a utility library (affects one feature).
+
+**Correct approach — always do this:**
+```
+Before merging any dependency update, classify it:
+
+| Factor | Low Risk | Medium Risk | High Risk |
+|--------|----------|-------------|-----------|
+| Type | devDependency | dependency (utility) | dependency (framework) |
+| Bump | patch (x.y.Z) | minor (x.Y.0) | major (X.0.0) |
+| Scope | single tool | single feature | entire runtime |
+
+Verification by risk level:
+- Low: CI passing is sufficient
+- Medium: CI + local smoke test
+- High: CI + preview deployment + manual verification
+- Critical (major framework): Full QA cycle, staged rollout
+
+# Example risk assessment for a batch of Dependabot PRs:
+# - minimatch 10.2.2 → 10.2.4 (devDep, patch) → LOW → CI only
+# - upload-artifact v3 → v4 (CI action, major) → MEDIUM → check CI works
+# - Next.js 16.1.6 → 16.2.1 (framework, minor) → HIGH → preview deploy required
+# - dompurify 3.2.3 → 3.2.4 (runtime, patch) → MEDIUM → CI + local test
+
+# Merge low-risk updates together. High-risk updates get individual attention.
+```
+
+**Never do this:**
+```
+# Don't treat all updates the same:
+# "All 7 PRs passed CI, merge them all" — CI doesn't catch platform-specific issues
+
+# Don't merge framework upgrades in a batch with other updates:
+# If the batch breaks production, you can't tell which update caused it
+# Merge framework upgrades separately with full verification
+
+# Don't skip risk assessment because "it's just a minor version":
+# Minor versions of frameworks can and do introduce breaking changes
+# Next.js 16.2.1 was a minor bump that crashed all serverless functions
+```
+
+**Key detail:** The risk matrix is not just about the version number. A patch to a framework can be higher risk than a major bump to a dev dependency. The factors are: (1) is it in the runtime path? (2) how much of the app does it affect? (3) does the deployment platform have specific behaviors the dependency interacts with? Framework upgrades for Vercel/serverless projects are always high risk because the deployment runtime differs from local/CI environments.
