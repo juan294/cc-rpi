@@ -2239,3 +2239,50 @@ console.log('Using fallback stories');  // ← invisible in production log noise
 ```
 
 **Key detail:** The pattern applies to any code with fallback behavior — not just database queries. API clients with default responses, feature flags with hardcoded defaults, CDN fallbacks to origin, cache miss handlers that return stale data. Whenever you write a fallback path, ask: "If this fallback activates in production, will anyone know?" If the answer is no, add error logging and health check coverage before shipping.
+
+---
+
+## Error #62: Agent pushes Supabase migration to remote without local testing
+
+**Symptom:** A migration works in the agent's mental model but fails when applied to the remote Supabase project — missing columns, wrong types, RLS policy errors, or broken references. The remote database is now in a partially migrated state. Rolling back requires manual intervention in the Supabase dashboard or a new corrective migration. In the worst case, the broken migration runs on the production database and causes downtime.
+
+**Root cause:** The agent writes a migration SQL file, runs `supabase db push` directly, and treats success (no syntax error) as validation. It never tests the migration against a local Postgres instance. Supabase provides a full local development stack (`supabase start`) with Postgres, RLS, extensions, and auth — but the agent skips it and pushes straight to remote.
+
+Real example: An agent created a migration adding a foreign key to a table that didn't exist yet (the referenced table was in a later migration file). `supabase db push` failed on the remote project with a foreign key constraint error. The agent then wrote a "fix" migration that also failed because it didn't understand the remote state. Two broken migrations had to be manually cleaned up in the Supabase dashboard.
+
+**Correct approach — always do this:**
+
+```bash
+# 1. Ensure local Supabase is running (requires Docker Desktop)
+supabase start
+
+# 2. Apply all migrations to the local Postgres instance
+supabase db reset
+
+# 3. Verify the migration worked (query the local database)
+# The container name follows the pattern supabase_db_<project>
+# where <project> is the Supabase project name from supabase/config.toml
+docker exec supabase_db_myproject psql -U postgres -c "\d my_new_table"
+docker exec supabase_db_myproject psql -U postgres -c "SELECT * FROM my_new_table LIMIT 1"
+
+# 4. Only after local verification succeeds, push to remote
+supabase db push
+```
+
+**Never do this:**
+
+```bash
+# Don't push migrations without local testing:
+supabase migration new add_stories_table
+# ... write SQL ...
+supabase db push  # ← directly to remote, no local verification
+
+# Don't assume "no syntax error" means the migration is correct:
+supabase db push  # "Applied 1 migration" ← doesn't mean it's right
+
+# Don't write fix-up migrations without testing locally first:
+supabase migration new fix_foreign_key  # ← another untested migration
+supabase db push  # ← compounds the problem
+```
+
+**Key detail:** The local Supabase instance is a full Postgres with RLS, extensions, and auth — it's not a mock. If a migration works locally with `supabase db reset`, it will work on the remote. If `supabase start` fails, Docker Desktop needs to be running. The container name follows the pattern `supabase_db_<project>` where `<project>` comes from `supabase/config.toml`.

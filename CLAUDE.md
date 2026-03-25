@@ -96,8 +96,8 @@ release: vX.Y.Z         # Version bumps
 
 ## Agent Operational Rules
 
-Read `patterns/quick-reference.md` for the full rule set (68 rules).
-Read `patterns/agent-errors.md` for detailed error patterns (61 errors).
+Read `patterns/quick-reference.md` for the full rule set (69 rules).
+Read `patterns/agent-errors.md` for detailed error patterns (62 errors).
 Read `patterns/deployment-safety.md` for deployment safety and resource efficiency rules.
 
 These files ARE the source of truth -- they live in this repo. Do not duplicate their content here.
