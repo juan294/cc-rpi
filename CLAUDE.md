@@ -176,7 +176,10 @@ cc-rpi/
     │   └── detach.md                # /detach -- clean removal of cc-rpi (user-level)
     ├── scripts/                     # Scheduled agent shell script templates
     │   ├── cc-rpi-update-agent.sh   # Nightly blueprint sync
-    │   └── morning-triage.sh        # Multi-project morning triage
+    │   ├── morning-triage.sh        # Multi-project morning triage
+    │   └── agents/                  # Per-project agent infrastructure
+    │       ├── install-agents.sh    # Automated launchd installer
+    │       └── lib/agent-utils.sh   # Shared agent utility library
 ```
 
 ## Project File Locations

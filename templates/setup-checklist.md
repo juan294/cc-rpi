@@ -160,7 +160,9 @@ The shell script reads update instructions from cc-rpi at runtime, so when cc-rp
 
 ## Scheduled Agents (Optional)
 
-- [ ] Create `scripts/agents/` directory for agent shell scripts (already done if blueprint sync is set up)
+- [ ] Create `scripts/agents/` and `scripts/agents/lib/` directories
+- [ ] Copy `lib/agent-utils.sh` from `cc-rpi/templates/scripts/agents/lib/agent-utils.sh` to `scripts/agents/lib/`
+- [ ] Copy `install-agents.sh` from `cc-rpi/templates/scripts/agents/install-agents.sh` to `scripts/agents/`
 - [ ] Create `docs/agents/` directory for agent reports and shared context
 - [ ] Create `logs/` directory for agent output capture
 - [ ] **Gitignore all agent operational directories** (Rule #70 — reports are never committed):
@@ -171,11 +173,11 @@ The shell script reads update instructions from cc-rpi at runtime, so when cc-rp
   scripts/agents/
   ```
   This applies to ALL projects — open-source and closed-source alike. Reports stay on disk for historical access but never enter version control.
-- [ ] Write at least one agent script (e.g., test-health, security-audit)
-- [ ] For macOS launchd: ensure plist has resource limits, env vars, and `/bin/bash -c exec` wrapper in ProgramArguments (see [scheduled-agents.md](../methodology/scheduled-agents.md) for plist template and gotchas)
+- [ ] Write at least one agent script (e.g., test-health, security-audit) — source `lib/agent-utils.sh` and add a `# SCHEDULE:` comment
 - [ ] Run `claude setup-token` for non-interactive auth (required for launchd/cron)
-- [ ] Schedule with launchd (macOS) or cron (Linux)
+- [ ] Install agents: `bash scripts/agents/install-agents.sh` (auto-generates plists from `# SCHEDULE:` comments)
 - [ ] Test with `launchctl start` (macOS) — don't test from a terminal, it masks launchd issues
+- [ ] Check status: `bash scripts/agents/install-agents.sh --status`
 - [ ] Verify the agent produces a report in `docs/agents/`
 - [ ] Add `/pre-launch` slash command for multi-agent production audit
 - [ ] Add `/triage` slash command for morning agent report processing

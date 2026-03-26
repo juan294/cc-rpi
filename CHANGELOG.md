@@ -12,13 +12,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - **Rule #71: Use timestamp-based discovery for triage, not git status** -- triage now uses a `.last-triage` marker file and `find -newer` instead of `git status` for report discovery. Decouples the entire triage workflow from git tracking.
 - **Rule #72** (renumbered from #69): Supabase migration local testing rule unchanged, renumbered to accommodate new rules.
 - **Report Lifecycle** section in `methodology/scheduled-agents.md` -- codifies the separation between operational reports (local-only) and code fixes (committed). Includes required `.gitignore` entries.
+- **`templates/scripts/agents/lib/agent-utils.sh`** -- shared utility library for all agent scripts. Handles environment setup, fd limits, auth preflight, logging, and shared context read/write/prune. Eliminates boilerplate duplication across agents.
+- **`templates/scripts/agents/install-agents.sh`** -- automated launchd installer. Auto-discovers agent scripts via `# SCHEDULE:` comments, generates plists with all four launchd gotcha fixes, and installs/unloads/shows status.
 
 ### Changed
 
 - **`/triage` command** -- Step 1 rewritten: three-layer git-based scan replaced with timestamp-based discovery. Step 4 rewritten: two-commit strategy (reports + fixes) replaced with single commit (fixes only) plus `.last-triage` marker touch.
 - **`morning-triage.sh`** -- both main and fallback prompts updated to reflect local-only reports and timestamp-based discovery.
-- **Setup checklist** -- scheduled agents section now includes gitignore step with the three required entries.
+- **Agent shell script template** in `methodology/scheduled-agents.md` -- now sources `lib/agent-utils.sh` instead of duplicating boilerplate. Uses `SHARED_CONTEXT_START/END` blocks and `# SCHEDULE:` comments.
+- **Setup checklist** -- scheduled agents section updated with `agent-utils.sh`, `install-agents.sh`, and gitignore steps.
 - **CLAUDE.md template** -- project file locations table updated to note that agent reports, logs, and scripts are gitignored.
+- **Scheduling section** in `methodology/scheduled-agents.md` -- automated installation via `install-agents.sh` is now the recommended path for macOS launchd.
 
 ## [1.12.0] - 2026-03-25
 

@@ -28,81 +28,94 @@ Scheduled agents run outside of interactive sessions on a recurring schedule. Th
 
 ## Agent Shell Script Template
 
+Agent scripts source a shared utility library (`lib/agent-utils.sh`) that handles environment setup, file descriptor limits, authentication, logging, and shared context management. This eliminates boilerplate duplication across agents.
+
 ```bash
 #!/bin/bash
 # scripts/agents/my-agent.sh
+# SCHEDULE: daily 06:00
 
-set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "${SCRIPT_DIR}/lib/agent-utils.sh"
 
-# ── Environment setup (required for launchd) ──
-# launchd provides a minimal env — no PATH, no TERM, possibly no HOME.
-# These are no-ops in a normal terminal but critical under launchd.
-export HOME="${HOME:-$(eval echo ~"$(whoami)")}"
-export TERM="${TERM:-xterm-256color}"
-export PATH="/usr/local/bin:/opt/homebrew/bin:$HOME/.local/bin:$PATH"
+AGENT_KEY="my_agent"
+REPORT_FILE="${AGENTS_DIR}/my-agent-report.md"
+LOG_FILE="${LOGS_DIR}/my-agent-$(date '+%Y-%m-%d').log"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+preflight_claude
+log_info "=== My Agent starting ==="
 
-AGENT_NAME="my-agent"
-CLAUDE_BIN="${CLAUDE_BIN:-$HOME/.local/bin/claude}"
-REPORT_FILE="docs/agents/${AGENT_NAME}-report.md"
+# ── Read shared context from other agents ──
+SHARED_CONTEXT=$(read_shared_context "${AGENT_KEY}")
 
-# ── File descriptor check ──
-ulimit -n 122880 2>/dev/null
-FD_LIMIT=$(ulimit -n)
-if [ "$FD_LIMIT" -lt 10000 ]; then
-  echo "[$(date)] FATAL: File descriptor limit too low ($FD_LIMIT)."
-  echo "  Fix: Add HardResourceLimits/SoftResourceLimits to your .plist"
-  exit 1
-fi
-
-# ── Authentication preflight ──
-if ! "$CLAUDE_BIN" -p "echo ok" --output-format text >/dev/null 2>&1; then
-  echo "[$(date)] FATAL: Claude CLI auth failed in non-interactive mode."
-  echo "  Fix: Run 'claude setup-token' from an interactive terminal."
-  exit 1
-fi
-
-# ── 1. Read shared context from other agents ──
-SHARED_CONTEXT=""
-if [ -f "$PROJECT_ROOT/docs/agents/shared-context.md" ]; then
-  SHARED_CONTEXT=$(cat "$PROJECT_ROOT/docs/agents/shared-context.md")
-fi
-
-# ── 2. Build the prompt ──
-PROMPT="You are the $AGENT_NAME scheduled agent for this project.
+# ── Build the prompt ──
+PROMPT="You are the my-agent scheduled agent for this project.
 
 Your responsibilities:
 [Define agent-specific responsibilities here]
 
 ## Context from Other Agents
-$SHARED_CONTEXT
+${SHARED_CONTEXT}
 
-After completing your analysis, append a SHARED_CONTEXT block to docs/agents/shared-context.md with your key findings and any cross-agent recommendations."
+Write your report. Include a shared context block at the end:
 
-# ── 3. Run Claude CLI in headless mode ──
-cd "$PROJECT_ROOT"
-echo "[$(date)] Starting $AGENT_NAME agent..."
+SHARED_CONTEXT_START
+## My Agent -- $(date '+%Y-%m-%d')
+- **Status**: GREEN / YELLOW / RED
+- Key findings
+SHARED_CONTEXT_END"
 
-"$CLAUDE_BIN" -p "$PROMPT" \
+# ── Run Claude CLI in headless mode ──
+cd "${PROJECT_DIR}"
+"${CLAUDE_BIN}" -p "${PROMPT}" \
   --allowedTools "Read,Glob,Grep,Bash(npm run *),Bash(pnpm run *)" \
   --output-format text \
-  > "$REPORT_FILE" 2>&1
+  > "${REPORT_FILE}" 2>>"${LOG_FILE}" || {
+    log_error "Claude execution failed. Check ${LOG_FILE}"
+    exit 1
+  }
 
-echo "[$(date)] $AGENT_NAME complete. Report: $REPORT_FILE"
+log_info "Report written to ${REPORT_FILE}"
+extract_and_write_shared_context "${AGENT_KEY}" "${REPORT_FILE}"
+log_info "=== My Agent complete ==="
 ```
+
+The `# SCHEDULE:` comment is read by `install-agents.sh` to auto-generate launchd plists.
 
 ### Key Design Choices
 
-- **`set -euo pipefail`** — Fail fast on errors. Don't silently continue if Claude CLI crashes.
+- **`source lib/agent-utils.sh`** — Shared library handles env setup, fd limits, auth preflight, logging, and shared context read/write/prune. No boilerplate duplication.
+- **`# SCHEDULE: daily HH:MM`** — Declares the agent's schedule in the script itself. `install-agents.sh` reads this to generate launchd plists automatically.
 - **`--allowedTools`** — Restrict what the agent can do. Scheduled agents should be read-only or narrowly scoped.
 - **`--output-format text`** — Write the report as plain markdown.
-- **Shared context** — Agents read other agents' findings before starting, building on each other's intelligence.
+- **`SHARED_CONTEXT_START/END`** — Agents include a shared context block in their report output. `extract_and_write_shared_context` extracts it and appends to `shared-context.md`, auto-pruning to the last 3 entries per agent.
+- **Separate log files** — stdout goes to the report file, stderr goes to a dated log file for debugging.
 
 ## Scheduling
 
-### macOS (launchd)
+### macOS (launchd) — Automated Installation
+
+The `install-agents.sh` script (in `templates/scripts/agents/`) auto-discovers agent scripts and generates launchd plists. It reads the `# SCHEDULE:` comment from each script to determine when it runs.
+
+```bash
+# Install all agents (auto-discovers scripts with SCHEDULE comments):
+bash scripts/agents/install-agents.sh
+
+# Check status:
+bash scripts/agents/install-agents.sh --status
+
+# Test a specific agent (don't test from terminal — it masks launchd issues):
+launchctl start com.project-name.my-agent
+
+# Uninstall all:
+bash scripts/agents/install-agents.sh --unload
+```
+
+The installer handles all four launchd gotchas automatically (fd limits, env vars, ProgramArguments wrapper, log paths). No manual plist authoring needed.
+
+### macOS (launchd) — Manual Plist
+
+If you need custom plist configuration beyond what the installer generates:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -149,18 +162,6 @@ echo "[$(date)] $AGENT_NAME complete. Report: $REPORT_FILE"
   <string>/absolute/path/to/project/logs/my-agent.error.log</string>
 </dict>
 </plist>
-```
-
-```bash
-# Install:
-cp com.project.agent.my-agent.plist ~/Library/LaunchAgents/
-launchctl load ~/Library/LaunchAgents/com.project.agent.my-agent.plist
-
-# Test (don't rely on terminal execution — it masks launchd issues):
-launchctl start com.project.agent.my-agent
-
-# Uninstall:
-launchctl unload ~/Library/LaunchAgents/com.project.agent.my-agent.plist
 ```
 
 #### macOS launchd Gotchas
@@ -417,7 +418,8 @@ For multi-project orchestration, the `morning-triage.sh` script template (in `te
 
 - Claude CLI installed and authenticated (`claude --version`)
 - Non-interactive auth configured: run `claude setup-token` from an interactive terminal (required for launchd/cron — OAuth won't work without a browser)
-- macOS launchd: plist must include `HardResourceLimits`/`SoftResourceLimits` with `NumberOfFiles: 122880`, `EnvironmentVariables` with HOME, TERM, PATH, and `ProgramArguments` must use `/bin/bash -c "exec /bin/bash <script>"` format (see plist template above, [Error #37](../patterns/agent-errors.md#error-37-scheduled-agent-silently-fails-under-macos-launchd), and [Error #38](../patterns/agent-errors.md#error-38-claude-cli-crashes-with-unexpected-when-plist-runs-script-directly))
+- macOS launchd: use `install-agents.sh` (handles all four gotchas automatically), or ensure plist includes `HardResourceLimits`/`SoftResourceLimits` with `NumberOfFiles: 122880`, `EnvironmentVariables` with HOME, TERM, PATH, and `ProgramArguments` using `/bin/bash -c "exec /bin/bash <script>"` format (see [Error #37](../patterns/agent-errors.md#error-37-scheduled-agent-silently-fails-under-macos-launchd) and [Error #38](../patterns/agent-errors.md#error-38-claude-cli-crashes-with-unexpected-when-plist-runs-script-directly))
+- `lib/agent-utils.sh` copied to `scripts/agents/lib/` (provides env setup, logging, shared context utilities)
 - Project dependencies installed (agents may run test/build commands)
-- `docs/agents/` directory exists in the project
-- `logs/` directory exists for output capture
+- `docs/agents/` and `logs/` directories exist (created automatically by `agent-utils.sh`)
+- `docs/agents/`, `logs/`, and `scripts/agents/` gitignored (Rule #70)
