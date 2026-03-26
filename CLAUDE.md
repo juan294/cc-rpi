@@ -2,7 +2,7 @@
 
 ## One-liner
 
-Blueprint repository for Claude Code projects. Contains the RPI methodology, 53 known agent error patterns, 59 operational rules, and templates for CLAUDE.md, slash commands, and project setup.
+Blueprint repository for Claude Code projects. Contains the RPI methodology, 62 known agent error patterns, 72 operational rules, and templates for CLAUDE.md, slash commands, skills, and project setup.
 
 ## Stack
 

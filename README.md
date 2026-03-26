@@ -1,7 +1,7 @@
 # cc-rpi — Claude Code Reference & Project Intelligence
 
 [![CI](https://github.com/juan294/cc-rpi/actions/workflows/validate.yml/badge.svg)](https://github.com/juan294/cc-rpi/actions/workflows/validate.yml)
-[![Version: v1.9.0](https://img.shields.io/badge/Version-v1.9.0-orange.svg)](https://github.com/juan294/cc-rpi/releases/tag/v1.9.0)
+[![Version: v1.12.0](https://img.shields.io/badge/Version-v1.12.0-orange.svg)](https://github.com/juan294/cc-rpi/releases/tag/v1.12.0)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Status: Active](https://img.shields.io/badge/Status-Active-brightgreen.svg)]()
 [![Claude Code](https://img.shields.io/badge/Built%20for-Claude%20Code-blueviolet.svg)](https://docs.anthropic.com/en/docs/claude-code)
