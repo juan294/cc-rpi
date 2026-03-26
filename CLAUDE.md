@@ -94,7 +94,7 @@ chore: description      # CI, templates, scripts
 release: vX.Y.Z         # Version bumps
 ```
 
-## Agent Operational Rules
+## Working Patterns
 
 Read `patterns/quick-reference.md` for the full rule set (72 rules).
 Read `patterns/agent-errors.md` for detailed error patterns (62 errors).

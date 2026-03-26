@@ -64,7 +64,7 @@ Two file pairs follow the same split pattern:
 - [ ] Document build/test/lint commands
 - [ ] Document deployment pipeline (which branch deploys where)
 - [ ] Document git workflow (default branch, production branch)
-- [ ] Include all Agent Operational Rules from the template
+- [ ] Include Working Patterns section (canonical examples) from the template
 - [ ] Add project-specific context (key routes, data types, code ownership)
 
 ## Slash Commands
