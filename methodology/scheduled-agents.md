@@ -370,17 +370,46 @@ The shared context file (`docs/agents/shared-context.md`) is a cross-agent intel
 2. **Cross-agent recommendations are mandatory.** If findings affect another agent's domain, say so explicitly.
 3. **Be specific.** "Security looks fine" is useless. "No injection vectors found — all user input escaped via `sanitize()`" is useful.
 
+## Report Lifecycle
+
+Agent reports are internal operational tools, not project artifacts. They follow a strict lifecycle that applies to all projects — open-source and closed-source alike (Rule #70):
+
+1. **Agents write reports to `docs/agents/`** on disk during overnight runs.
+2. **Reports accumulate historically** — never deleted, always available for review.
+3. **Reports are never committed to version control.** `docs/agents/`, `logs/`, and `scripts/agents/` are gitignored.
+4. **Triage discovers reports via timestamps** (Rule #71), not git status. A `.last-triage` marker file in `docs/agents/` tracks which reports have been processed.
+5. **Only code fixes are committed.** When triage resolves findings, the fix goes into git. The report that triggered the fix stays local.
+
+This separation means:
+- Public repositories never expose operational details (security audit findings, internal metrics, agent status).
+- Private repositories don't clutter git history with machine-generated reports.
+- Historical reports remain on disk indefinitely for the operator to review.
+- Triage works identically regardless of git tracking — no git status dependency.
+
+### Required `.gitignore` entries
+
+Every project using scheduled agents must gitignore these directories:
+
+```gitignore
+# Agent operational output (never committed)
+docs/agents/
+logs/
+scripts/agents/
+```
+
 ## Morning Triage
 
 After scheduled agents finish their overnight runs, use `/triage` to process all reports:
 
-1. Discovers every new/modified report in `docs/agents/` exhaustively
-2. Checks `logs/` for agent failures (a missing report might mean a crashed agent)
-3. Reads all reports and shared-context.md
-4. Synthesizes findings and drafts an action plan
-5. Implements all fixes (fix everything — Rule #58)
-6. Commits reports for historical record, then code fixes separately
-7. Updates shared-context.md with triage results
+1. Checks the `.last-triage` marker to discover reports modified since the last triage run
+2. If no marker exists (first run), processes ALL reports in `docs/agents/`
+3. Checks `logs/` for agent failures (a missing report might mean a crashed agent)
+4. Reads all reports and shared-context.md
+5. Synthesizes findings and drafts an action plan
+6. Implements all fixes (fix everything — Rule #58)
+7. Commits code fixes only — reports stay on disk (Rule #70)
+8. Updates shared-context.md with triage results
+9. Touches `docs/agents/.last-triage` to mark reports as processed
 
 For multi-project orchestration, the `morning-triage.sh` script template (in `templates/scripts/`) runs `/triage` across all configured projects sequentially, producing a cross-project summary.
 

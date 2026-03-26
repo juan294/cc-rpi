@@ -163,6 +163,14 @@ The shell script reads update instructions from cc-rpi at runtime, so when cc-rp
 - [ ] Create `scripts/agents/` directory for agent shell scripts (already done if blueprint sync is set up)
 - [ ] Create `docs/agents/` directory for agent reports and shared context
 - [ ] Create `logs/` directory for agent output capture
+- [ ] **Gitignore all agent operational directories** (Rule #70 — reports are never committed):
+  ```gitignore
+  # Agent operational output (never committed)
+  docs/agents/
+  logs/
+  scripts/agents/
+  ```
+  This applies to ALL projects — open-source and closed-source alike. Reports stay on disk for historical access but never enter version control.
 - [ ] Write at least one agent script (e.g., test-health, security-audit)
 - [ ] For macOS launchd: ensure plist has resource limits, env vars, and `/bin/bash -c exec` wrapper in ProgramArguments (see [scheduled-agents.md](../methodology/scheduled-agents.md) for plist template and gotchas)
 - [ ] Run `claude setup-token` for non-interactive auth (required for launchd/cron)

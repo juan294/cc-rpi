@@ -268,9 +268,9 @@ Go directly to these paths — never search the codebase for them.
 
 | Topic | Path | Notes |
 |-------|------|-------|
-| Agent reports | `docs/agents/*-report.md` | Flag YELLOW/RED items. Cross-agent context in `shared-context.md` |
-| Agent logs | `logs/<name>.log`, `<name>.error.log` | Read alongside reports to diagnose failures |
-| Agent scripts | `scripts/agents/` | Standalone bash files invoking Claude CLI headless |
+| Agent reports | `docs/agents/*-report.md` | Gitignored. Local-only operational history. Never committed (Rule #70) |
+| Agent logs | `logs/<name>.log`, `<name>.error.log` | Gitignored. Read alongside reports to diagnose failures |
+| Agent scripts | `scripts/agents/` | Gitignored. Standalone bash files invoking Claude CLI headless |
 | ADRs | `docs/decisions/` | Architecture decision records |
 | PR descriptions | `docs/prs/{number}_description.md` | |
 | Research docs | `docs/research/YYYY-MM-DD-description.md` | |

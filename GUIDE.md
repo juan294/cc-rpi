@@ -130,7 +130,7 @@ That's it. Those four commands are 90% of your interaction with the methodology.
 | `/describe-pr` | Generates a PR description from the current branch's diff and commit history. | Before opening or updating a PR. |
 | `/pre-launch` | Spawns 6 parallel specialist agents (QA, security, performance, architecture, UX, devops) for a production audit. | Before any production release. Run `/remediate` after to fix all findings. |
 | `/remediate` | Parses the pre-launch report, creates GitHub issues for every finding, spawns parallel TDD agents in worktrees, merges sequentially, verifies CI, runs `/simplify` twice. | After `/pre-launch` when findings exist. Automates the full fix cycle. |
-| `/triage` | Discovers all overnight agent reports exhaustively, checks for agent failures in logs, synthesizes findings, proposes action plan for all items, implements fixes, commits reports for history. | Every morning. First command of the day for each project. |
+| `/triage` | Discovers overnight agent reports via timestamp-based scanning, checks for agent failures in logs, synthesizes findings, proposes action plan for all items, implements fixes. Reports stay local (never committed). | Every morning. First command of the day for each project. |
 | `/status` | Quick 5-line project orientation: branch, last commit, working tree, CI status, open items. | Start of session. Quick check without starting a full task. |
 | `/update-docs` | Spawns 4 parallel discovery agents, then updates all documentation, Mermaid diagrams, version references, and inline code docs based on changes since last release. | After features/fixes are done, before releasing. Refreshes everything in one pass. |
 | `/release` | Detects project type and branching strategy, bumps versions everywhere, generates CHANGELOG entry, creates release commit and tag, publishes GitHub release, advises on registry publish. | When ready to cut a new version. Run `/update-docs` first. |
@@ -242,7 +242,7 @@ This sounds restrictive, but it's the single most impactful rule for research qu
 
 ### Error Prevention
 
-The blueprint includes 69 operational rules learned from real sessions. These aren't theoretical — they're patterns that caused actual failures and wasted time. Examples:
+The blueprint includes 72 operational rules learned from real sessions. These aren't theoretical — they're patterns that caused actual failures and wasted time. Examples:
 
 - Never run verification commands in parallel (they interfere with each other)
 - Always use absolute paths in worktree commands (relative paths resolve to the wrong directory)
@@ -364,7 +364,7 @@ The blueprint repository contains detailed documentation on every topic mentione
 | Testing approach | `methodology/testing.md` | TDD protocol, verification hierarchy |
 | CI ownership | `methodology/push-accountability.md` | Background CI monitoring, fix-and-repush |
 | Error patterns | `patterns/agent-errors.md` | 62 documented errors with symptoms and solutions |
-| Operational rules | `patterns/quick-reference.md` | 69 rules to prevent known mistakes |
+| Operational rules | `patterns/quick-reference.md` | 72 rules to prevent known mistakes |
 | Deployment safety | `patterns/deployment-safety.md` | Resource efficiency and production deployment rules |
 | Worked examples | `examples/README.md` | Sample research docs, plans, logs, pseudocode |
 

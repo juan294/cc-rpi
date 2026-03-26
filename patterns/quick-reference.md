@@ -164,9 +164,15 @@ These rules must be internalized before starting any work. They prevent the most
 
 68. **Every fallback path must be observable** — when writing code with fallback behavior (default data, cached responses, placeholder content), always add: (1) ERROR-level logging when the fallback activates, (2) health endpoint coverage that detects degraded state, (3) alerting or monitoring hooks. A silent fallback is a silent production bug. Ask: "If this fallback fires in production, will anyone know?"
 
+## Agent Report Rules
+
+70. **Never commit agent reports to the repository** — `docs/agents/`, `logs/`, and `scripts/agents/` are gitignored in all projects (open-source and closed-source alike). Reports are local operational tools, not project artifacts. They stay on disk for historical access but never enter version control. The only things triage commits are code fixes.
+
+71. **Use timestamp-based discovery for triage, not git status** — touch `docs/agents/.last-triage` after each triage run. Next triage discovers new reports with `find docs/agents/ -name "*-report.md" -newer docs/agents/.last-triage`. On first run (no marker), process ALL reports. This decouples report discovery from git entirely.
+
 ## Supabase Rules
 
-69. **Always test Supabase migrations locally before pushing to remote** — run `supabase start` + `supabase db reset` locally, verify with `docker exec supabase_db_<project> psql -U postgres -c "<query>"`, and only then `supabase db push`. The local instance has full Postgres with RLS, extensions, and auth — treat it as UAT. Never push a migration without local verification.
+72. **Always test Supabase migrations locally before pushing to remote** — run `supabase start` + `supabase db reset` locally, verify with `docker exec supabase_db_<project> psql -U postgres -c "<query>"`, and only then `supabase db push`. The local instance has full Postgres with RLS, extensions, and auth — treat it as UAT. Never push a migration without local verification.
 
 ---
 

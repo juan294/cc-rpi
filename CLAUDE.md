@@ -96,7 +96,7 @@ release: vX.Y.Z         # Version bumps
 
 ## Agent Operational Rules
 
-Read `patterns/quick-reference.md` for the full rule set (69 rules).
+Read `patterns/quick-reference.md` for the full rule set (72 rules).
 Read `patterns/agent-errors.md` for detailed error patterns (62 errors).
 Read `patterns/deployment-safety.md` for deployment safety and resource efficiency rules.
 
@@ -160,8 +160,8 @@ cc-rpi/
 ├── methodology/                      # The RPI approach (11 files)
 ├── examples/                         # Sample documents and workflow walkthroughs
 ├── patterns/                         # Operational knowledge
-│   ├── quick-reference.md            # 68 rules to internalize before any work
-│   ├── agent-errors.md               # 61 errors with symptoms and solutions
+│   ├── quick-reference.md            # 72 rules to internalize before any work
+│   ├── agent-errors.md               # 62 errors with symptoms and solutions
 │   └── deployment-safety.md          # Resource efficiency and production deployment rules
 └── templates/                        # Files to adapt for new projects
     ├── CLAUDE.md.template            # Starting point for project CLAUDE.md

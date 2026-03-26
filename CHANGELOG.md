@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Added
+
+- **Rule #70: Never commit agent reports to the repository** -- `docs/agents/`, `logs/`, and `scripts/agents/` are gitignored in all projects (open-source and closed-source). Reports stay on disk as local operational history but never enter version control.
+- **Rule #71: Use timestamp-based discovery for triage, not git status** -- triage now uses a `.last-triage` marker file and `find -newer` instead of `git status` for report discovery. Decouples the entire triage workflow from git tracking.
+- **Rule #72** (renumbered from #69): Supabase migration local testing rule unchanged, renumbered to accommodate new rules.
+- **Report Lifecycle** section in `methodology/scheduled-agents.md` -- codifies the separation between operational reports (local-only) and code fixes (committed). Includes required `.gitignore` entries.
+
+### Changed
+
+- **`/triage` command** -- Step 1 rewritten: three-layer git-based scan replaced with timestamp-based discovery. Step 4 rewritten: two-commit strategy (reports + fixes) replaced with single commit (fixes only) plus `.last-triage` marker touch.
+- **`morning-triage.sh`** -- both main and fallback prompts updated to reflect local-only reports and timestamp-based discovery.
+- **Setup checklist** -- scheduled agents section now includes gitignore step with the three required entries.
+- **CLAUDE.md template** -- project file locations table updated to note that agent reports, logs, and scripts are gitignored.
+
 ## [1.12.0] - 2026-03-25
 
 ### Added

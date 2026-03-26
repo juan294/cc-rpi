@@ -5,11 +5,16 @@
 .claude/tasks/
 .claude/debug/
 
-# Internal working docs (research, plans, agent reports)
+# Internal working docs (research, plans)
 docs/research/
 docs/plans/
 docs/decisions/
 docs/reports/
+
+# Agent operational output (never committed — Rule #70)
+docs/agents/
+logs/
+scripts/agents/
 
 # OS files
 .DS_Store

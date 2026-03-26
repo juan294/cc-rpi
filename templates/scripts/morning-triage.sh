@@ -195,19 +195,21 @@ for PROJECT_DIR in "${PROJECTS[@]}"; do
 Important: this is a non-interactive scheduled run.
 - Process ALL reports. Approve all action items automatically.
 - Fix everything — do not defer any items regardless of severity.
-- Commit reports for historical record, then code fixes separately.
+- Reports stay on disk (never committed). Only commit code fixes.
 - Push when done.
+- Touch docs/agents/.last-triage after completion.
 - Write your final summary as your text output (it becomes the report)."
   else
     PROMPT="You are a morning triage agent for this project.
 
-1. Check git status -- docs/agents/ for new/modified reports
+1. Check for docs/agents/.last-triage marker — find reports newer than it (or all reports if no marker)
 2. Check logs/ for recent agent failures (error logs from last 24h)
 3. Read every new/modified report in docs/agents/ completely
 4. Implement ALL action items from every report — fix everything
-5. Commit reports: git add docs/agents/ && git commit -m 'chore: commit overnight agent reports [$TODAY]'
-6. Commit fixes: git add <changed-files> && git commit -m 'fix: resolve agent report findings [triage]'
+5. Commit fixes only: git add <changed-files> && git commit -m 'fix: resolve agent report findings [triage]'
+6. Do NOT commit anything in docs/agents/ or logs/ — these are gitignored
 7. Push and verify CI
+8. Touch docs/agents/.last-triage to mark reports as processed
 
 Write your final summary as your text output."
   fi
