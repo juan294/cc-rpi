@@ -15,13 +15,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - **`templates/scripts/agents/lib/agent-utils.sh`** -- shared utility library for all agent scripts. Handles environment setup, fd limits, auth preflight, logging, and shared context read/write/prune. Eliminates boilerplate duplication across agents.
 - **`templates/scripts/agents/install-agents.sh`** -- automated launchd installer. Auto-discovers agent scripts via `# SCHEDULE:` comments, generates plists with all four launchd gotcha fixes, and installs/unloads/shows status.
 
+- **8 domain skill templates** in `templates/skills/` -- progressive disclosure for operational rules. Skills: git-workflow, ci-workflow, deployment-safety, multi-agent, github-cli, python-rules, macos-rules, supabase. Each uses example-based format (wrong/right pairs) per Anthropic guidance that examples beat rule lists.
+
 ### Changed
 
+- **CLAUDE.md template** -- context pressure optimization: always-loaded lines reduced from ~199 to ~152 (-24%). "Agent Operational Rules" section (43 lines of rule lists) replaced with "Working Patterns" section (4 canonical examples in `<examples>` tags). "Push Accountability" wrapped in `<important if>`. "Agent Autonomy" and "Memory Management" slimmed. "Conditional Blocks" guide moved to HTML comment. Skills reference added.
+- **`patterns/quick-reference.md`** -- restructured with scope/stack/skill tags on every rule. Sections reorganized by domain (matching skills). Word count reduced 33% (2,950 to 1,975 words). LIKELY_KNOWN rules trimmed to one-liners per Anthropic Claude 4.6 guidance.
+- **`/bootstrap`** -- now installs blueprint skills from `templates/skills/` (stack-aware).
+- **`/adopt`** -- skills gap elevated to HIGH priority in audit report.
+- **`/update`** -- new Phase 4 syncs skills (direct replacement). Blueprint-managed sections list updated for new template structure.
+- **Setup checklist** -- new "Skills Setup" section. Scheduled agents section updated with `agent-utils.sh`, `install-agents.sh`, and gitignore steps.
 - **`/triage` command** -- Step 1 rewritten: three-layer git-based scan replaced with timestamp-based discovery. Step 4 rewritten: two-commit strategy (reports + fixes) replaced with single commit (fixes only) plus `.last-triage` marker touch.
 - **`morning-triage.sh`** -- both main and fallback prompts updated to reflect local-only reports and timestamp-based discovery.
 - **Agent shell script template** in `methodology/scheduled-agents.md` -- now sources `lib/agent-utils.sh` instead of duplicating boilerplate. Uses `SHARED_CONTEXT_START/END` blocks and `# SCHEDULE:` comments.
-- **Setup checklist** -- scheduled agents section updated with `agent-utils.sh`, `install-agents.sh`, and gitignore steps.
-- **CLAUDE.md template** -- project file locations table updated to note that agent reports, logs, and scripts are gitignored.
 - **Scheduling section** in `methodology/scheduled-agents.md` -- automated installation via `install-agents.sh` is now the recommended path for macOS launchd.
 
 ## [1.12.0] - 2026-03-25

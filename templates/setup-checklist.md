@@ -82,6 +82,17 @@ Adjust file paths in each command to match your project's docs directory.
 
 **Slash commands vs skills:** Commands (`.claude/commands/`) are user-invoked workflows. Skills (`.claude/skills/`) are knowledge + workflows that Claude can also auto-detect. Use commands for RPI phases; use skills for domain conventions and reusable task patterns.
 
+## Skills Setup
+
+- [ ] Create `.claude/skills/` directory
+- [ ] Copy blueprint skills from `cc-rpi/templates/skills/` to `.claude/skills/`:
+  - Always: `git-workflow/`, `multi-agent/`, `deployment-safety/`, `ci-workflow/`, `github-cli/`
+  - Python projects: also `python-rules/`
+  - macOS development: also `macos-rules/`
+  - Supabase projects: also `supabase/`
+- [ ] Review installed skills -- remove any that don't apply to your stack
+- [ ] Add project-specific skills as needed (see `methodology/agent-design.md` for the skill taxonomy)
+
 ## Agent Tool Hooks
 
 - [ ] Create `.claude/hooks/` directory

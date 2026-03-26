@@ -174,6 +174,15 @@ cc-rpi/
     │   ├── release.md               # /release -- version release automation
     │   ├── update-docs.md           # /update-docs -- comprehensive docs refresh
     │   └── detach.md                # /detach -- clean removal of cc-rpi (user-level)
+    ├── skills/                      # Domain skill templates (source for .claude/skills/)
+    │   ├── git-workflow/            # Push sequences, worktree management
+    │   ├── ci-workflow/             # Push accountability, verification sequencing
+    │   ├── deployment-safety/       # Production deploy, rollback, batching
+    │   ├── multi-agent/             # Sub-agent rules, central commit
+    │   ├── github-cli/              # gh patterns, PR checks, labels
+    │   ├── python-rules/            # uv, python -m, version pinning
+    │   ├── macos-rules/             # launchd, brew vs pip, zsh quirks
+    │   └── supabase/                # Migration safety, grants, fallback observability
     ├── scripts/                     # Scheduled agent shell script templates
     │   ├── cc-rpi-update-agent.sh   # Nightly blueprint sync
     │   ├── morning-triage.sh        # Multi-project morning triage
@@ -189,8 +198,9 @@ Go directly to these paths -- never search the codebase for them.
 | Topic | Path | Notes |
 |-------|------|-------|
 | Error catalog | `patterns/agent-errors.md` | Full entries with symptoms, root cause, solution |
-| Operational rules | `patterns/quick-reference.md` | One-liner rules (source of truth) |
+| Operational rules | `patterns/quick-reference.md` | 72 rules with scope/stack tags (source of truth) |
 | Deployment safety | `patterns/deployment-safety.md` | Resource efficiency and production deployment rules |
+| Skill templates | `templates/skills/` | 8 domain skills for progressive disclosure |
 | Methodology | `methodology/` | 11 files, reading order in `methodology/README.md` |
 | Templates | `templates/` | Source files adapted for new projects |
 | Command source | `templates/commands/` | Canonical command definitions |

@@ -242,14 +242,9 @@ This sounds restrictive, but it's the single most impactful rule for research qu
 
 ### Error Prevention
 
-The blueprint includes 72 operational rules learned from real sessions. These aren't theoretical — they're patterns that caused actual failures and wasted time. Examples:
+The blueprint includes 72 operational rules learned from real sessions. These aren't theoretical — they're patterns that caused actual failures and wasted time. Rather than loading all rules into every session, the blueprint uses **progressive disclosure**: CLAUDE.md carries a slim set of canonical examples, while domain-specific rules live in `.claude/skills/` and load automatically when relevant. This follows Anthropic's guidance that examples are more effective than rule lists for steering agent behavior.
 
-- Never run verification commands in parallel (they interfere with each other)
-- Always use absolute paths in worktree commands (relative paths resolve to the wrong directory)
-- Run checks before committing (not after — catching errors after commit means amending, which is risky)
-- Don't guess GitHub CLI field names (they change between versions — check the docs)
-
-When your project is set up via the blueprint, these rules are baked into the CLAUDE.md file that Claude Code reads every session.
+The 8 blueprint-provided skills cover: git workflow, CI verification, deployment safety, multi-agent coordination, GitHub CLI, Python, macOS, and Supabase.
 
 ### Agent Teams
 
@@ -280,20 +275,19 @@ your-project/
 ├── CLAUDE.md                    # Project configuration (Claude reads this every session)
 ├── .claude/
 │   ├── settings.json            # Tool permissions, Agent Teams, hooks
-│   ├── commands/                # Slash commands
+│   ├── commands/                # Slash commands (user-invoked workflows)
 │   │   ├── research.md          # /research
 │   │   ├── plan.md              # /plan
 │   │   ├── implement.md         # /implement
 │   │   ├── validate.md          # /validate
-│   │   ├── describe-pr.md       # /describe-pr
-│   │   ├── pre-launch.md        # /pre-launch
-│   │   ├── remediate.md         # /remediate
-│   │   ├── triage.md            # /triage
-│   │   ├── status.md            # /status
-│   │   ├── fix-ci.md            # /fix-ci
-│   │   ├── update-docs.md       # /update-docs
-│   │   └── release.md           # /release
-│   └── skills/                  # Domain-specific knowledge (optional)
+│   │   └── ...                  # + describe-pr, pre-launch, remediate, triage, etc.
+│   └── skills/                  # Domain rules (loaded on demand by Claude)
+│       ├── git-workflow/        # Push sequences, worktree management, conflict resolution
+│       ├── ci-workflow/         # Push accountability, verification sequencing
+│       ├── deployment-safety/   # Production deploy, rollback, dependency batching
+│       ├── multi-agent/         # Sub-agent rules, central commit pattern
+│       ├── github-cli/          # gh CLI patterns, PR checks, labels
+│       └── ...                  # + python-rules, macos-rules, supabase (if relevant)
 ├── docs/
 │   ├── research/                # Research documents
 │   ├── plans/                   # Implementation plans
@@ -364,7 +358,8 @@ The blueprint repository contains detailed documentation on every topic mentione
 | Testing approach | `methodology/testing.md` | TDD protocol, verification hierarchy |
 | CI ownership | `methodology/push-accountability.md` | Background CI monitoring, fix-and-repush |
 | Error patterns | `patterns/agent-errors.md` | 62 documented errors with symptoms and solutions |
-| Operational rules | `patterns/quick-reference.md` | 72 rules to prevent known mistakes |
+| Operational rules | `patterns/quick-reference.md` | 72 rules with scope/stack tags, organized by domain |
+| Domain skills | `templates/skills/` | 8 blueprint-provided skills for progressive disclosure |
 | Deployment safety | `patterns/deployment-safety.md` | Resource efficiency and production deployment rules |
 | Worked examples | `examples/README.md` | Sample research docs, plans, logs, pseudocode |
 

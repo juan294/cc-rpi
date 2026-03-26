@@ -42,37 +42,47 @@ On incremental syncs (lastSyncCommit exists), prioritize reading files that appe
      - If it exists in cc-rpi but not in this project → add it.
      - If it exists only in this project → leave it (project-specific command).
 
-## Phase 4: Update CLAUDE.md
+## Phase 4: Update Skills
 
-8. Read this project's CLAUDE.md fully.
-9. Read cc-rpi's `templates/CLAUDE.md.template`.
-10. Identify **blueprint-managed sections** by their headers. These sections come from the template and should be kept in sync:
+8. Compare each skill directory in cc-rpi `templates/skills/` against this project's `.claude/skills/`:
+   - For each skill in the blueprint:
+     - If it exists in both locations and the cc-rpi SKILL.md is different -> replace the project's SKILL.md.
+     - If it exists in cc-rpi but not in this project -> create the directory and copy SKILL.md (new skill from blueprint).
+     - If it exists only in this project -> leave it (project-specific skill).
+   - Blueprint skills: `git-workflow/`, `multi-agent/`, `deployment-safety/`, `ci-workflow/`, `github-cli/`, `python-rules/`, `macos-rules/`, `supabase/`
+   - Skip stack-irrelevant skills: if this is not a Python project, skip `python-rules/`. If not using Supabase, skip `supabase/`. If not on macOS, skip `macos-rules/`.
+
+## Phase 5: Update CLAUDE.md
+
+9. Read this project's CLAUDE.md fully.
+10. Read cc-rpi's `templates/CLAUDE.md.template`.
+11. Identify **blueprint-managed sections** by their headers. These sections come from the template and should be kept in sync:
     - `## RPI Workflow` (and all `###` subsections under it)
-    - `## Agent Operational Rules` (and all `###` subsections under it)
-    - `## Push Accountability`
+    - `## Working Patterns` (and all `###` subsections under it)
     - `## TDD Protocol`
     - `## Agent Autonomy`
     - `## Memory Management`
-11. For each blueprint-managed section:
+    - `## Push Accountability` (inside `<important if>` block -- update if present)
+12. For each blueprint-managed section:
     - If the project's version differs from the template → update to match.
     - If the project has added project-specific content *within* a blueprint section (e.g., extra rules), preserve it — only update the parts that came from the template.
     - If a section doesn't exist in the project → **add it** from the template. Place it after the last existing blueprint-managed section, preserving the order from the template. New blueprint sections are new knowledge — `/update` is responsible for delivering them.
-12. **Do NOT touch** project-specific sections: One-liner, Stack, Key Commands, Git Workflow, Deployment, Commit Messages, Research Documents, Implementation Plans, or any custom section.
-13. The `### CRITICAL: Run verification commands sequentially` section under Key Commands is blueprint-originated — update it if it exists.
+13. **Do NOT touch** project-specific sections: One-liner, Stack, Key Commands, Git Workflow, Deployment, Commit Messages, Research Documents, Implementation Plans, or any custom section.
+14. The `### CRITICAL: Run verification commands sequentially` section under Key Commands is blueprint-originated — update it if it exists.
 
-## Phase 5: Update settings.json
+## Phase 6: Update settings.json
 
-14. Read this project's `.claude/settings.json`.
-15. Compare against cc-rpi's `templates/settings.json.template`.
-16. Add any new `permissions.allow` entries from the template that are missing in the project.
-17. Add any new `env` entries from the template that are missing.
-18. **Never remove** project-specific permissions, env vars, hooks, or deny rules.
+15. Read this project's `.claude/settings.json`.
+16. Compare against cc-rpi's `templates/settings.json.template`.
+17. Add any new `permissions.allow` entries from the template that are missing in the project.
+18. Add any new `env` entries from the template that are missing.
+19. **Never remove** project-specific permissions, env vars, hooks, or deny rules.
 
-## Phase 6: Write Sync Metadata
+## Phase 7: Write Sync Metadata
 
-19. Get the current HEAD commit hash of cc-rpi: `git -C <cc-rpi-path> rev-parse HEAD`
-20. Get the current version tag: `git -C <cc-rpi-path> describe --tags --abbrev=0 2>/dev/null`
-21. Write/update `.claude/cc-rpi-sync.json`:
+20. Get the current HEAD commit hash of cc-rpi: `git -C <cc-rpi-path> rev-parse HEAD`
+21. Get the current version tag: `git -C <cc-rpi-path> describe --tags --abbrev=0 2>/dev/null`
+22. Write/update `.claude/cc-rpi-sync.json`:
     ```json
     {
       "lastSyncCommit": "<commit-hash>",
@@ -81,16 +91,17 @@ On incremental syncs (lastSyncCommit exists), prioritize reading files that appe
     }
     ```
 
-## Phase 7: Report and Commit
+## Phase 8: Report and Commit
 
-22. If any project files were changed (commands, CLAUDE.md, settings.json):
+23. If any project files were changed (commands, skills, CLAUDE.md, settings.json):
     - Stage only the changed files (not unrelated changes).
     - Commit with: `chore: sync with cc-rpi blueprint <version-tag>`
     - Always update the sync metadata even if no other files changed.
 
-23. Present a summary:
+24. Present a summary:
     - cc-rpi version synced to (tag + commit hash)
     - Commands updated/added (list them)
+    - Skills updated/added (list them)
     - CLAUDE.md sections updated/added (list them)
     - settings.json changes (list them)
     - Notable new content: new error patterns, new rules, methodology changes

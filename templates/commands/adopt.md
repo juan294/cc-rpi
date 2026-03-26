@@ -59,6 +59,7 @@ List gaps organized by priority:
 - No slash commands for /research, /plan, /implement, /validate
 - No settings.json or Agent Teams not enabled
 - No docs/ directory structure
+- Missing `.claude/skills/` directory or missing blueprint-provided skills
 
 **MEDIUM — Quality infrastructure (improves reliability):**
 - No pre-commit hooks
@@ -68,7 +69,6 @@ List gaps organized by priority:
 - `.claude/settings.local.json` not gitignored
 
 **LOW — Advanced features (nice to have):**
-- No skills directory
 - No custom agent definitions
 - No scheduled agents
 - No error/success logging structure

@@ -1,181 +1,176 @@
-# Agent Operational Rules — Quick Reference
+# Agent Operational Rules -- Quick Reference
 
-These rules must be internalized before starting any work. They prevent the most common recurring errors across all projects.
+Scope: `[universal]` `[frequent]` `[situational]` `[rare]`
+Stack: `[node]` `[python]` `[macos]` `[github]` (omitted = all stacks)
+Enforcement: `[hook-enforced]` = blocked by PreToolUse hook.
+Skills: `[skill:name]` points to `.claude/skills/name/` for full examples.
 
-## Shell & Tool Rules
+## Shell & Tools
 
-1. **Never run sibling tool calls that can fail in parallel** — chain Bash commands with `&&` or `;` instead. Applies to ALL tool types: Bash, TaskOutput, Read. If one sibling fails, all parallel calls are killed.
+1. **Chain fallible tool calls with && or ;** `[universal]` -- parallel siblings are all killed if one fails.
 
-2. **Worktrees: always use absolute paths in every Bash command** — shell cwd resets to the main repo between calls. Prefix every command with `cd /absolute/path/to/worktree &&`.
+3. **Use absolute paths in file tools** `[universal]` -- Write/Read/Edit don't expand `~`.
 
-3. **Never use `~` in file tool paths** — Write/Read/Edit don't expand tilde. Always use full absolute paths starting with `/`.
+17. **Don't escape operators inside single-quoted jq filters** `[frequent]` -- `!=` is literal inside `'...'`. Writing `\!=` passes a backslash to jq, causing syntax errors.
 
-4. **Always pass `{ encoding: 'utf-8' }` to `execSync`/`spawnSync`** — they return Buffers by default. `.trim()` and other string methods fail on Buffer.
+19. **Create boilerplate files sequentially** `[situational]` -- API content filters can block certain files (CODE_OF_CONDUCT, SECURITY.md). Sequential creation with fallback prevents wasted turns.
 
-## Git Rules
+22. **Re-read directory contents before bulk operations** `[universal]` -- don't operate on stale file lists. `ls` first or use `rm -f`.
 
-5. **Always run typecheck/lint BEFORE committing** — pre-commit hooks run the same checks. Fix errors first, then commit. Don't discover failures at commit time.
+24. **Use absolute paths for cross-project commands** `[universal]` -- cwd resets between Bash calls. `../` breaks.
 
-6. **Always `git pull --rebase` before pushing** — remote may have advanced from other sessions, merged PRs, or parallel agents.
+26. **Don't build complex regex in shell -- use dedicated tools** `[frequent]` `[macos]` -- macOS zsh treats `!`, `{`, `}` as special. Use the built-in Grep tool, dedicated linters, or `bash -c '...'` for complex regex.
 
-7. **Remove worktrees BEFORE merging PRs with `--delete-branch`** — Git can't delete a branch checked out in a worktree.
+27. **Only pass correct file types to linters** `[frequent]` -- `markdownlint` on `.sh` = false errors. Before "fixing" warnings, check if the pattern is intentional. Add linter exceptions, don't change content.
 
-8. **Always `git worktree remove --force`** — worktrees have build artifacts/node_modules. Use `;` not `&&` for multiple removals. Apply fixes to ALL instances in a chain, not just the first.
+28. **Use `--fix` for auto-fixable linter issues** `[frequent]` -- `[*]` in ruff output means auto-fixable. Run `ruff check --fix` or `eslint --fix` first, then address remaining manual issues.
 
-## GitHub CLI Rules
+31. **Run `--help` on unfamiliar CLIs before guessing flags** `[universal]` -- `--json` works on `gh` but not `vercel`. Each CLI has its own flag vocabulary.
 
-9. **Don't guess `gh` CLI `--json` field names** — fields differ per subcommand. Run `gh <cmd> --json 2>&1 | head -5` first if unsure. `conclusion` exists on `gh run` but NOT `gh pr checks`.
+34. **Don't retry WebFetch on a 403 -- switch strategies** `[frequent]` -- a 403 means the domain blocks automated requests. Alternate paths also 403. Use WebSearch or ask the user.
 
-10. **Check CI per-PR with `--json`, not chained human-readable output** — jumbled output is unreadable. `review: fail` means "needs approval", NOT a CI failure — always filter it out.
+36. **Write temp scripts instead of mega one-liners** `[universal]` -- if your command needs loops/awk with complex logic, write to `/tmp/script.sh`. Prefer built-in tools (Grep, Read, Glob) over shell pipelines.
 
-## Node.js / TypeScript Rules
+45. **Don't escape `!=` inside single-quoted strings** `[frequent]` `[python]` -- `\!=` breaks Python (`SyntaxError`) and jq (`INVALID_CHARACTER`). Inside `'...'`, all characters are literal.
 
-11. **Don't run ESM CLI tools with `node <file>`** — shebang + ESM = SyntaxError. Use `chmod +x && ./<file>` or `npx .` instead.
+47. **Inspect JSON structure before indexing** `[universal]` -- `data['key']` on a list gives `TypeError`. Check `type(data)` first.
 
-## CI & Workflow Rules
+51. **Save curl output before parsing** `[universal]` -- `curl | jq` crashes with unhelpful errors when the API returns HTML or auth failures. Save response first and check HTTP status, or use `curl -sf`.
 
-12. **Never push and forget** — after every push to the development branch, spawn a background agent to monitor CI. If CI fails, investigate, fix, and re-push. The push isn't done until CI is green.
+## Git `[skill:git-workflow]`
 
-13. **Always write tests before implementation (TDD)** — Red-Green-Refactor, every time. Bug fixes need a regression test first. No "tests later." Tests written after implementation tend to be tautological.
+2. **Use absolute paths in worktree commands** `[universal]` -- shell cwd resets to the main repo between calls. Prefix every command with `cd /absolute/path/to/worktree &&`.
 
-14. **Exhaust all tools before suggesting manual steps** — before telling the user "go to the dashboard and...", check if you can use CLI tools, shell commands, MCP servers, or file tools to do it yourself. Only escalate when genuinely impossible.
+6. **Pull before push** `[universal]` -- remote may have advanced from other sessions or parallel agents.
 
-15. **Always `git branch -D` (uppercase) for worktree branches** — worktree branches are almost never "fully merged" in git's view (squash merges, deleted remotes, abandoned work). Lowercase `-d` fails with "not fully merged." Full cleanup idiom: `git worktree remove --force <path>; git branch -D <branch>`
+7. **Remove worktrees before merging PRs with `--delete-branch`** `[frequent]` -- Git can't delete a branch checked out in a worktree.
 
-## Environment & Dependencies Rules
+8. **Force-remove worktrees** `[frequent]` -- worktrees have build artifacts/node_modules. Use `git worktree remove --force` with `;` not `&&` for multiple removals.
 
-16. **Install dependencies before running commands in fresh environments** — worktrees, clones, and CI don't have node_modules. Always run `pnpm install` (or equivalent) first.
+15. **Use `git branch -D` (uppercase) for worktree branches** `[frequent]` -- squash merges and deleted remotes make `-d` fail with "not fully merged." Full cleanup: `git worktree remove --force <path>; git branch -D <branch>`.
 
-17. **Don't escape operators inside single-quoted jq filters** — `!=` is literal inside `'...'`. Writing `\!=` passes a backslash to jq, causing "INVALID_CHARACTER" syntax errors.
+18. **Handle empty repos gracefully** `[situational]` -- `git log` and `git diff HEAD` fail on repos with no commits. Check `git rev-parse HEAD` first.
 
-18. **Handle empty repos gracefully** — `git log` and `git diff HEAD` fail on repos with no commits. Check `git rev-parse HEAD` first or create an initial commit during bootstrap.
+25. **Use `git push -u` on first push** `[universal]` -- both `git push` and `git pull --rebase` need upstream tracking. Use `git push -u origin <branch>` first.
 
-19. **Create boilerplate files sequentially, not in parallel** — API content filters can block certain files (CODE_OF_CONDUCT, SECURITY.md). Sequential creation with fallback prevents wasted turns.
+30. **Push before `gh pr create`** `[frequent]` `[github]` -- a PR requires the branch on the remote. `git push -u` first.
 
-20. **`gh release create` uses `--notes`, not `--body`** — different `gh` subcommands use different flags for similar concepts. `--body` is for `pr create` and `issue create`. When in doubt, check `--help`.
+33. **Commit before `git pull --rebase`** `[universal]` `[hook-enforced]` -- fails with a dirty working tree.
 
-21. **Use `brew install` instead of `pip3 install` on macOS** — Homebrew Python 3.12+ blocks system-wide pip installs (PEP 668). Use `brew` for CLI tools, `pipx` for Python apps.
+48. **Push specific tags, not `--tags`** `[universal]` `[hook-enforced]` -- `--tags` pushes ALL local tags. If any old tag exists on remote, git exits non-zero. Use `git push origin <tag>` or `--follow-tags`.
 
-22. **Re-read directory contents before bulk file operations** — don't operate on memorized/stale file lists from previous sessions. Always `ls` first or use `rm -f` (ignores nonexistent). Files may already be deleted.
+52. **Verify current branch before committing** `[universal]` -- run `git branch --show-current` before `git commit`. Don't assume from conversation context.
 
-23. **Don't fabricate GitHub identifiers — discover them** — repo names, branch names, and issue numbers are case-sensitive and must be exact. Use `gh repo list`, `git branch -r`, or `gh issue list --search` instead of guessing.
+60. **Use `--ours`/`--theirs` for unmerged files** `[situational]` -- `git checkout --` fails on unmerged files during merge/rebase conflicts. Use `git checkout --ours <file>` or `--theirs`, or abort entirely. Check `git status` first.
 
-24. **Never use `../` relative paths for cross-project Bash commands** — cwd resets between Bash calls (Error #2). Use full absolute paths starting with `/` for any file operation outside the current project.
+61. **Remove conflicting untracked files before merge** `[situational]` -- untracked files at the same paths as incoming files cause git to abort. Delete or move them first.
 
-25. **Use `git push -u` on first push — both `git push` and `git pull --rebase` need upstream tracking** — branches that have never been pushed have no tracking info. Always `git push -u origin <branch>` first, or specify remote explicitly: `git pull --rebase origin <branch>`.
+## GitHub CLI `[skill:github-cli]`
 
-26. **Don't build complex regex pipelines in shell — use dedicated tools** — macOS defaults to zsh where `!`, `{`, `}` trigger special parsing. `grep -oP` with complex Perl regex breaks with zsh parse errors. Use the built-in Grep tool, dedicated linters, or `bash -c '...'` for complex regex.
+9. **Don't guess `gh --json` field names** `[universal]` `[github]` -- fields differ per subcommand. Run `gh <cmd> --json 2>&1 | head -5` first. `conclusion` exists on `gh run` but not `gh pr checks`.
 
-27. **Only pass correct file types to linters — don't fight intentional patterns** — `markdownlint` on `.sh` files = hundreds of false errors. Before "fixing" linter warnings, check if the pattern is intentional (e.g., continuous step numbering). Add linter exceptions for intentional style, don't change the content.
+10. **Check CI per-PR with `--json`** `[universal]` `[github]` -- jumbled human-readable output is unreadable. `review: fail` means "needs approval", not CI failure -- filter it out.
 
-28. **Use `--fix` for auto-fixable linter issues — don't manually edit** — `[*]` in ruff output means auto-fixable. Run `ruff check --fix` or `eslint --fix` first, then check for remaining manual issues. Don't waste turns manually reordering imports that `--fix` handles in one command.
+20. **`gh release create` uses `--notes`, not `--body`** `[frequent]` `[github]` -- `--body` is for `pr create` and `issue create`.
 
-29. **Specify Python version for `uv sync` — system default may be too new** — `uv` auto-selects the newest Python on the system. If Homebrew has Python 3.14+, packages may lack wheels. Check `.python-version` or use `uv sync --python 3.13`.
+23. **Don't fabricate GitHub identifiers** `[universal]` `[github]` -- repo names, branch names, issue numbers are case-sensitive. Use `gh repo list`, `git branch -r`, or `gh issue list --search`.
 
-30. **Always `git push -u` before `gh pr create`** — a PR requires the branch to exist on the remote. Push with `-u` first, then create the PR. Combines with Rule #25 — `-u` handles both upstream tracking and remote existence.
+32. **Check repo merge settings before `gh pr merge`** `[frequent]` `[github]` -- repos may only allow squash/rebase or have auto-merge disabled. Run `gh api repos/{owner}/{repo}` first.
 
-31. **Don't guess CLI flags on unfamiliar tools — run `--help` first** — `--json` works on `gh` but not `vercel`. `--output` works on `curl` but is deprecated on `vercel`. Each CLI has its own flag vocabulary. Run `<cmd> --help` before using flags you haven't verified.
+35. **`gh pr checks` exit 0 doesn't mean passed** `[frequent]` `[github]` -- all-pending checks also return 0. Inspect output or use `--json` to distinguish. Use `--watch` to wait.
 
-32. **Check repo merge settings before `gh pr merge`** — don't default to `--merge`. Repos may only allow squash/rebase, require branches to be up-to-date, or have auto-merge disabled. Run `gh api repos/{owner}/{repo}` to check allowed methods first.
+43. **Upgrade `gh` if you hit "Projects (classic) deprecated"** `[rare]` `[github]` -- older `gh` versions query removed `projectCards` fields. `brew upgrade gh` fixes it.
 
-33. **Commit or stash before `git pull --rebase`** — `git pull --rebase` fails if there are unstaged changes. Always commit your work before the pull+push sequence. Don't chain `git pull --rebase && git push` right after editing files.
+56. **Don't assume GitHub labels exist** `[frequent]` `[github]` -- `gh issue create --label "chore"` fails if the label doesn't exist. Run `gh label list` first, or `gh label create`. Create issues sequentially to avoid Error #1 cascade.
 
-34. **Don't retry WebFetch on a 403 domain — switch strategies** — a 403 means the domain blocks automated requests. Alternate URL paths on the same domain will also 403. Use WebSearch instead, or ask the user for the content.
+57. **Check for existing PRs before `gh pr create`** `[frequent]` `[github]` -- fails if a PR already exists for the branch pair. Check with `gh pr list --head <branch>` first; use `gh pr edit` to update.
 
-35. **`gh pr checks` exit code 0 doesn't mean "passed" — it means "no failures yet"** — all-pending checks also return exit code 0. Always inspect the actual output or use `--json` to distinguish passed from pending. Use `--watch` to wait for completion.
+## CI & Verification `[skill:ci-workflow]`
 
-36. **Don't build mega inline shell one-liners — write a temp script** — if your command needs `while`/`for`/`awk` with complex logic, write it to `/tmp/script.sh` and execute that. zsh can't parse long inline commands with special characters, Unicode, or nested quotes. Prefer built-in tools (Grep, Read, Glob) over shell pipelines.
+4. **Pass `{ encoding: 'utf-8' }` to `execSync`/`spawnSync`** `[frequent]` `[node]` -- they return Buffers by default. `.trim()` fails on Buffer.
 
-37. **macOS launchd agents need four fixes** — plist `HardResourceLimits`/`SoftResourceLimits` (NumberOfFiles: 122880), plist `EnvironmentVariables` (HOME, TERM, PATH), `claude setup-token` for non-interactive auth, and ProgramArguments must use `/bin/bash -c "exec /bin/bash <script>"` (not direct script path). Test with `launchctl start`, not from a terminal — terminal execution masks all four problems.
+5. **Run typecheck/lint before committing** `[universal]` -- pre-commit hooks run the same checks. Fix first, commit second.
 
-38. **launchd plist must NOT run project scripts directly** — `<string>/project/scripts/agent.sh</string>` in ProgramArguments causes Claude CLI to crash with "Unexpected" when the script is inside a directory with `.claude/`. Use `/bin/bash -c "exec /bin/bash <script>"` wrapper instead. Exit code is 0 despite the error, so preflight checks silently pass.
+11. **Don't run ESM CLI tools with `node <file>`** `[situational]` `[node]` -- shebang + ESM = SyntaxError. Use `chmod +x && ./<file>` or `npx .`.
 
-## Native Command Rules
+12. **Verify CI after every push** `[universal]` -- spawn a background agent to monitor. If CI fails, investigate and re-push. The push isn't done until CI is green.
 
-39. **Always run `/simplify` after reviewer approval during `/implement`** — it catches code reuse, quality, and efficiency issues that the plan-compliance reviewer doesn't check.
+16. **Install dependencies before running commands** `[universal]` `[node]` -- worktrees, clones, and CI don't have node_modules. Run `pnpm install` first.
 
-40. **Mark independent plan phases as `[batch-eligible]`** — during `/plan`, identify phases with no file overlap and no dependency on another phase's output. `/batch` can execute these in parallel (one worktree per phase, each opens a PR).
+50. **Run scaffolding tools before adding config files** `[situational]` `[node]` -- `create-next-app`, `create-vite`, etc. require an empty directory. Creating CLAUDE.md first causes the scaffolder to abort.
 
-41. **Use `/batch` for bulk changes outside the RPI cycle** — migrations, multi-issue sprints, and repetitive refactors across many files are `/batch` territory. Don't manually iterate through 20 files when `/batch` can parallelize them.
+54. **Run full test suite after config changes** `[universal]` -- config changes (tsconfig, eslint, package.json, .env, CI workflows) have broader blast radius than code changes. Run typecheck + lint + test immediately.
 
-42. **After `/pre-launch` audit, run `/simplify` first** — it fixes the bulk of architect and performance-eng findings (dead code, duplicates, inefficiencies) in one automated pass. Then address security, infrastructure, and accessibility findings manually.
+## Python `[skill:python-rules]`
 
-## Environment & Language Rules
+29. **Specify Python version for `uv sync`** `[frequent]` `[python]` -- `uv` auto-selects the newest Python. If Homebrew has 3.14+, packages may lack wheels. Check `.python-version` or use `uv sync --python 3.13`.
 
-43. **`gh` fails with "Projects (classic) deprecated" GraphQL error** — upgrade `gh` CLI (`brew upgrade gh`). Older versions query removed `projectCards` fields. No flag or auth change fixes it.
+44. **Use `uv run python`, not bare `python3`** `[universal]` `[python]` `[hook-enforced]` -- system Python lacks project dependencies. Use `uv run python`, `poetry run python`, or equivalent.
 
-44. **Always use `uv run python` (or project's venv runner) — never bare `python3`** — system Python doesn't have project dependencies. Use `uv run python`, `poetry run python`, or `pipenv run python`.
+46. **Use `python -m` for scripts with relative imports** `[frequent]` `[python]` -- `python scripts/foo.py` fails with `ModuleNotFoundError` if using `from scripts.bar import ...`. Use `python -m scripts.foo`.
 
-45. **Don't escape `!=` inside single-quoted shell strings** — `\!=` breaks Python (`SyntaxError: unexpected character after line continuation`) and jq (`INVALID_CHARACTER`). Inside `'...'`, all characters are literal.
+## macOS `[skill:macos-rules]`
 
-46. **Use `python -m` for scripts with package-relative imports** — `python scripts/foo.py` fails with `ModuleNotFoundError` if the script uses `from scripts.bar import ...`. Use `python -m scripts.foo` instead.
+21. **Use `brew install` instead of `pip3 install` on macOS** `[frequent]` `[macos]` -- Python 3.12+ blocks system-wide pip (PEP 668). Use brew for CLI tools, pipx for Python apps.
 
-47. **Inspect JSON structure before indexing** — `data['key']` on a list gives `TypeError: list indices must be integers`. Check `type(data)` first when working with unfamiliar JSON.
+37. **macOS launchd agents need four fixes** `[rare]` `[macos]` -- plist `HardResourceLimits`/`SoftResourceLimits` (NumberOfFiles: 122880), `EnvironmentVariables` (HOME, TERM, PATH), `claude setup-token` for non-interactive auth, and ProgramArguments must use `/bin/bash -c "exec /bin/bash <script>"`. Test with `launchctl start`, not from a terminal.
 
-48. **Use `git push origin <tag>` instead of `--tags`** — `--tags` pushes ALL local tags. If any old tag already exists on the remote, git exits non-zero even though commits and new tags pushed fine. Push specific tags by name, or use `--follow-tags` for annotated tags reachable from pushed commits.
+38. **launchd plist must not run project scripts directly** `[rare]` `[macos]` -- `<string>/project/scripts/agent.sh</string>` causes Claude CLI to crash with "Unexpected" when the script is inside a directory with `.claude/`. Use `/bin/bash -c "exec /bin/bash <script>"` wrapper. Exit code is 0 despite the error.
 
-49. **Don't fabricate filesystem paths — use the working directory or discover with `ls`** — the agent invents plausible directory names (`Projects`, `GenAI_Projects`, `repos`) that don't exist. Use the environment's working directory for the current project, and `ls`/Glob to discover paths for other projects.
+## Multi-Agent `[skill:multi-agent]`
 
-50. **Run project scaffolding tools BEFORE adding config files** — `create-next-app`, `create-vite`, etc. require an empty directory. Creating CLAUDE.md or `.claude/` first causes the scaffolder to abort with "files that could conflict." Scaffold first, configure second.
+53. **Only the main agent handles git commit/push** `[universal]` -- sub-agents write changes; the main agent reviews, tests, and commits centrally. Prevents wrong-branch pushes and merge conflicts.
 
-51. **Never pipe `curl` directly to a JSON parser** — `curl | jq` or `curl | python3 json.load()` crashes with unhelpful parse errors when the API returns non-JSON (HTML error pages, auth failures, rate limits). Save the response first and check HTTP status, or use `curl -sf` to fail on errors.
+55. **Only the main agent pushes -- worktree agents commit locally** `[universal]` -- N independent pushes trigger N x M CI runs. Agents commit locally, main agent batch-pushes all branches, creates PRs, and monitors CI centrally.
 
-## Branch & Multi-Agent Rules
+## Deployment & Resources `[skill:deployment-safety]`
 
-52. **Always verify the current branch before committing** — run `git branch --show-current` before any `git commit`. Don't assume the branch from conversation context — git state may have changed. If the user hasn't specified a branch, ask. Hook blocks push to main/master.
+62. **Merging to main IS deploying to production** `[universal]` -- in projects with CI/CD, a merge is a deployment. Dependabot PRs target main by default.
 
-53. **Only the main agent handles git commit/push** — sub-agents and teammates write changes to their working directories. The main agent reviews all changes, runs tests, and commits centrally. This prevents wrong-branch pushes and merge conflicts from parallel agents.
+63. **Batch dependency updates into a single PR** `[frequent]` -- merging N PRs one-by-one with "require up-to-date" creates O(n^2) CI waste. Create one branch, apply all updates, run CI once.
 
-54. **Run the full test suite after config or infrastructure changes** — config changes (tsconfig, eslint, package.json, .env, migrations, CI workflows) have broader blast radius than code changes. A single tsconfig modification can break hundreds of files. Always run `typecheck; lint; test` immediately after config changes, before proceeding.
+64. **Every CI run costs money -- count before triggering** `[universal]` -- estimate runs before starting. If >2-3, find a more efficient approach. Work locally until confident, push once.
 
-55. **Only the main agent pushes — worktree agents commit locally** — when N agents work in parallel worktrees, each independent push triggers N x M CI runs (branches x workflows). Agents commit locally, main agent batch-pushes all branches in one command (`git push origin branch-1 branch-2 ...`), creates all PRs, and monitors CI centrally. Saves runner minutes (especially 10x macOS) and eliminates wrong-branch pushes.
+65. **Framework upgrades need preview verification** `[frequent]` -- CI passing is necessary but not sufficient. Build != Runtime. Deploy to a preview URL and verify the site loads before merging.
 
-56. **Don't assume GitHub labels exist — check or create first** — `gh issue create --label "chore"` fails if the label doesn't exist on the repo. Run `gh label list` first, or create needed labels with `gh label create`. When creating multiple issues, do it sequentially (not as parallel tool calls) to avoid Error #1 cancellation cascade.
+66. **When production is down: roll back first** `[universal]` -- restore service immediately. Investigate on a non-production environment. Fix forward on develop, verify on preview, release to main.
 
-57. **Check for existing PRs before `gh pr create`** — `gh pr create` fails if a PR already exists for the head-to-base branch pair. Check with `gh pr list --head <branch> --base <base>` first; if one exists, use `gh pr edit` to update it instead.
+67. **Justify every external action before triggering** `[universal]` -- before any CI run, deployment, or API call: Is this needed? Is this justified? Is this verifiable? If any answer is "no", stop.
 
-## Quality & Attitude Rules
+## Supabase `[skill:supabase]`
 
-58. **Fix everything, always** — categorize findings by severity (that's useful), but fix 100% of them. With AI agents, the cost of fixing is near-zero. Never suggest deferring items, say "nothing urgent," or recommend leaving low-priority items for a later session. The quality bar is the highest possible.
+72. **Test migrations locally before pushing to remote** `[frequent]` -- run `supabase start` + `supabase db reset` locally, verify with `docker exec ... psql`, then `supabase db push`. The local instance has full Postgres with RLS and extensions -- treat it as UAT.
 
-## CLAUDE.md Authoring Rules
+## Quality & Process
 
-59. **Wrap context-specific CLAUDE.md sections in `<important if="condition">` tags** — as CLAUDE.md grows, the agent must judge relevance for every line. Conditional blocks give explicit activation signals so testing rules only fire when writing tests, deployment rules only fire when deploying, etc. Keep universal content (stack, structure, git workflow) unwrapped. Make conditions specific — `"you are writing tests"` not `"you are writing code"`.
+13. **Write tests before implementation (TDD)** `[universal]` -- Red-Green-Refactor. Bug fixes need a regression test first.
 
-## Git Conflict Resolution Rules
+14. **Exhaust all tools before suggesting manual steps** `[universal]` -- check CLI tools, shell commands, MCP servers, file tools before escalating to the user.
 
-60. **`git checkout --` doesn't work on unmerged files — use `--ours`/`--theirs` or abort** — during a merge/rebase/cherry-pick conflict, files are "unmerged" and plain `git checkout -- <file>` fails. Use `git checkout --ours <file>` or `git checkout --theirs <file>` to pick a side, or `git merge --abort` / `git rebase --abort` to cancel entirely. Check `git status` first to see the conflict state.
+39. **Run `/simplify` after reviewer approval** `[frequent]` -- catches code reuse, quality, and efficiency issues the plan-compliance reviewer doesn't check.
 
-61. **Remove conflicting untracked files before `git merge`** — if untracked files exist at the same paths as files in the branch being merged, git aborts with "untracked working tree files would be overwritten." Delete or move the untracked copies first, then merge. Common in multi-agent workflows where the main repo and worktree agents create files at the same paths.
+40. **Mark independent plan phases as `[batch-eligible]`** `[frequent]` -- during `/plan`, identify phases with no file overlap. `/batch` executes them in parallel (one worktree per phase, each opens a PR).
 
-## Deployment & Resource Efficiency Rules
+41. **Use `/batch` for bulk changes outside RPI** `[situational]` -- migrations, multi-issue sprints, repetitive refactors. Don't manually iterate through 20 files when `/batch` can parallelize.
 
-62. **Merging to `main` IS deploying to production** — in any project with CI/CD connected to `main`, a merge is a production deployment. Dependabot PRs target `main` by default — merging them deploys to production. "Clean up PRs" means close/retarget, not merge. Cherry-pick dependency updates to `develop`, close the Dependabot PR, release via the normal process.
+42. **After `/pre-launch`, run `/simplify` first** `[situational]` -- fixes dead code, duplicates, inefficiencies in one pass. Then address security and infrastructure findings manually.
 
-63. **Batch dependency updates into a single PR — never merge sequentially** — merging N PRs one-by-one on a branch with "require up-to-date" protection creates O(n^2) CI waste from rebase cascades. Create a single branch, apply all updates, run CI once. For 7 PRs with 9 workflows, batching reduces ~189 wasted runs to ~9.
+49. **Don't fabricate filesystem paths** `[universal]` -- the agent invents plausible names (`Projects`, `repos`). Use the working directory or discover with `ls`/Glob.
 
-64. **Every CI run and deployment costs money — count before triggering** — before starting work, estimate how many CI runs and deployments you'll trigger. If the answer is more than 2-3, find a more efficient approach. Never push partial work to branches that trigger CI. Never deploy to diagnose. Work locally until confident, then push once.
+58. **Fix everything, always** `[universal]` -- categorize by severity, but fix 100%. With AI agents, fix cost is near-zero.
 
-65. **Framework upgrades require platform preview verification** — CI passing is necessary but NOT sufficient for framework upgrades (Next.js, React, etc.). Build != Runtime. Local != Production. Deploy to a preview URL and verify the site loads, API routes respond, and health checks pass before merging to production.
+59. **Wrap context-specific CLAUDE.md sections in `<important if="condition">`** `[frequent]` -- gives explicit activation signals so testing rules only fire when writing tests, deployment rules only when deploying. Keep universal content unwrapped.
 
-66. **When production is down: roll back first, investigate second** — restore service immediately by rolling back to the last known good deployment. Then investigate on a non-production environment. Fix forward on `develop`, verify on preview, release to `main`. Never promote broken deployments "briefly to capture logs." Never deploy to diagnose.
+68. **Every fallback path must be observable** `[universal]` -- add ERROR-level logging when fallbacks activate, health endpoint coverage for degraded state, and alerting hooks. A silent fallback is a silent production bug.
 
-67. **Justify every external action before triggering** — before any CI run, deployment, or API call, answer: Is this needed? Is this justified? Is this verifiable? If any answer is "no," do not proceed. Track your deployment count during recovery — if you've deployed more than twice without success, stop and re-evaluate.
+## Agent Reports
 
-68. **Every fallback path must be observable** — when writing code with fallback behavior (default data, cached responses, placeholder content), always add: (1) ERROR-level logging when the fallback activates, (2) health endpoint coverage that detects degraded state, (3) alerting or monitoring hooks. A silent fallback is a silent production bug. Ask: "If this fallback fires in production, will anyone know?"
+70. **Do not commit agent reports to the repository** `[universal]` -- `docs/agents/`, `logs/`, `scripts/agents/` are gitignored. Reports are local operational tools. The only triage commits are code fixes.
 
-## Agent Report Rules
-
-70. **Never commit agent reports to the repository** — `docs/agents/`, `logs/`, and `scripts/agents/` are gitignored in all projects (open-source and closed-source alike). Reports are local operational tools, not project artifacts. They stay on disk for historical access but never enter version control. The only things triage commits are code fixes.
-
-71. **Use timestamp-based discovery for triage, not git status** — touch `docs/agents/.last-triage` after each triage run. Next triage discovers new reports with `find docs/agents/ -name "*-report.md" -newer docs/agents/.last-triage`. On first run (no marker), process ALL reports. This decouples report discovery from git entirely.
-
-## Supabase Rules
-
-72. **Always test Supabase migrations locally before pushing to remote** — run `supabase start` + `supabase db reset` locally, verify with `docker exec supabase_db_<project> psql -U postgres -c "<query>"`, and only then `supabase db push`. The local instance has full Postgres with RLS, extensions, and auth — treat it as UAT. Never push a migration without local verification.
+71. **Use timestamp-based discovery for triage** `[frequent]` -- touch `docs/agents/.last-triage` after each run. Next triage uses `find ... -newer .last-triage`. On first run, process all reports.
 
 ---
 
 For detailed symptoms, root causes, and examples, see [agent-errors.md](agent-errors.md).
 
-For the full deployment safety guide and resource efficiency patterns, see [deployment-safety.md](deployment-safety.md).
+For the full deployment safety guide, see [deployment-safety.md](deployment-safety.md).
