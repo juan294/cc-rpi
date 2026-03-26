@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-03-26
+
 ### Added
 
 - **Rule #70: Never commit agent reports to the repository** -- `docs/agents/`, `logs/`, and `scripts/agents/` are gitignored in all projects (open-source and closed-source). Reports stay on disk as local operational history but never enter version control.
