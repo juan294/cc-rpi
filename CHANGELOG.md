@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Added
+
+- **`templates/rules/`** -- 5 rule template files for `.claude/rules/` conditional loading: `rpi-details.md` (always loaded), `push-accountability.md` (always loaded), `deployment-safety.md` (path-conditional), `supabase.md` (path-conditional), `testing.md` (path-conditional). Rules with `paths` frontmatter only load when Claude works with matching files -- true infrastructure-level conditional loading.
+- **`templates/skills/error-patterns/`** -- New skill providing condensed top-20 error reference on demand. Agents no longer need to read the full 117K-char error catalog during onboarding. Full catalog remains available for deep debugging.
+
+### Changed
+
+- **CLAUDE.md template** -- context overhaul v2: reduced from 241 to 70 lines (71% reduction). All `<important if>` blocks migrated to `.claude/rules/` with `paths` frontmatter. Working Patterns section removed (already in skills). Always-loaded context reduced from ~10K to ~4.9K chars.
+- **`/bootstrap`** -- no longer requires reading `agent-errors.md` during onboarding. Now installs `.claude/rules/` (stack-aware) and `error-patterns/` skill. Step numbering updated.
+- **`/adopt`** -- adds `.claude/rules/` audit, `<important if>` migration guidance, rules installation step. CLAUDE.md lean guidance updated (~70 lines target).
+- **`/update`** -- new Phase 4b syncs `.claude/rules/` (preserves custom paths, never deletes project rules). CLAUDE.md section list updated for v2 template. Sync metadata includes `rulesSynced`/`rulesCustom` fields.
+- **Setup checklist** -- new "Authoring Principles" section (migrated from CLAUDE.md template comment block), new "Rules Setup" section, `error-patterns/` added to skills list.
+- **cc-rpi CLAUDE.md** -- self-applied v2: reduced from 221 to 96 lines. RPI details, git recipes, and contributing guidelines moved to `.claude/rules/`. Repo structure updated with rules/ directories.
+- **`patterns/agent-errors.md`** -- preamble updated to reference error-patterns skill; file is no longer mandatory onboarding reading.
+
 ## [1.13.0] - 2026-03-26
 
 ### Added

@@ -159,7 +159,7 @@ Skills: `[skill:name]` points to `.claude/skills/name/` for full examples.
 
 58. **Fix everything, always** `[universal]` -- categorize by severity, but fix 100%. With AI agents, fix cost is near-zero.
 
-59. **Wrap context-specific CLAUDE.md sections in `<important if="condition">`** `[frequent]` -- gives explicit activation signals so testing rules only fire when writing tests, deployment rules only when deploying. Keep universal content unwrapped.
+59. **Use `.claude/rules/` with `paths` frontmatter for conditional rules** `[frequent]` -- domain rules load only when Claude works with matching files (e.g., deployment rules on `.github/**`, test rules on `**/*.test.*`). Replaces `<important if>` blocks with infrastructure-level conditional loading.
 
 68. **Every fallback path must be observable** `[universal]` -- add ERROR-level logging when fallbacks activate, health endpoint coverage for degraded state, and alerting hooks. A silent fallback is a silent production bug.
 

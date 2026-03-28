@@ -66,11 +66,12 @@ Sample documents illustrating the methodology in practice — a research documen
 
 Ready-to-use starting points for new projects:
 
-- **CLAUDE.md template** — Comprehensive project configuration with all operational rules baked in
+- **CLAUDE.md template** — Slim project configuration (~70 lines) with universal instructions
+- **Rule templates** — `.claude/rules/` files with conditional loading (deployment, Supabase, testing) and universal rules (RPI details, push accountability)
 - **settings.json template** — `.claude/settings.json` with Agent Teams, hooks, and permissions
-- **Setup checklist** — Step-by-step guide including pre-commit hooks, CI setup, push accountability, and scheduled agents
-- **Slash commands** — `/bootstrap`, `/adopt`, `/update`, `/research`, `/plan`, `/implement`, `/validate`, `/describe-pr`, `/pre-launch`, `/remediate`, `/triage`, `/status`, `/fix-ci` — plus integration with Anthropic-native `/simplify` and `/batch`
-- **Scheduled agent scripts** — Nightly blueprint sync (`cc-rpi-update-agent.sh`) and multi-project morning triage (`morning-triage.sh`), both with retry logic and launchd/cron templates
+- **Setup checklist** — Step-by-step guide including rules, skills, hooks, CI, and scheduled agents
+- **Slash commands** — `/bootstrap`, `/adopt`, `/update`, `/research`, `/plan`, `/implement`, `/validate`, `/describe-pr`, `/pre-launch`, `/remediate`, `/triage`, `/status`, `/fix-ci` — plus Anthropic-native `/simplify` and `/batch`
+- **Scheduled agent scripts** — Nightly blueprint sync and multi-project morning triage with launchd/cron templates
 
 ## Adding New Patterns
 

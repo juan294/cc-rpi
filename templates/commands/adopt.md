@@ -9,11 +9,12 @@ This project already exists and may already follow some, all, or none of these p
 Read these files from cc-rpi IN ORDER. Do not skip any.
 
 1. `patterns/quick-reference.md` — Internalize every operational rule.
-2. `patterns/agent-errors.md` — Know every error pattern and its solution.
-3. `methodology/README.md` — Read the one-paragraph summary and reading order.
-4. `templates/setup-checklist.md` — Understand the target state for a fully set up project.
-5. `templates/CLAUDE.md.template` — Know what a well-configured CLAUDE.md looks like.
-6. `templates/settings.json.template` — Know what settings.json should contain.
+2. `methodology/README.md` — Read the one-paragraph summary and reading order.
+
+The error-patterns skill provides condensed error reference on demand. The full catalog (`patterns/agent-errors.md`) is available but not required for onboarding.
+3. `templates/setup-checklist.md` — Understand the target state for a fully set up project.
+4. `templates/CLAUDE.md.template` — Know what a well-configured CLAUDE.md looks like.
+5. `templates/settings.json.template` — Know what settings.json should contain.
 
 ## Phase 2: Audit This Project
 
@@ -23,9 +24,11 @@ Now investigate THIS project. Spawn parallel Explore agents to assess the curren
 - Does CLAUDE.md exist? If so, read it fully. How complete is it vs the template?
 - Does `.claude/settings.json` exist? What permissions and env vars are configured?
 - Does `.claude/commands/` exist? Which slash commands are present?
-- Does `.claude/skills/` exist?
+- Does `.claude/skills/` exist? Which skills are installed?
+- Does `.claude/rules/` exist? Which rules are installed? (New in blueprint v2)
 - Does `.claude/agents/` exist?
 - Is `.claude/settings.local.json` in `.gitignore`?
+- Does CLAUDE.md contain `<important if>` blocks? (These should migrate to `.claude/rules/`)
 
 **Agent 2 — Infrastructure Audit:**
 - What's the project type? (web app, library, CLI, monorepo, Python, static site)
@@ -59,7 +62,9 @@ List gaps organized by priority:
 - No slash commands for /research, /plan, /implement, /validate
 - No settings.json or Agent Teams not enabled
 - No docs/ directory structure
-- Missing `.claude/skills/` directory or missing blueprint-provided skills
+- Missing `.claude/skills/` or missing blueprint-provided skills
+- Missing `.claude/rules/` (conditional and modular rules)
+- CLAUDE.md contains `<important if>` blocks (should be `.claude/rules/` with `paths`)
 
 **MEDIUM — Quality infrastructure (improves reliability):**
 - No pre-commit hooks
@@ -97,6 +102,17 @@ After presenting the report:
 2. **Ask about conflicts** — if the project has conventions that differ from the blueprint, ask which to keep.
 3. **Create a migration plan** as a checklist based on their decisions.
 4. **Execute the plan item by item**, confirming after each major change.
+5. **Install `.claude/rules/`** — copy rule templates from `cc-rpi/templates/rules/`:
+   - Always: `rpi-details.md`, `push-accountability.md`
+   - If deployment pipeline: `deployment-safety.md`
+   - If Supabase: `supabase.md`
+   - If tests: `testing.md`
+   - Adapt `paths` in frontmatter to match the project's file structure.
+6. **Migrate `<important if>` blocks** — if the project's CLAUDE.md has `<important if>` blocks:
+   - Extract each block's content
+   - Create a `.claude/rules/` file with `paths` frontmatter
+   - Remove the block from CLAUDE.md
+   - Verify path globs match the project's actual files
 
 ## Phase 5: Save to Memory
 
@@ -127,6 +143,6 @@ This is optional but recommended — it gives adopters a clear picture of their 
 - **Merge, don't replace.** If CLAUDE.md already exists with useful content, add the missing pieces — don't replace the whole file.
 - **Preserve project identity.** The project's name, description, stack choices, and conventions are theirs. The blueprint provides structure, not opinions about technology choices.
 - **Ask before assuming.** When in doubt about whether to change something, ask.
-- **Keep CLAUDE.md lean.** When updating it, only add instructions that would cause mistakes if missing.
+- **Keep CLAUDE.md lean.** Target ~70 lines. Domain rules go in `.claude/rules/` and `.claude/skills/`, not CLAUDE.md.
 - **One thing at a time.** Don't batch all changes into one massive commit. Make logical, reviewable changes.
 - **Always save to memory.** Phase 5 is not optional. Every adoption must end with a memory save.

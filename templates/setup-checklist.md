@@ -60,11 +60,28 @@ Two file pairs follow the same split pattern:
 
 ## CLAUDE.md Configuration
 
+### Authoring Principles
+
+- Keep CLAUDE.md **LEAN** -- loaded every session,
+  only universally applicable instructions.
+- Budget: ~100 usable instruction slots.
+  System prompt uses ~50. Don't waste them.
+- Test: "Would removing this line cause mistakes?"
+  If not, cut it.
+- Domain rules go in `.claude/rules/` (conditional loading)
+  and `.claude/skills/` (on-demand knowledge).
+  Don't duplicate their content in CLAUDE.md.
+- Use `.claude/rules/` with `paths` frontmatter for rules
+  that only apply when working with specific file types.
+- Manually craft every line --
+  don't auto-generate with `/init`.
+
+### Checklist
+
 - [ ] Fill in project name, description, and stack
 - [ ] Document build/test/lint commands
 - [ ] Document deployment pipeline (which branch deploys where)
 - [ ] Document git workflow (default branch, production branch)
-- [ ] Include Working Patterns section (canonical examples) from the template
 - [ ] Add project-specific context (key routes, data types, code ownership)
 
 ## Slash Commands
@@ -86,12 +103,25 @@ Adjust file paths in each command to match your project's docs directory.
 
 - [ ] Create `.claude/skills/` directory
 - [ ] Copy blueprint skills from `cc-rpi/templates/skills/` to `.claude/skills/`:
-  - Always: `git-workflow/`, `multi-agent/`, `deployment-safety/`, `ci-workflow/`, `github-cli/`
+  - Always: `git-workflow/`, `multi-agent/`, `deployment-safety/`, `ci-workflow/`, `github-cli/`, `error-patterns/`
   - Python projects: also `python-rules/`
   - macOS development: also `macos-rules/`
   - Supabase projects: also `supabase/`
 - [ ] Review installed skills -- remove any that don't apply to your stack
 - [ ] Add project-specific skills as needed (see `methodology/agent-design.md` for the skill taxonomy)
+
+## Rules Setup
+
+- [ ] Create `.claude/rules/` directory
+- [ ] Copy rule templates from `cc-rpi/templates/rules/`:
+  - Always: `rpi-details.md`, `push-accountability.md`
+  - Deployment pipelines: `deployment-safety.md`
+  - Supabase projects: `supabase.md`
+  - Projects with tests: `testing.md`
+- [ ] Review `paths` frontmatter in conditional rules --
+  adjust globs to match your project's file structure
+- [ ] Add project-specific rules as needed
+  (e.g., API conventions, database patterns)
 
 ## Agent Tool Hooks
 

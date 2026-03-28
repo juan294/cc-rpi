@@ -2,7 +2,7 @@
 
 ## One-liner
 
-Blueprint repository for Claude Code projects. Contains the RPI methodology, 62 known agent error patterns, 72 operational rules, and templates for CLAUDE.md, slash commands, skills, and project setup.
+Blueprint repository for Claude Code projects. Contains the RPI methodology, 62 known agent error patterns, 72 operational rules, and templates for CLAUDE.md, slash commands, skills, rules, and project setup.
 
 ## Stack
 
@@ -13,44 +13,28 @@ Markdown documentation, shell scripts (bash). CI: GitHub Actions with markdownli
 When starting a new project, the agent is told: "Go check my cc-rpi repository and set up the environment to follow all the best practices."
 
 The agent should:
+
 1. Read `patterns/quick-reference.md` -- internalize all operational rules
-2. Read `patterns/agent-errors.md` -- know every known error pattern
-3. Read `methodology/README.md` -- understand the RPI approach (follow reading order for depth)
-4. Use `templates/setup-checklist.md` to set up the new project
-5. Adapt `templates/CLAUDE.md.template` for the new project's CLAUDE.md
-6. Copy `templates/commands/` into the new project's `.claude/commands/`
+2. Read `methodology/README.md` -- understand the RPI approach (follow reading order for depth)
+3. Use `templates/setup-checklist.md` to set up the new project
+4. Adapt `templates/CLAUDE.md.template` for the new project's CLAUDE.md
+5. Copy `templates/commands/` into the new project's `.claude/commands/`
+6. Copy relevant `templates/skills/` into `.claude/skills/`
+7. Copy relevant `templates/rules/` into `.claude/rules/`
+
+The error-patterns skill provides condensed error reference on demand. The full catalog (`patterns/agent-errors.md`) is available but not required for onboarding.
 
 ## RPI Workflow
 
 This project follows its own Research-Plan-Implement pattern.
-All significant changes go through four phases:
+
 1. /research -- Understand the codebase as-is
 2. /plan -- Create a phased implementation spec
 3. /implement -- Execute one phase at a time with review gates
 4. /validate -- Verify implementation against the plan
 
-### Context Management
-
-- Each RPI phase should be its own conversation. Don't run research + plan + implement in one session.
-- Use `/clear` between unrelated tasks. Use `/compact` when context is heavy but the task continues.
-- Subagents are context control mechanisms -- they search/read in their window and return only distilled results.
-
-### Rules for All Phases
-
-- Read all mentioned files COMPLETELY before doing anything else.
-- Never suggest improvements during research -- only document what exists.
-- Every code reference must include file:line.
-- Spawn parallel subagents for independent research tasks.
-- Wait for ALL subagents before synthesizing.
-- Never write documents with placeholder values.
-
-### Rules for Implementation
-
-- Follow the atomic loop: implement -> review (plan compliance) -> fix -> approve -> `/simplify` (code quality) -> verify.
-- Run `/simplify` after reviewer approval -- it handles code reuse, quality, and efficiency in one native pass.
-- Check for `[batch-eligible]` phases in the plan -- use `/batch` to execute independent phases in parallel.
-- STOP after each phase and wait for human confirmation.
-- If the plan doesn't match reality, STOP and explain the mismatch.
+Each phase is its own conversation. STOP after each phase.
+Use /clear between tasks, /compact when context is heavy.
 
 ## Key Commands
 
@@ -59,33 +43,19 @@ All significant changes go through four phases:
 npx markdownlint '**/*.md' --ignore node_modules --ignore .claude 2>&1
 ```
 
-### Pre-Release Workflow
-
-```
-/pre-launch -> /remediate -> /update-docs -> /release
-```
-
-- `/remediate` -- resolve all pre-launch findings with parallel TDD agents, CI verification
-- `/update-docs` -- refreshes all documentation, diagrams, version references, and inline code docs
-- `/release` -- version bump, CHANGELOG, tag, GitHub release, registry publish advisory
-
-### CRITICAL: Run verification commands sequentially, NEVER in parallel
-
-Never run verification commands as parallel sibling Bash tool calls.
-Chain with `&&` or `;`.
+Run verification sequentially with `&&` or `;`, NEVER as parallel Bash calls.
 
 ## Git Workflow
 
-**`main` is the only branch. This is a documentation project -- no develop/main split.**
+**`main` is the only branch. Documentation project -- no develop/main split.**
 
-1. All work happens directly on `main` (or short-lived feature branches for large changes)
+1. All work happens directly on `main`
 2. Always run markdownlint before committing
-3. Always commit before pulling -- `git pull --rebase` requires a clean tree (hook enforced)
-4. Before any commit, verify the current branch -- run `git branch --show-current`
+3. Always commit before pulling (hook enforced)
+4. Verify current branch before any commit
 
 ### Commit Messages
 
-Use conventional commits:
 ```
 feat: description       # New errors, rules, methodology content
 fix: description        # Corrections to existing content
@@ -94,102 +64,13 @@ chore: description      # CI, templates, scripts
 release: vX.Y.Z         # Version bumps
 ```
 
-## Working Patterns
-
-Read `patterns/quick-reference.md` for the full rule set (72 rules).
-Read `patterns/agent-errors.md` for detailed error patterns (62 errors).
-Read `patterns/deployment-safety.md` for deployment safety and resource efficiency rules.
-
-These files ARE the source of truth -- they live in this repo. Do not duplicate their content here.
-
-### Shell & Tools
-- Chain verification commands sequentially, never as parallel Bash calls
-- Never use `~` in file tool paths -- use full absolute paths starting with `/`
-
-### Git Recipes (hooks enforce critical steps)
-```bash
-# Push sequence -- ALWAYS commit before pulling (Error #33, hook enforced)
-git add <files> && git commit -m "msg" && git pull --rebase && git push
-
-# Push with tag -- NEVER use --tags (Error #44, hook enforced)
-git push origin main && git push origin v1.0.0
-# Or: git push origin main --follow-tags
-
-# Worktree cleanup
-git worktree remove --force <path>; git branch -D <branch>
-```
-
-### GitHub CLI
-- Don't guess `gh --json` field names -- query available fields first
-- Check CI per-PR with `--json`, not chained human-readable output
-
 ## Push Accountability
 
 After every push, verify CI:
+
 1. `gh run list --branch main --limit 1` to check status
-2. If CI fails -- investigate with `gh run view <id> --log-failed`, fix, and re-push
+2. If CI fails -- investigate with `gh run view <id> --log-failed`, fix, re-push
 3. The push isn't done until CI is green
-
-## Contributing to This Repo
-
-When new error patterns are discovered during work on ANY project:
-1. Add them to `patterns/agent-errors.md` following the existing format
-2. Add a one-liner to `patterns/quick-reference.md`
-3. Update counts in `GUIDE.md` (two locations: prose paragraph + "Where to Go Deeper" table)
-4. Update `CHANGELOG.md`
-5. Keep entries generic -- no project-specific references
-
-When new best practices or methodology refinements are confirmed:
-1. Add them to the appropriate file under `methodology/`
-2. Or create a new file under `patterns/` if it's a distinct topic
-
-## Repo Structure
-
-```
-cc-rpi/
-├── CLAUDE.md                         # This file
-├── GUIDE.md                          # Human-readable quick-start guide
-├── README.md                         # Public documentation
-├── .claude/
-│   ├── settings.json                 # Agent Teams, hooks, permissions
-│   ├── hooks/guard-bash.sh           # PreToolUse enforcement (Errors #33, #44, #48)
-│   └── commands/                     # Slash commands (copied from templates/)
-├── docs/
-│   ├── research/                     # RPI research documents about this repo
-│   └── plans/                        # RPI implementation plans for this repo
-├── methodology/                      # The RPI approach (11 files)
-├── examples/                         # Sample documents and workflow walkthroughs
-├── patterns/                         # Operational knowledge
-│   ├── quick-reference.md            # 72 rules to internalize before any work
-│   ├── agent-errors.md               # 62 errors with symptoms and solutions
-│   └── deployment-safety.md          # Resource efficiency and production deployment rules
-└── templates/                        # Files to adapt for new projects
-    ├── CLAUDE.md.template            # Starting point for project CLAUDE.md
-    ├── settings.json.template        # .claude/settings.json template
-    ├── setup-checklist.md            # Step-by-step new project setup
-    ├── hooks/guard-bash.sh           # Hook template (source for .claude/hooks/)
-    ├── commands/                     # Command templates (source for .claude/commands/)
-    │   ├── remediate.md             # /remediate -- fix all pre-launch findings
-    │   ├── triage.md               # /triage -- morning agent report processing
-    │   ├── release.md               # /release -- version release automation
-    │   ├── update-docs.md           # /update-docs -- comprehensive docs refresh
-    │   └── detach.md                # /detach -- clean removal of cc-rpi (user-level)
-    ├── skills/                      # Domain skill templates (source for .claude/skills/)
-    │   ├── git-workflow/            # Push sequences, worktree management
-    │   ├── ci-workflow/             # Push accountability, verification sequencing
-    │   ├── deployment-safety/       # Production deploy, rollback, batching
-    │   ├── multi-agent/             # Sub-agent rules, central commit
-    │   ├── github-cli/              # gh patterns, PR checks, labels
-    │   ├── python-rules/            # uv, python -m, version pinning
-    │   ├── macos-rules/             # launchd, brew vs pip, zsh quirks
-    │   └── supabase/                # Migration safety, grants, fallback observability
-    ├── scripts/                     # Scheduled agent shell script templates
-    │   ├── cc-rpi-update-agent.sh   # Nightly blueprint sync
-    │   ├── morning-triage.sh        # Multi-project morning triage
-    │   └── agents/                  # Per-project agent infrastructure
-    │       ├── install-agents.sh    # Automated launchd installer
-    │       └── lib/agent-utils.sh   # Shared agent utility library
-```
 
 ## Project File Locations
 
@@ -197,24 +78,19 @@ Go directly to these paths -- never search the codebase for them.
 
 | Topic | Path | Notes |
 |-------|------|-------|
-| Error catalog | `patterns/agent-errors.md` | Full entries with symptoms, root cause, solution |
-| Operational rules | `patterns/quick-reference.md` | 72 rules with scope/stack tags (source of truth) |
-| Deployment safety | `patterns/deployment-safety.md` | Resource efficiency and production deployment rules |
-| Skill templates | `templates/skills/` | 8 domain skills for progressive disclosure |
-| Methodology | `methodology/` | 11 files, reading order in `methodology/README.md` |
-| Templates | `templates/` | Source files adapted for new projects |
-| Command source | `templates/commands/` | Canonical command definitions |
-| Active commands | `.claude/commands/` | Copies of templates/ for this repo's own use |
-| Hook source | `templates/hooks/guard-bash.sh` | Canonical hook definition |
-| Active hook | `.claude/hooks/guard-bash.sh` | Copy for this repo's own use |
-| Research docs | `docs/research/YYYY-MM-DD-description.md` | RPI research about cc-rpi itself |
-| Plans | `docs/plans/YYYY-MM-DD-description.md` | RPI plans for cc-rpi improvements |
-| Examples | `examples/` | Sample research docs, plans, logs, workflows |
-| Changelog | `CHANGELOG.md` | Version history with error/rule counts |
-| Guide | `GUIDE.md` | Human-readable walkthrough (counts in 2 places) |
+| Error catalog | `patterns/agent-errors.md` | 62 errors, source of truth |
+| Operational rules | `patterns/quick-reference.md` | 72 rules with scope/stack tags |
+| Deployment safety | `patterns/deployment-safety.md` | Resource efficiency rules |
+| Skill templates | `templates/skills/` | 9 domain skills |
+| Rule templates | `templates/rules/` | 5 conditional/universal rules |
+| Active rules | `.claude/rules/` | cc-rpi's own rules |
+| Methodology | `methodology/` | 11 files, order in README.md |
+| Commands | `templates/commands/` | Canonical command definitions |
+| Active commands | `.claude/commands/` | This repo's own commands |
+| Hooks | `templates/hooks/guard-bash.sh` | Template; `.claude/hooks/` active |
+| Research | `docs/research/YYYY-MM-DD-*.md` | RPI research about cc-rpi |
+| Plans | `docs/plans/YYYY-MM-DD-*.md` | RPI plans for cc-rpi |
 
-## Memory Management
+## Memory
 
-When you discover an operational lesson during any session -- CI failure pattern, workaround, tooling quirk -- save it to auto memory immediately. Don't wait to be asked.
-
-After completing any significant change, save the key decisions and context to auto memory so future sessions start with full awareness.
+Save operational lessons to auto memory immediately. Don't wait to be asked.

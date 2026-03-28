@@ -7,16 +7,17 @@ You are setting up a new project using the cc-rpi blueprint repository. The blue
 Read these files from cc-rpi IN ORDER. Do not skip any.
 
 1. `patterns/quick-reference.md` — Internalize every operational rule. These apply to ALL your work from now on.
-2. `patterns/agent-errors.md` — Know every error pattern and its solution. Never rediscover these.
-3. `methodology/README.md` — Read the one-paragraph summary and the reading order. You do NOT need to read every methodology file right now — you'll reference them as needed during actual work.
+2. `methodology/README.md` — Read the one-paragraph summary and the reading order. You do NOT need to read every methodology file right now — you'll reference them as needed during actual work.
+
+The error-patterns skill provides condensed error reference on demand during debugging. The full 62-error catalog (`patterns/agent-errors.md`) is available but not required for onboarding.
 
 ## Phase 2: Understand the Templates
 
 Read these files to understand what you'll be creating:
 
-4. `templates/setup-checklist.md` — This is your step-by-step guide. You'll execute it in Phase 3.
-5. `templates/CLAUDE.md.template` — The starting point for this project's CLAUDE.md.
-6. `templates/settings.json.template` — The starting point for .claude/settings.json.
+3. `templates/setup-checklist.md` — This is your step-by-step guide. You'll execute it in Phase 3.
+4. `templates/CLAUDE.md.template` — The starting point for this project's CLAUDE.md.
+5. `templates/settings.json.template` — The starting point for .claude/settings.json.
 
 ## Phase 3: Set Up This Project
 
@@ -28,21 +29,27 @@ Now execute the setup checklist against THIS project. Work through it section by
 4. Create `.claude/settings.json` — adapt from the template.
 5. Create `.claude/commands/` — copy slash commands from `cc-rpi/templates/commands/` and adjust file paths.
 6. Install skills from `cc-rpi/templates/skills/` to `.claude/skills/`:
-   - Always install: `git-workflow/`, `multi-agent/`, `deployment-safety/`, `ci-workflow/`, `github-cli/`
+   - Always install: `git-workflow/`, `multi-agent/`, `deployment-safety/`, `ci-workflow/`, `github-cli/`, `error-patterns/`
    - If Python project: also install `python-rules/`
    - If macOS development: also install `macos-rules/`
    - If using Supabase: also install `supabase/`
    - Each skill is a directory with a SKILL.md file -- copy the entire directory.
-7. Create the directory structure (`docs/research/`, `docs/plans/`, `docs/decisions/`).
-8. Set up the README with the standard header.
-9. Add `.claude/settings.local.json` to `.gitignore`.
-10. Walk through the remaining checklist items (pre-commit hooks, CI, git setup) — ask me for decisions where needed.
+7. Install rules from `cc-rpi/templates/rules/` to `.claude/rules/`:
+   - Always copy: `rpi-details.md`, `push-accountability.md`
+   - If deployment pipeline exists: copy `deployment-safety.md`
+   - If using Supabase: copy `supabase.md`
+   - If test framework detected: copy `testing.md`
+   - Adapt `paths` in frontmatter to match the project's actual file structure.
+8. Create the directory structure (`docs/research/`, `docs/plans/`, `docs/decisions/`).
+9. Set up the README with the standard header.
+10. Add `.claude/settings.local.json` to `.gitignore`.
+11. Walk through the remaining checklist items (pre-commit hooks, CI, git setup) — ask me for decisions where needed.
 
 ## Phase 4: Save to Memory
 
 After completing all setup:
 
-11. Save the following to auto memory so future sessions start with full awareness:
+12. Save the following to auto memory so future sessions start with full awareness:
     - Project name, type, and stack
     - Key decisions made during setup (git workflow, CI choices, deployment targets)
     - Any project-specific conventions or constraints the user mentioned

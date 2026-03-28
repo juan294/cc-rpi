@@ -1,8 +1,12 @@
-# Known Agent Errors — Universal Catalog
+# Known Agent Errors -- Universal Catalog
 
-Documented from real recurring issues across projects. Each entry includes the symptom, root cause, and the correct approach to use from the start.
+62 documented error patterns from real recurring issues across projects.
+Each entry: symptom, root cause, correct approach, anti-pattern.
 
-**How to use this file:** Read this before starting any work. These are patterns Claude Code agents hit repeatedly — the solutions are known and should be applied from the first attempt, not rediscovered.
+**Note:** This file is the source of truth for error patterns. The condensed
+top-20 reference is distributed to projects via the error-patterns skill.
+
+For the one-liner rule set, see [quick-reference.md](quick-reference.md).
 
 ---
 

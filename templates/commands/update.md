@@ -28,8 +28,9 @@ Before starting, verify this project was bootstrapped or adopted from cc-rpi:
 Read these files from cc-rpi to internalize the latest rules and patterns:
 
 4. `patterns/quick-reference.md` — All operational rules.
-5. `patterns/agent-errors.md` — All known error patterns.
-6. `methodology/README.md` — Methodology overview.
+5. `methodology/README.md` — Methodology overview.
+
+The error-patterns skill provides condensed error reference on demand. The full catalog (`patterns/agent-errors.md`) is available on incremental syncs when error patterns changed in the diff.
 
 On incremental syncs (lastSyncCommit exists), prioritize reading files that appear in the git diff. You can skip unchanged methodology files.
 
@@ -49,26 +50,36 @@ On incremental syncs (lastSyncCommit exists), prioritize reading files that appe
      - If it exists in both locations and the cc-rpi SKILL.md is different -> replace the project's SKILL.md.
      - If it exists in cc-rpi but not in this project -> create the directory and copy SKILL.md (new skill from blueprint).
      - If it exists only in this project -> leave it (project-specific skill).
-   - Blueprint skills: `git-workflow/`, `multi-agent/`, `deployment-safety/`, `ci-workflow/`, `github-cli/`, `python-rules/`, `macos-rules/`, `supabase/`
+   - Blueprint skills: `git-workflow/`, `multi-agent/`, `deployment-safety/`, `ci-workflow/`, `github-cli/`, `error-patterns/`, `python-rules/`, `macos-rules/`, `supabase/`
    - Skip stack-irrelevant skills: if this is not a Python project, skip `python-rules/`. If not using Supabase, skip `supabase/`. If not on macOS, skip `macos-rules/`.
+
+## Phase 4b: Update Rules
+
+9. Compare each file in cc-rpi `templates/rules/` against this project's `.claude/rules/`:
+   - Blueprint rules: `rpi-details.md`, `push-accountability.md`, `deployment-safety.md`, `supabase.md`, `testing.md`
+   - For each blueprint rule:
+     - If it exists in both and the cc-rpi version is different → update the content but **preserve custom `paths`** the project may have adapted.
+     - If it exists in cc-rpi but not in this project → add it (new rule from blueprint). Adapt `paths` to match project structure.
+     - If it exists only in this project → leave it (project-specific rule).
+   - Skip stack-irrelevant rules: if not using Supabase, skip `supabase.md`. If no test framework, skip `testing.md`. If no deployment pipeline, skip `deployment-safety.md`.
+   - **Never delete** project-added custom rule files.
 
 ## Phase 5: Update CLAUDE.md
 
 9. Read this project's CLAUDE.md fully.
 10. Read cc-rpi's `templates/CLAUDE.md.template`.
 11. Identify **blueprint-managed sections** by their headers. These sections come from the template and should be kept in sync:
-    - `## RPI Workflow` (and all `###` subsections under it)
-    - `## Working Patterns` (and all `###` subsections under it)
-    - `## TDD Protocol`
-    - `## Agent Autonomy`
-    - `## Memory Management`
-    - `## Push Accountability` (inside `<important if>` block -- update if present)
+    - `## RPI Workflow`
+    - `## Agent Behavior` (was `## Agent Autonomy` + `## Memory` in older templates)
+    - `## Project File Locations`
+    - If the project has older sections now moved to `.claude/rules/` (`## Working Patterns`, `## TDD Protocol`, `## Push Accountability`, `<important if>` blocks), remove them and ensure the corresponding rule file exists in `.claude/rules/`.
 12. For each blueprint-managed section:
     - If the project's version differs from the template → update to match.
     - If the project has added project-specific content *within* a blueprint section (e.g., extra rules), preserve it — only update the parts that came from the template.
     - If a section doesn't exist in the project → **add it** from the template. Place it after the last existing blueprint-managed section, preserving the order from the template. New blueprint sections are new knowledge — `/update` is responsible for delivering them.
 13. **Do NOT touch** project-specific sections: One-liner, Stack, Key Commands, Git Workflow, Deployment, Commit Messages, Research Documents, Implementation Plans, or any custom section.
-14. The `### CRITICAL: Run verification commands sequentially` section under Key Commands is blueprint-originated — update it if it exists.
+14. If CLAUDE.md still contains `<important if>` blocks, migrate them to `.claude/rules/` files with `paths` frontmatter and remove the blocks from CLAUDE.md.
+15. The verification sequencing rule ("Run verification sequentially with `;` or `&&`") should be a one-liner in the Git Workflow section, not a separate subsection.
 
 ## Phase 6: Update settings.json
 
@@ -87,7 +98,9 @@ On incremental syncs (lastSyncCommit exists), prioritize reading files that appe
     {
       "lastSyncCommit": "<commit-hash>",
       "lastSyncDate": "YYYY-MM-DD",
-      "blueprintVersion": "<version-tag>"
+      "blueprintVersion": "<version-tag>",
+      "rulesSynced": ["rpi-details.md", "push-accountability.md"],
+      "rulesCustom": []
     }
     ```
 
@@ -102,6 +115,7 @@ On incremental syncs (lastSyncCommit exists), prioritize reading files that appe
     - cc-rpi version synced to (tag + commit hash)
     - Commands updated/added (list them)
     - Skills updated/added (list them)
+    - Rules updated/added (list them)
     - CLAUDE.md sections updated/added (list them)
     - settings.json changes (list them)
     - Notable new content: new error patterns, new rules, methodology changes

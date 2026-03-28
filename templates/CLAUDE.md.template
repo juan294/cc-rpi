@@ -1,77 +1,24 @@
 # Project: [PROJECT NAME]
 
-<!-- CLAUDE.md AUTHORING GUIDE
-Keep this file LEAN. It's loaded every session -- only include universally applicable instructions.
-For domain-specific knowledge, use .claude/skills/ (loaded on demand).
-Budget: ~100 usable instruction slots. System prompt uses ~50. Don't waste them.
-Test: "Would removing this line cause Claude to make mistakes?" If not, cut it.
-
-CONDITIONAL BLOCKS: Wrap context-specific sections in <important if="condition"> tags.
-Be specific: "you are writing tests" not "you are writing code".
-Group by domain: one block per domain, don't wrap individual lines.
-
-SKILLS: Domain rules live in .claude/skills/. They load automatically when relevant.
-Don't duplicate skill content here.
--->
-
 ## One-liner
+
 [Brief description of what this project does]
 
 ## Stack
+
 [Framework, language, key libraries]
 
 ## RPI Workflow
 
-This project follows the Research-Plan-Implement (RPI) pattern.
-All significant changes go through four phases:
+This project follows Research-Plan-Implement (RPI).
+
 1. /research -- Understand the codebase as-is
 2. /plan -- Create a phased implementation spec
 3. /implement -- Execute one phase at a time with review gates
 4. /validate -- Verify implementation against the plan
 
-### Context Management
-
-- Each RPI phase should be its own conversation. Don't run research + plan + implement in one session.
-- Use `/clear` between unrelated tasks. Use `/compact` when context is heavy but the task continues.
-- Subagents are context control mechanisms -- they search/read in their window and return only distilled results.
-- Research and planning happen on the default branch. Implementation happens in worktrees or feature branches.
-- If research comes back wrong, throw it out and restart with more specific steering.
-
-### Rules for All Phases
-
-- Read all mentioned files COMPLETELY before doing anything else.
-- Never suggest improvements during research -- only document what exists.
-- Every code reference must include file:line.
-- Spawn parallel subagents for independent research tasks.
-- Wait for ALL subagents before synthesizing.
-- Never write documents with placeholder values.
-
-### Rules for Implementation
-
-- Follow the atomic loop: implement -> review (plan compliance) -> fix -> approve -> `/simplify` (code quality) -> verify.
-- Run `/simplify` after reviewer approval -- it handles code reuse, quality, and efficiency in one native pass.
-- Check for `[batch-eligible]` phases in the plan -- use `/batch` to execute independent phases in parallel.
-- Run ALL automated verification after each phase.
-- STOP after each phase and wait for human confirmation.
-- Never auto-proceed to the next phase.
-- If the plan doesn't match reality, STOP and explain the mismatch.
-
-### Pre-Release Workflow
-
-```
-/pre-launch -> /remediate -> /update-docs -> /release
-```
-
-- `/remediate` -- resolve all pre-launch findings with parallel TDD agents, CI verification
-- `/update-docs` -- refreshes all documentation, diagrams, version references, and inline code docs
-- `/release` -- version bump, CHANGELOG, tag, GitHub release, registry publish advisory
-
-### Testing Philosophy
-
-- Prefer automated verification over manual testing.
-- Manual testing is ONLY for: sudo, hardware, new installs, truly visual-only validation.
-- If you can verify it with a command or tool, do so automatically.
-- Don't use Claude for linting/formatting -- use automated tools and hooks instead.
+Each phase is its own conversation. STOP after each phase.
+Use /clear between tasks, /compact when context is heavy.
 
 ## Key Commands
 
@@ -86,155 +33,38 @@ pnpm run build          # Production build
 
 ## Git Workflow
 
-**`develop` is the default branch. `main` is production only.**
+**`develop` is the default branch. `main` is production.**
 
-1. All development happens on `develop`
-2. Never commit directly to `main`
-3. Release to production via PR: `develop` -> `main`
-4. Pre-commit hooks enforce typecheck + lint
-
-### Commit Messages
-
-Use conventional commits:
-```
-feat(scope): description (#issue)
-fix(scope): description (#issue)
-test(scope): description
-refactor(scope): description
-chore: description
-docs: description
-```
-
-## Deployment
-[Describe your deployment pipeline -- which branch deploys where]
-
-<important if="you are merging PRs, merging branches to main, deploying, or handling dependency updates">
-### Deployment Safety
-
-- **Merging to `main` IS deploying to production.** Every merge triggers a production deployment. No exceptions.
-- **Dependabot PRs target `main` by default.** Never merge them directly. Cherry-pick to `develop`, close the PR, release normally.
-- **Every CI run and deployment costs money.** Before starting: estimate how many runs/deploys this will trigger. If more than 2-3, batch the work.
-- **Framework upgrades (Next.js, React, etc.) require preview deployment verification.** CI passing is NOT sufficient. Deploy to a preview URL and verify before merging to production.
-- **When production is down:** Roll back immediately. Investigate on non-production. Fix forward on `develop`. Never deploy to diagnose. Never promote broken deployments "briefly."
-- **Batch dependency updates** into a single branch and PR. Never merge N PRs one-by-one (causes O(n^2) CI waste from rebase cascades).
-- **Justify every external action** -- before any CI run, deployment, or API call: Is this needed? Is this justified? Is this verifiable? If any answer is "no," stop.
-</important>
-
-<important if="you are writing Supabase migrations or creating tables in Supabase">
-### Supabase Migration Rules
-
-- **Every migration that creates a public-facing table must include explicit grants:**
-  ```sql
-  GRANT SELECT ON table_name TO anon, authenticated;
-  ```
-- **Add `ALTER DEFAULT PRIVILEGES` in the initial setup migration** so all future tables automatically get anon SELECT. Never rely on Supabase dashboard-granted defaults for migration-created tables.
-- **Fallback data paths must log at ERROR level.** If a query fails and the code falls back to default/placeholder data, log `[TABLE_FALLBACK]` at ERROR -- not INFO. Silent fallbacks hide permission bugs for days.
-- **Health endpoints must check actual data access**, not just connectivity. Return `"degraded"` if primary tables are inaccessible.
-</important>
-
-<important if="you are creating or modifying Supabase database migrations">
-### Supabase Migration Safety
-
-Always test migrations locally before pushing to the remote project.
+Conventional commits:
+`feat|fix|test|refactor|chore|docs(scope): description`
 
 ```bash
-# 1. Ensure local Supabase is running (requires Docker Desktop)
-supabase start
-
-# 2. Apply all migrations to the local Postgres instance
-supabase db reset
-
-# 3. Verify the migration worked (query the local database)
-docker exec supabase_db_<project> psql -U postgres -c "<verification query>"
-
-# 4. Only after local verification succeeds, push to remote
-supabase db push
-```
-
-- The local instance is a full Postgres with RLS, extensions, and auth -- treat it as your UAT environment.
-- If `supabase start` fails, check that Docker Desktop is running.
-- The container name follows the pattern `supabase_db_<project>` where `<project>` is the Supabase project name from `supabase/config.toml`.
-- Never push a migration to remote without testing it locally first.
-</important>
-
-## Working Patterns
-
-<examples>
-<example name="push-sequence">
-Commit before pulling -- hook blocks dirty pulls.
-
-```bash
-git add src/feature.ts && git commit -m "feat: add feature"
+# Push -- commit before pulling (hook enforced)
+git add <files> && git commit -m "msg"
 git pull --rebase && git push
 ```
 
-</example>
+Run verification sequentially with `;` or `&&`,
+never as parallel Bash calls.
 
-<example name="verification">
-Run checks sequentially, never as parallel tool calls.
+## Deployment
 
-```bash
-pnpm run typecheck 2>&1; pnpm run lint 2>&1; pnpm run test 2>&1
-```
+[Describe your deployment pipeline]
 
-</example>
+Rules load from `.claude/rules/` and `.claude/skills/` automatically.
 
-<example name="worktree-cleanup">
-Remove worktrees before merging PRs. Use -D (uppercase) for branches.
+## Agent Behavior
 
-```bash
-git worktree remove --force ../feature-branch; git branch -D feature-branch
-```
-
-</example>
-
-<example name="file-paths">
-Use absolute paths in all file tools and worktree commands. Never use ~.
-
-```bash
-cd /Users/dev/project && pnpm run test
-```
-
-</example>
-</examples>
-
-Domain-specific rules (git, CI, deployment, Python, macOS, Supabase, GitHub CLI, multi-agent) are in `.claude/skills/` -- loaded automatically when relevant.
-
-<important if="you are pushing code to a remote">
-### Push Accountability
-
-After pushing to the development branch, spawn a background agent to monitor CI.
-If CI fails, the background agent investigates, fixes, and re-pushes.
-Main terminal continues working -- push verification is non-blocking.
-</important>
-
-## TDD Protocol
-
-All code changes follow Red-Green-Refactor:
-1. **Red** -- Write a failing test FIRST
-2. **Green** -- Minimum code to pass
-3. **Refactor** -- Clean up with green tests
-
-No exceptions. Bug fixes need a regression test. Refactors need existing coverage. No "tests later."
-
-## Agent Autonomy
-
-Exhaust CLI tools, shell commands, and file tools before asking the user. Only escalate when genuinely impossible. Production-affecting actions need explicit human authorization.
-
-## Memory Management
-
-Save operational lessons to auto memory immediately -- CI failure patterns, environment quirks, project conventions, permission issues. Don't wait to be asked.
+Exhaust tools before asking the user. Production actions need human authorization.
+Save operational lessons to auto memory immediately. Don't wait to be asked.
 
 ## Project File Locations
 
-Go directly to these paths -- never search the codebase for them.
+Go directly to these paths -- never search for them.
 
 | Topic | Path | Notes |
 |-------|------|-------|
-| Agent reports | `docs/agents/*-report.md` | Gitignored. Local-only operational history. Never committed (Rule #70) |
-| Agent logs | `logs/<name>.log`, `<name>.error.log` | Gitignored. Read alongside reports to diagnose failures |
-| Agent scripts | `scripts/agents/` | Gitignored. Standalone bash files invoking Claude CLI headless |
-| ADRs | `docs/decisions/` | Architecture decision records |
-| PR descriptions | `docs/prs/{number}_description.md` | |
-| Research docs | `docs/research/YYYY-MM-DD-description.md` | |
-| Plans | `docs/plans/YYYY-MM-DD-description.md` | Phase files in `-phases/phase-N.md` |
+| Agent reports | `docs/agents/*-report.md` | Gitignored |
+| Research | `docs/research/YYYY-MM-DD-*.md` | |
+| Plans | `docs/plans/YYYY-MM-DD-*.md` | `-phases/` |
+| ADRs | `docs/decisions/` | |

@@ -242,9 +242,9 @@ This sounds restrictive, but it's the single most impactful rule for research qu
 
 ### Error Prevention
 
-The blueprint includes 72 operational rules learned from real sessions. These aren't theoretical — they're patterns that caused actual failures and wasted time. Rather than loading all rules into every session, the blueprint uses **progressive disclosure**: CLAUDE.md carries a slim set of canonical examples, while domain-specific rules live in `.claude/skills/` and load automatically when relevant. This follows Anthropic's guidance that examples are more effective than rule lists for steering agent behavior.
+The blueprint includes 72 operational rules learned from real sessions. These aren't theoretical — they're patterns that caused actual failures and wasted time. Rather than loading all rules into every session, the blueprint uses **progressive disclosure** across three layers: a slim CLAUDE.md (~70 lines) for universal instructions, `.claude/rules/` for conditional rules that load only when working with matching files, and `.claude/skills/` for detailed domain knowledge that loads on demand. This keeps the agent's context window clean and focused.
 
-The 8 blueprint-provided skills cover: git workflow, CI verification, deployment safety, multi-agent coordination, GitHub CLI, Python, macOS, and Supabase.
+The 9 blueprint-provided skills cover: git workflow, CI verification, deployment safety, multi-agent coordination, GitHub CLI, Python, macOS, Supabase, and error patterns. The 5 rule templates cover: RPI details, push accountability, deployment safety, Supabase, and testing.
 
 ### Agent Teams
 
@@ -281,13 +281,17 @@ your-project/
 │   │   ├── implement.md         # /implement
 │   │   ├── validate.md          # /validate
 │   │   └── ...                  # + describe-pr, pre-launch, remediate, triage, etc.
-│   └── skills/                  # Domain rules (loaded on demand by Claude)
-│       ├── git-workflow/        # Push sequences, worktree management, conflict resolution
-│       ├── ci-workflow/         # Push accountability, verification sequencing
-│       ├── deployment-safety/   # Production deploy, rollback, dependency batching
-│       ├── multi-agent/         # Sub-agent rules, central commit pattern
-│       ├── github-cli/          # gh CLI patterns, PR checks, labels
-│       └── ...                  # + python-rules, macos-rules, supabase (if relevant)
+│   ├── rules/                   # Conditional/modular rules
+│   │   ├── rpi-details.md       # Always loaded: phase rules, pre-release
+│   │   ├── push-accountability.md # Always loaded: commit-before-pull, CI
+│   │   ├── deployment-safety.md # Loads when working with deploy files
+│   │   ├── testing.md           # Loads when working with test files
+│   │   └── supabase.md          # Loads when working with SQL/migrations
+│   └── skills/                  # Domain knowledge (loaded on demand)
+│       ├── git-workflow/        # Push sequences, worktree management
+│       ├── ci-workflow/         # Push accountability, verification
+│       ├── error-patterns/      # Known error catalog (top 20 + index)
+│       └── ...                  # + deployment-safety, multi-agent, etc.
 ├── docs/
 │   ├── research/                # Research documents
 │   ├── plans/                   # Implementation plans
@@ -359,7 +363,8 @@ The blueprint repository contains detailed documentation on every topic mentione
 | CI ownership | `methodology/push-accountability.md` | Background CI monitoring, fix-and-repush |
 | Error patterns | `patterns/agent-errors.md` | 62 documented errors with symptoms and solutions |
 | Operational rules | `patterns/quick-reference.md` | 72 rules with scope/stack tags, organized by domain |
-| Domain skills | `templates/skills/` | 8 blueprint-provided skills for progressive disclosure |
+| Domain skills | `templates/skills/` | 9 blueprint-provided skills for progressive disclosure |
+| Rule templates | `templates/rules/` | 5 conditional/modular rules for `.claude/rules/` |
 | Deployment safety | `patterns/deployment-safety.md` | Resource efficiency and production deployment rules |
 | Worked examples | `examples/README.md` | Sample research docs, plans, logs, pseudocode |
 
