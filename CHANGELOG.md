@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-03-28
+
 ### Added
 
 - **`templates/rules/`** -- 5 rule template files for `.claude/rules/` conditional loading: `rpi-details.md` (always loaded), `push-accountability.md` (always loaded), `deployment-safety.md` (path-conditional), `supabase.md` (path-conditional), `testing.md` (path-conditional). Rules with `paths` frontmatter only load when Claude works with matching files -- true infrastructure-level conditional loading.
