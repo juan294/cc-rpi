@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.14.2] - 2026-04-03
+
+### Changed
+
+- **Model tier annotations** -- all RPI commands now declare their model tier.
+  `/research` and `/plan` are pinned to Opus; `/implement`, `/remediate`,
+  `/validate`, `/fix-ci`, and `/triage` are pinned to Sonnet. Subagents
+  spawned by each command carry explicit `model:` parameters. Reduces Max
+  plan token consumption by ~64% for projects previously running all
+  commands on Opus.
+
+## [1.14.1] - 2026-03-28
+
+### Changed
+
+- **`/implement`** -- added EnterWorktree step: implementation now always
+  runs in an isolated worktree, preventing conflicts with uncommitted work
+  on main.
+
 ## [1.14.0] - 2026-03-28
 
 ### Added
