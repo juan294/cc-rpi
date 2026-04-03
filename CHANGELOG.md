@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.14.3] - 2026-04-03
+
+### Changed
+
+- **Sonnet tier commands** -- model tier headers now specify Sonnet 4.6 (1M context)
+  instead of generic "Sonnet session". Affects `/implement`, `/validate`,
+  `/remediate`, `/triage`, and `/fix-ci` in both `.claude/commands/` and
+  `templates/commands/`.
+
 ## [1.14.2] - 2026-04-03
 
 ### Changed
