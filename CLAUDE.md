@@ -78,8 +78,8 @@ Go directly to these paths -- never search the codebase for them.
 
 | Topic | Path | Notes |
 |-------|------|-------|
-| Error catalog | `patterns/agent-errors.md` | 62 errors, source of truth |
-| Operational rules | `patterns/quick-reference.md` | 72 rules with scope/stack tags |
+| Error catalog | `patterns/agent-errors.md` | 63 errors, source of truth |
+| Operational rules | `patterns/quick-reference.md` | 73 rules with scope/stack tags |
 | Deployment safety | `patterns/deployment-safety.md` | Resource efficiency rules |
 | Skill templates | `templates/skills/` | 9 domain skills |
 | Rule templates | `templates/rules/` | 5 conditional/universal rules |

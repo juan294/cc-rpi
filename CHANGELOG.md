@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Added
+
+- **Error #63:** Parallel agents each run full test suite, exhausting local
+  resources. N agents x full suite = N x workers processes competing for CPU
+  and memory. Agents must run scoped tests only; full suite runs once at
+  integration.
+- **Rule #73:** Parallel agents run scoped tests only -- full suite runs once
+  at integration.
+
 ## [1.14.3] - 2026-04-03
 
 ### Changed

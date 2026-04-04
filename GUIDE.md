@@ -361,8 +361,8 @@ The blueprint repository contains detailed documentation on every topic mentione
 | Plan notation | `methodology/pseudocode-notation.md` | How to write and read implementation plans |
 | Testing approach | `methodology/testing.md` | TDD protocol, verification hierarchy |
 | CI ownership | `methodology/push-accountability.md` | Background CI monitoring, fix-and-repush |
-| Error patterns | `patterns/agent-errors.md` | 62 documented errors with symptoms and solutions |
-| Operational rules | `patterns/quick-reference.md` | 72 rules with scope/stack tags, organized by domain |
+| Error patterns | `patterns/agent-errors.md` | 63 documented errors with symptoms and solutions |
+| Operational rules | `patterns/quick-reference.md` | 73 rules with scope/stack tags, organized by domain |
 | Domain skills | `templates/skills/` | 9 blueprint-provided skills for progressive disclosure |
 | Rule templates | `templates/rules/` | 5 conditional/modular rules for `.claude/rules/` |
 | Deployment safety | `patterns/deployment-safety.md` | Resource efficiency and production deployment rules |

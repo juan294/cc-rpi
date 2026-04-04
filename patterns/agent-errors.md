@@ -1,6 +1,6 @@
 # Known Agent Errors -- Universal Catalog
 
-62 documented error patterns from real recurring issues across projects.
+63 documented error patterns from real recurring issues across projects.
 Each entry: symptom, root cause, correct approach, anti-pattern.
 
 **Note:** This file is the source of truth for error patterns. The condensed
@@ -2290,3 +2290,45 @@ supabase db push  # ← compounds the problem
 ```
 
 **Key detail:** The local Supabase instance is a full Postgres with RLS, extensions, and auth — it's not a mock. If a migration works locally with `supabase db reset`, it will work on the remote. If `supabase start` fails, Docker Desktop needs to be running. The container name follows the pattern `supabase_db_<project>` where `<project>` comes from `supabase/config.toml`.
+
+## Error #63: Parallel agents each run full test suite, exhausting local resources
+
+**Symptom:** The machine becomes unresponsive — CPU pegged, memory exhausted, swap thrashing. Activity Monitor or `htop` shows hundreds of Node/Python/test-runner processes. The agent launched N parallel worktree agents (e.g., 10), and each independently runs the project's full test suite. With a 7,000-test suite, that's ~70,000 tests executing simultaneously, each test runner spawning its own worker processes. The result is N x workers-per-suite processes competing for CPU and memory. The machine may need a hard reboot.
+
+**Root cause:** The agent treats "verify your changes" as "run the full test suite" and does this for every parallel agent. No coordination limits how many agents run tests concurrently. Each worktree agent has its own copy of the codebase and independently spawns a full test runner (vitest, jest, pytest, etc.) with its default worker count. The multiplication is catastrophic: 10 agents x 4 workers each = 40 concurrent test processes, each loading the full application into memory.
+
+Real example: An agent implementing 10 independent features launched 10 worktree agents. Each ran `pnpm test` (vitest with the full 6,900-test suite). This created 478 Node processes simultaneously. The machine with 16GB RAM was completely overwhelmed. The agent acknowledged the mistake but couldn't cancel the already-running processes.
+
+**Correct approach — always do this:**
+
+```bash
+# 1. Agents run ONLY tests related to their changed files
+pnpm vitest run src/features/my-feature/  # scoped to changed directory
+pytest tests/test_my_module.py            # specific test file only
+
+# 2. Limit concurrent agents to 3-4 at a time (waves)
+# Launch wave 1 (3 agents), wait for completion, then wave 2
+
+# 3. Defer full test suite to the integration step
+# After all agents complete and changes are merged:
+pnpm test  # one full run, once, at the end
+
+# 4. If agents must run broader tests, limit workers
+pnpm vitest run --pool=threads --poolOptions.threads.maxThreads=2
+pytest -x --numprocesses=2
+```
+
+**Never do this:**
+
+```bash
+# Don't let each of N parallel agents run the full suite:
+# Agent 1: pnpm test     ← full 7,000-test suite
+# Agent 2: pnpm test     ← another full suite
+# ...
+# Agent 10: pnpm test    ← 70,000 tests total, machine melts
+
+# Don't assume "more parallel = faster":
+# 10 agents x full suite = resource starvation, not speed
+```
+
+**Key detail:** This compounds with Error #1 — if any agent's test run fails, sibling tool calls are killed, but the underlying test processes (spawned via Bash) continue running. The agent loses the ability to manage or cancel them. Prevention is the only fix: scope tests narrowly and limit concurrency.
