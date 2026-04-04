@@ -16,6 +16,9 @@ docs/agents/
 logs/
 scripts/agents/
 
+# Summon (machine-specific editor config)
+.summon
+
 # OS files
 .DS_Store
 Thumbs.db
