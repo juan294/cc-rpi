@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.14.4] - 2026-04-04
+
 ### Added
 
 - **Error #63:** Parallel agents each run full test suite, exhausting local
