@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.14.5] - 2026-04-07
+
 ### Added
 
 - **Draw.io diagram skill:** New `.claude/skills/drawio/` skill for generating
