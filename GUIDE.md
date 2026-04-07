@@ -174,6 +174,8 @@ You type `/research how does authentication work in this app?` and the agent:
 
 The critical rule here is **documentarian, not critic**. The research describes what exists — it doesn't suggest improvements or identify problems. This keeps the research factual and prevents the agent from jumping to solutions before understanding the problem.
 
+Note: /research is for projects that already have code. If you just bootstrapped a new project and have no code yet, skip /research and start with /plan — there's nothing to research. Once you have code from your first implementation, /research becomes your starting point for every subsequent task.
+
 **Your job:** Read the research document. If it's wrong or incomplete, throw it out and run `/research` again with more specific steering. Multiple passes are normal. Don't approve bad research — it poisons everything downstream.
 
 ### Phase 2: Plan
@@ -301,7 +303,7 @@ your-project/
 
 ## Tips for Getting the Most Out of It
 
-**Start every task with `/research`.** Even if you think you know the answer. The research phase takes a couple of minutes and often reveals things you didn't expect.
+**Start every task with `/research` — except for greenfield projects with no code yet, where you start with `/plan`.** Once you have code, the research phase takes a couple of minutes and often reveals things you didn't expect.
 
 **Read your research and plans critically.** This is where your time has 10x leverage compared to reviewing code. A bad plan wastes hours; catching it early saves them.
 

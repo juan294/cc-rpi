@@ -226,7 +226,8 @@ The shell script reads update instructions from cc-rpi at runtime, so when cc-rp
 
 ## Workflow Habits
 
-- [ ] Always `/research` before `/plan`
+- [ ] Always `/research` before `/plan` (except greenfield —
+  no code means nothing to research; start with `/plan`)
 - [ ] Always `/plan` before `/implement`
 - [ ] Always review plans before approving
 - [ ] Mark independent plan phases as `[batch-eligible]` during `/plan`

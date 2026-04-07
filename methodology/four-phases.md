@@ -133,6 +133,8 @@ When resuming from a handoff, the agent should classify the situation before act
 
 **Purpose:** Build a complete, accurate map of the codebase as it exists today.
 
+**Applicability:** This phase requires an existing codebase. For greenfield projects with no code yet, skip directly to Phase 2 (Plan). Once the first implementation phase produces code, /research becomes the starting point for every subsequent task.
+
 **Process:**
 
 1. **Read mentioned files first** — fully, no truncation, before spawning any subagents. This gives the orchestrator full context for decomposition.

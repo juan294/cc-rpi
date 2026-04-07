@@ -58,6 +58,19 @@ After completing all setup:
 
 This ensures the next session doesn't start from zero — the agent already knows the project context, the rules, and the decisions that shaped the setup.
 
+## Recommended Next Step
+
+After bootstrap is complete, your project has structure but no code yet.
+For your first feature, skip /research and start directly with /plan:
+
+```text
+/plan [your first feature]
+```
+
+There is nothing to research in an empty project. Once your first
+implementation produces code, /research becomes your starting point
+for every subsequent task.
+
 ## Rules for This Process
 
 - **Ask before assuming.** Every project is different. Don't guess the stack, conventions, or workflow.
