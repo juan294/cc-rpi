@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Added
+
+- **Draw.io diagram skill:** New `.claude/skills/drawio/` skill for generating
+  native draw.io diagrams (`.drawio` mxGraphModel XML) with optional export to
+  PNG, SVG, or PDF. Cross-platform CLI support (macOS, Linux, Windows/WSL2).
+
+### Changed
+
+- **Greenfield clarity:** Clarified across GUIDE.md, methodology/four-phases.md,
+  templates/setup-checklist.md, and templates/commands/bootstrap.md that
+  `/research` only applies to projects with existing code. For greenfield
+  projects, start directly with `/plan`.
+
 ## [1.14.4] - 2026-04-04
 
 ### Added

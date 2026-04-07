@@ -244,7 +244,7 @@ This sounds restrictive, but it's the single most impactful rule for research qu
 
 ### Error Prevention
 
-The blueprint includes 72 operational rules learned from real sessions. These aren't theoretical — they're patterns that caused actual failures and wasted time. Rather than loading all rules into every session, the blueprint uses **progressive disclosure** across three layers: a slim CLAUDE.md (~70 lines) for universal instructions, `.claude/rules/` for conditional rules that load only when working with matching files, and `.claude/skills/` for detailed domain knowledge that loads on demand. This keeps the agent's context window clean and focused.
+The blueprint includes 73 operational rules learned from real sessions. These aren't theoretical — they're patterns that caused actual failures and wasted time. Rather than loading all rules into every session, the blueprint uses **progressive disclosure** across three layers: a slim CLAUDE.md (~70 lines) for universal instructions, `.claude/rules/` for conditional rules that load only when working with matching files, and `.claude/skills/` for detailed domain knowledge that loads on demand. This keeps the agent's context window clean and focused.
 
 The 9 blueprint-provided skills cover: git workflow, CI verification, deployment safety, multi-agent coordination, GitHub CLI, Python, macOS, Supabase, and error patterns. The 5 rule templates cover: RPI details, push accountability, deployment safety, Supabase, and testing.
 
