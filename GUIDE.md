@@ -128,8 +128,8 @@ That's it. Those four commands are 90% of your interaction with the methodology.
 | Command | What It Does | When to Use |
 |---------|-------------|-------------|
 | `/describe-pr` | Generates a PR description from the current branch's diff and commit history. | Before opening or updating a PR. |
-| `/pre-launch` | Spawns 6 parallel specialist agents (QA, security, performance, architecture, UX, devops) for a production audit. | Before any production release. Run `/remediate` after to fix all findings. |
-| `/remediate` | Parses the pre-launch report, creates GitHub issues for every finding, spawns parallel TDD agents in worktrees, merges sequentially, verifies CI, runs `/simplify` twice. | After `/pre-launch` when findings exist. Automates the full fix cycle. |
+| `/pre-launch` | Spawns 8 parallel specialist agents (Principal Architect, Staff FE, Staff BE, Performance Engineer, DevOps/SRE Lead, Security Reviewer, QA/Reliability Lead, Product Designer/UX Lead) for a deep launch-readiness audit. Produces a 16-section report with 5-tier severity findings, finding IDs, and Before/After/Later time horizons. | Before any production release. Run `/remediate` after to fix findings in 3 waves. |
+| `/remediate` | Parses the 16-section pre-launch report, groups findings by wave (Before / After / Later launch), creates GitHub issues for every finding (Rule #58), spawns parallel TDD agents per wave in worktrees, merges sequentially, verifies CI, runs `/simplify` twice per wave. Wave 3 strategic items are filed as issues but not auto-fixed. | After `/pre-launch` when findings exist. Automates the full fix cycle in 3 waves. |
 | `/triage` | Discovers overnight agent reports via timestamp-based scanning, checks for agent failures in logs, synthesizes findings, proposes action plan for all items, implements fixes. Reports stay local (never committed). | Every morning. First command of the day for each project. |
 | `/status` | Quick 5-line project orientation: branch, last commit, working tree, CI status, open items. | Start of session. Quick check without starting a full task. |
 | `/update-docs` | Spawns 4 parallel discovery agents, then updates all documentation, Mermaid diagrams, version references, and inline code docs based on changes since last release. | After features/fixes are done, before releasing. Refreshes everything in one pass. |
@@ -257,16 +257,40 @@ Claude Code has an experimental feature called Agent Teams that lets the main ag
 
 ### Pre-Launch Audit
 
-Before any production release, you can run `/pre-launch` to spawn 6 specialist agents in parallel:
+Before any production release, you can run `/pre-launch` to spawn 8
+specialist agents in parallel:
 
-1. **Architect** — Dependencies, dead code, type errors
-2. **QA Lead** — Test suite, coverage, failure analysis
-3. **Security Reviewer** — Vulnerabilities, secrets, injection vectors
-4. **Performance Engineer** — Bundle sizes, build times, anti-patterns
-5. **UX Reviewer** — Accessibility, keyboard navigation, error states
-6. **DevOps** — CI status, environment variables, build verification
+1. **Principal Architect** — System-wide architecture, module boundaries,
+   dependency health, dead code, typecheck
+2. **Staff Frontend Engineer** — Component structure, state, routing,
+   client-side perf, hydration, bundle composition
+3. **Staff Backend Engineer** — API design, validation, DB access,
+   transactions, queues, background jobs, service boundaries
+4. **Performance Engineer** — Bundle sizes, p95/p99 latency risks,
+   cache strategy, hot paths
+5. **DevOps / SRE Lead** — Deployment safety, rollback, CI, env config,
+   observability, runbook readiness
+6. **Security Reviewer** — Dependency audit, secrets, auth/authz,
+   injection vectors
+7. **QA / Reliability Lead** — Test suite, coverage, graceful degradation,
+   failure modes, retry/idempotency coverage
+8. **Product Designer / UX Lead** — Visual hierarchy, design-system gaps,
+   component reuse, messaging/voice consistency, a11y
 
-They all run simultaneously, read-only, and produce a combined report with a verdict: READY, CONDITIONAL, or NOT READY. No auto-fixing — you decide what to address. When findings exist, run `/remediate` to resolve them all — it creates GitHub issues, spawns parallel TDD agents in worktrees, merges sequentially, verifies CI, and runs `/simplify` twice (per-agent and final).
+They all run simultaneously, read-only, and produce a 16-section report
+with a verdict: READY, CONDITIONAL, or NOT READY. Each finding carries a
+stable ID, a severity (launch-blocker / high / medium / low / strategic),
+a time horizon (Before / After / Later launch), and an evidence/inference
+label. No auto-fixing — you decide what to address.
+
+When findings exist, run `/remediate` to process them in 3 waves. Wave 1
+(Before launch — blockers + high-severity must-fix) runs first with full
+TDD + verification + CI gate. Wave 2 (After launch — medium severity)
+runs next, either in the same session or deferred. Wave 3 (Later /
+strategic) files GitHub issues for architectural work but does not spawn
+fix agents — that work requires human judgment. Rule #58's 100% coverage
+is preserved: every finding gets an issue, even if only Waves 1-2 get
+auto-fixed.
 
 ## Project Structure After Setup
 

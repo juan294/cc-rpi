@@ -450,7 +450,7 @@ Beyond individual subagents, teams of parallel agents can tackle complex multi-d
 | Scenario | Team Shape | Example |
 |----------|-----------|---------|
 | **Debugging** | 3-5 parallel investigators, each testing a different hypothesis | API, cache, rendering, config, dependencies |
-| **Pre-launch audit** | 6 parallel specialists, each auditing one domain | QA, security, architecture, performance, UX, infrastructure |
+| **Pre-launch audit** | 8 parallel specialists, each auditing one domain | Principal Architect, Staff FE, Staff BE, Performance, DevOps/SRE, Security, QA/Reliability, UX Cohesion |
 | **Self-healing pipeline** | Audit phase (parallel) → fix phase (parallel) → verify phase | Lint, tests, a11y, security, bundle size |
 | **Health check** | 4 parallel checkers with optional auto-fix | Tests, code quality, CI health, dependency health |
 | **Feature implementation** | Sequential workflow with parallel sub-steps | Read issue → TDD → implement → docs (parallel) → CI verify |
@@ -467,18 +467,28 @@ Beyond individual subagents, teams of parallel agents can tackle complex multi-d
 
 ### Pre-Launch Audit Template
 
-The most common team pattern. Spawn 6 parallel specialists before any production release:
+The most common team pattern. Spawn 8 parallel specialists before any production release:
 
 | Specialist | Focus |
 |------------|-------|
-| **architect** | Dependency health, TypeScript config, circular deps, dead code |
-| **qa-lead** | Full test suite, coverage gaps, graceful degradation |
-| **security-reviewer** | Dependency audit, hardcoded secrets, auth flows, injection vectors |
-| **performance-eng** | Bundle sizes, unused exports, code splitting, Core Web Vitals |
-| **ux-reviewer** | ARIA/a11y, keyboard nav, error states, design consistency |
-| **devops** | Build verification, CI status, env vars, error pages, git state |
+| **Principal Architect** | System-wide architecture, module boundaries, dependency health, circular deps, dead code, typecheck |
+| **Staff Frontend Engineer** | Component structure, state management, routing, client-side perf, hydration, bundle composition |
+| **Staff Backend Engineer** | API design, validation, error handling, retry/idempotency, DB access, transactions, queues, background jobs |
+| **Performance Engineer** | Bundle sizes, unused exports, code splitting, p95/p99 latency risks, cache strategy, hot-path identification |
+| **DevOps / SRE Lead** | Deployment safety, rollback, env config, secrets, migrations, CI/CD, health checks, observability, runbook readiness |
+| **Security Reviewer** | Dependency audit, hardcoded secrets, auth/authz, injection (SQL/XSS/SSRF/CSRF), unsafe defaults, CORS |
+| **QA / Reliability Lead** | Full test suite, coverage of critical flows, graceful degradation, failure modes, retry/idempotency coverage |
+| **Product Designer / UX Lead** | Visual hierarchy, design-system gaps, component reuse, messaging/voice, a11y, error/empty/loading states |
 
-Each produces findings categorized as **blockers** (must fix), **warnings** (should fix), or **recommendations** (nice to have). Results synthesize into a single report with a verdict: READY, CONDITIONAL, or NOT READY.
+Each produces findings carrying a 5-tier severity (launch-blocker / high /
+medium / low / strategic), a 3-tier time horizon (Before launch / After
+launch / Later), an evidence-or-inference label, a stable finding ID, and
+file:line refs. Results synthesize into a 16-section report with a verdict:
+READY, CONDITIONAL, or NOT READY. `/remediate` processes findings in 3
+waves: Wave 1 (Before launch) before release, Wave 2 (After launch)
+post-release, Wave 3 (Later / strategic) filed as backlog issues without
+auto-fixing (requires human judgment — the one documented exception to
+Rule #58's 100% auto-fix coverage).
 
 See [templates/commands/pre-launch.md](../templates/commands/pre-launch.md) for the slash command that triggers this team.
 

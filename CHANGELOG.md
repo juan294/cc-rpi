@@ -6,6 +6,42 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Changed
+
+- **`/pre-launch` command** — deep-audit restructure. Now spawns 8
+  parallel specialist agents (Principal Architect, Staff FE, Staff BE,
+  Performance Engineer, DevOps/SRE Lead, Security Reviewer,
+  QA/Reliability Lead, Product Designer/UX Lead) instead of 6. Produces
+  a 16-section launch-readiness report with Executive Summary, System
+  Architecture Overview, End-to-End Flow Analysis, 8 per-domain findings
+  sections, Prioritized Action Plan, Top-10 ROI ranking,
+  Before/After/Later processing waves, Open Questions, and Final Verdict.
+  Findings carry a 5-tier severity (launch-blocker / high / medium / low
+  / strategic), a 3-tier time horizon (Before launch / After launch /
+  Later), stable finding IDs (e.g., `SE-B1`), and mandatory
+  evidence/inference labeling. Each specialist opens with a
+  system-map-first domain model. Critic-mode mindset: systemic findings
+  preferred over isolated nitpicks.
+- **`/remediate` command** — updated to parse the new 16-section report
+  format and process findings in 3 sequential waves. Wave 1 (Before
+  launch — launch-blockers + high severity) runs first with full TDD +
+  merge + CI verification. Wave 2 (After launch — medium severity) runs
+  next with STOP gate for user deferral. Wave 3 (Later / strategic —
+  low + strategic severity) files GitHub issues but does NOT spawn
+  worktree fix agents — these require human architectural judgment and
+  remain in the backlog. Rule #58's 100% coverage is preserved: every
+  finding gets an issue; Wave 3 is the one documented exception to
+  auto-fix. Issue labels now include `wave-1-before-launch` /
+  `wave-2-after-launch` / `wave-3-later` in addition to domain and
+  severity labels.
+
+### Migration note for blueprint consumers
+
+Run `/update` in any project using cc-rpi to pull the new `/pre-launch`
+and `/remediate` command files. Existing pre-launch reports from the old
+format are NOT backward-compatible with the new `/remediate` parser —
+regenerate with the new `/pre-launch` before running `/remediate`.
+
 ## [1.14.5] - 2026-04-07
 
 ### Added
