@@ -159,7 +159,7 @@ Skills: `[skill:name]` points to `.claude/skills/name/` for full examples.
 
 49. **Don't fabricate filesystem paths** `[universal]` -- the agent invents plausible names (`Projects`, `repos`). Use the working directory or discover with `ls`/Glob.
 
-58. **Fix everything, always** `[universal]` -- categorize by severity, but fix 100%. With AI agents, fix cost is near-zero.
+58. **Fix everything, always** `[universal]` -- categorize by severity, but fix 100%. With AI agents, fix cost is near-zero. Exception: `/remediate` Wave 3 (Later/strategic) items get issues filed but no fix agents -- requires human architectural judgment.
 
 59. **Use `.claude/rules/` with `paths` frontmatter for conditional rules** `[frequent]` -- domain rules load only when Claude works with matching files (e.g., deployment rules on `.github/**`, test rules on `**/*.test.*`). Replaces `<important if>` blocks with infrastructure-level conditional loading.
 

@@ -14,6 +14,9 @@ If `$ARGUMENTS` is provided, use it as the report path or wave selector
 at `docs/agents/pre-launch-report.md`. If no report exists, suggest
 running `/pre-launch` first and **STOP.**
 
+If `wave=N` is provided, skip the Step 1 STOP gate — the plan was
+already approved in a prior run. Begin directly at Wave N processing.
+
 ## Step 1: Parse & Plan
 
 Gather context before making any changes.
@@ -33,9 +36,11 @@ Gather context before making any changes.
 
    - Findings are the `#### <Finding-ID> <Title>` blocks in §4-§11.
    - Finding ID regex: `(AR|FE|BE|PE|DO|SE|QA|UX)-(B|H|M|L|S)[0-9]+`
-   - Each finding has structured fields: Severity, Time horizon,
-     Evidence type, Files, What's happening, Why it matters,
-     Recommendation, Expected impact, Effort estimate.
+   - Each finding has structured fields (bold format:
+     `**Severity:**`, `**Time horizon:**`, `**Evidence type:**`,
+     `**Files:**`, `**What's happening:**`, `**Why it matters:**`,
+     `**Recommendation:**`, `**Expected impact:**`,
+     `**Effort estimate:**`).
    - Parse every finding — never drop one.
 
 3. **Group related findings into work units:**
@@ -46,10 +51,10 @@ Gather context before making any changes.
    2. Within each horizon: by file ownership (conflict avoidance).
    3. Within each file group: by severity descending.
 
-   Wave 3 exception: strategic-severity findings in the
-   "Later / strategic" wave do NOT get grouped into work units. They
-   use a "file-only" path — create issue, do not spawn worktree agent.
-   This is the only exception to Rule #58: strategic items require
+   Wave 3 exception: findings in the "Later / strategic" wave (low and
+   strategic severity) do NOT get grouped into work units. They use a
+   "file-only" path — create issue, do not spawn worktree agent. This
+   is the only exception to Rule #58: low and strategic items require
    human architectural judgment that AI agents cannot reliably provide.
    This exception is documented explicitly here and in the pre-launch
    spec.
@@ -108,6 +113,9 @@ After user approval:
 
    Check that labels exist before using them. If they don't, create
    them or omit.
+
+   After all issues are created: confirm Wave 3 issue count matches
+   the Wave 3 row count in the Step 1 plan table.
 
 2. **Spawn worktree agents for Wave 1** (parallel, via Agent tool with
    `isolation: "worktree"`, `model: "sonnet"`).
@@ -209,10 +217,12 @@ later)?"
 
 If user proceeds:
 
-1. **Spawn worktree agents for Wave 2** (same pattern as Wave 1).
-2. **Complete push-PR-merge cycle for Wave 2** (same steps as Wave 1).
-3. **Run `/simplify`** on the full integrated Wave 2 result.
-4. **Run Wave 2 final verification** (same commands as Wave 1).
+1. **Spawn worktree agents for Wave 2** (same pattern as Wave 1
+   step 2).
+2. **Monitor Wave 2 agent progress** (same pattern as Wave 1 step 3).
+3. **Complete push-PR-merge cycle for Wave 2** (same steps as Wave 1).
+4. **Run `/simplify`** on the full integrated Wave 2 result.
+5. **Run Wave 2 final verification** (same commands as Wave 1).
 
 **STOP.** Wave 2 complete. Confirm Wave 3 issues are filed in the
 backlog. Document any deferred waves with timeline.
@@ -240,16 +250,18 @@ Remove worktrees per wave before starting the next wave.
 
 **After Wave 2:**
 
-1. Repeat the same cleanup for Wave 2 worktrees and branches.
-
-2. **Verify clean state:**
-
-   ```bash
-   git worktree list   # Should show only main worktree
-   git branch          # Should show only the integration branch
-   ```
+Repeat the same cleanup for Wave 2 worktrees and branches.
 
 Wave 3 has no worktrees or branches to clean up.
+
+**After all waves:**
+
+Verify clean state:
+
+```bash
+git worktree list   # Should show only main worktree
+git branch          # Should show only the integration branch
+```
 
 ## Step 5: Report
 
@@ -298,9 +310,9 @@ Present the report summary to the user.
 ## Rules
 
 - **100% coverage.** Process EVERY finding — all 5 severity tiers.
-  Wave 3 strategic items get ISSUES but no fix agents (requires human
-  architectural judgment — the one documented exception to Rule #58's
-  100% auto-fix coverage). Every finding still gets an issue.
+  Wave 3 low and strategic items get ISSUES but no fix agents (requires
+  human architectural judgment — the one documented exception to Rule
+  #58's 100% auto-fix coverage). Every finding still gets an issue.
 - **Wave ordering.** Process Waves in order: 1 → 2 → 3. Never
   interleave waves.
 - **Per-wave verification.** Each wave goes through the full merge →

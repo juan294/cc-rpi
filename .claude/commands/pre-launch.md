@@ -238,14 +238,20 @@ with this structure:
 
 ## Step 4: After the Audit
 
-Run `/remediate` to process findings in 3 waves:
+The following describes what `/remediate` will do — do not execute
+during the audit.
 
-- **Wave 1 (Before launch)** — launch-blockers + high severity `Before
-  launch` items. Must pass before release.
-- **Wave 2 (After launch)** — medium severity + any `After launch` items.
-  Post-release sprint; user may defer to a separate `/remediate` run.
-- **Wave 3 (Later / strategic)** — low + strategic items. GitHub issues
-  filed; no worktree fix agents. Requires human architectural judgment.
+Run `/remediate` to process findings in 3 waves, driven by Section 14:
+
+- **Wave 1 (Before launch)** — all findings marked `Before launch` in
+  Section 14. Typically launch-blockers + high severity. Must pass
+  before release.
+- **Wave 2 (After launch)** — all findings marked `After launch` in
+  Section 14. Typically medium severity. Post-release sprint; user may
+  defer to a separate `/remediate` run.
+- **Wave 3 (Later / strategic)** — all findings marked `Later` in
+  Section 14. Typically low + strategic. GitHub issues filed; no
+  worktree fix agents. Requires human architectural judgment.
 
 Rule #58 100% coverage preserved: every finding gets a GitHub issue.
 Wave 3 items are filed but not auto-fixed — the one documented exception
@@ -255,10 +261,8 @@ to Rule #58.
 
 ### Critic Mode
 
-Critic mode. Assume public launch under load and scrutiny. Do not give
-benefit of the doubt. Prefer systemic findings over isolated nitpicks —
-one systemic finding covering 5 instances is better than five separate
-nitpick entries of the same issue.
+Assume public launch under load and scrutiny. Do not give benefit of the
+doubt.
 
 ### Execution
 
