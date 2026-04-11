@@ -8,7 +8,7 @@ This repository contains methodology documentation, operational patterns, and te
 
 | Version | Supported |
 |---------|-----------|
-| 0.1.x   | Yes       |
+| 1.x     | Yes       |
 
 ## Reporting a Vulnerability
 

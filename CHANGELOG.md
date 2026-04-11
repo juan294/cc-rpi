@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-04-11
+
 ### Changed
 
 - **`/pre-launch` command** — deep-audit restructure. Now spawns 8
@@ -34,6 +36,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
   auto-fix. Issue labels now include `wave-1-before-launch` /
   `wave-2-after-launch` / `wave-3-later` in addition to domain and
   severity labels.
+
+### Fixed
+
+- **`SECURITY.md`** — supported versions table updated from `0.1.x` to
+  `1.x` (placeholder was never updated from initial scaffold).
 
 ### Migration note for blueprint consumers
 
