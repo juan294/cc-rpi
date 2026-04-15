@@ -2,7 +2,7 @@
 
 ## One-liner
 
-Blueprint repository for Claude Code projects. Contains the RPI methodology, 63 known agent error patterns, 73 operational rules, and templates for CLAUDE.md, slash commands, skills, rules, and project setup.
+Blueprint repository for Claude Code projects, with Codex compatibility via `AGENTS.md`. Contains the RPI methodology, 63 known agent error patterns, 73 operational rules, and templates for CLAUDE.md, AGENTS.md, slash commands, skills, rules, and project setup.
 
 ## Stack
 
@@ -18,9 +18,10 @@ The agent should:
 2. Read `methodology/README.md` -- understand the RPI approach (follow reading order for depth)
 3. Use `templates/setup-checklist.md` to set up the new project
 4. Adapt `templates/CLAUDE.md.template` for the new project's CLAUDE.md
-5. Copy `templates/commands/` into the new project's `.claude/commands/`
-6. Copy relevant `templates/skills/` into `.claude/skills/`
-7. Copy relevant `templates/rules/` into `.claude/rules/`
+5. Adapt `templates/AGENTS.md.template` for the new project's AGENTS.md
+6. Copy `templates/commands/` into the new project's `.claude/commands/`
+7. Copy relevant `templates/skills/` into `.claude/skills/`
+8. Copy relevant `templates/rules/` into `.claude/rules/`
 
 The error-patterns skill provides condensed error reference on demand. The full catalog (`patterns/agent-errors.md`) is available but not required for onboarding.
 

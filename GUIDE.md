@@ -1,10 +1,15 @@
 # The cc-rpi Guide
 
-A practical guide to using the cc-rpi blueprint for AI-assisted software development with Claude Code.
+A practical guide to using the cc-rpi blueprint for AI-assisted software development with Claude Code, with Codex compatibility via `AGENTS.md`.
 
 ## What Is This?
 
 cc-rpi is a blueprint repository. You clone it once, and every time you start a new project, you point Claude Code at it and say "set this project up." The agent reads the blueprint, learns the rules, and configures your new project with battle-tested practices — slash commands, error prevention rules, CI setup, the works.
+
+That setup now includes an `AGENTS.md` compatibility layer so the same
+project can be operated from Codex / GPT-5.x without changing the
+underlying methodology. Claude Code still handles bootstrap and adopt,
+but the resulting project is portable across agent harnesses.
 
 At its core, cc-rpi teaches Claude Code to work the way experienced developers have found works best: research first, plan second, implement third. This sounds obvious, but without explicit structure, AI coding agents tend to skip straight to writing code — and that's where things go wrong.
 
@@ -90,6 +95,10 @@ The agent reads the blueprint, then audits your project with three parallel agen
 
 The key difference: `/bootstrap` creates from templates. `/adopt` respects what exists and merges in what's missing.
 
+Both commands now install `AGENTS.md` by default, so after setup the
+same `/research`, `/plan`, `/implement`, `/pre-launch`, `/update-docs`,
+and `/release` workflows can be driven from Codex too.
+
 ### Step 3: Start Working
 
 Once your project is set up (by either command), your daily workflow uses four slash commands:
@@ -103,15 +112,20 @@ Once your project is set up (by either command), your daily workflow uses four s
 
 That's it. Those four commands are 90% of your interaction with the methodology.
 
+If you switch to Codex, the workflow names stay the same. `AGENTS.md`
+teaches Codex to interpret `.claude/commands/`, `.claude/rules/`, and
+`.claude/skills/` as the source of truth, so the methodology stays
+stable while the harness changes.
+
 ## Command Cheat Sheet
 
 ### Setup Commands
 
 | Command | What It Does | When to Use |
 |---------|-------------|-------------|
-| `/bootstrap` | Reads the cc-rpi blueprint, asks about your project, creates CLAUDE.md, settings, slash commands, and full directory structure. | New projects. Run once at the start. |
-| `/adopt` | Reads the blueprint, audits the existing project with parallel agents, presents a gap report, then migrates what you approve. | Existing projects you want to bring up to standard. |
-| `/update` | Pulls latest cc-rpi, diffs changes since last sync, updates commands and blueprint-managed CLAUDE.md sections, adds new settings. | Manually or via nightly scheduled agent. |
+| `/bootstrap` | Reads the cc-rpi blueprint, asks about your project, creates CLAUDE.md, AGENTS.md, settings, slash commands, and full directory structure. | New projects. Run once at the start. |
+| `/adopt` | Reads the blueprint, audits the existing project with parallel agents, presents a gap report, then migrates what you approve, including the Codex compatibility layer. | Existing projects you want to bring up to standard. |
+| `/update` | Pulls latest cc-rpi, diffs changes since last sync, updates commands, AGENTS.md, blueprint-managed CLAUDE.md sections, and settings. | Manually or via nightly scheduled agent. |
 | `/detach` | Inventories all cc-rpi artifacts, previews what will be removed, asks for confirmation, then cleanly removes commands, hooks, CLAUDE.md sections, and sync metadata. Preserves project config and work products. | When you want to stop using the RPI methodology and remove all blueprint artifacts. |
 
 ### The Core Four

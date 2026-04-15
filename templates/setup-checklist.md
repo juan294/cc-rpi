@@ -18,6 +18,11 @@ Use this when setting up a new project to follow cc-rpi best practices.
 - [ ] Create `CLAUDE.md` at project root (adapt from `CLAUDE.md.template`)
   - Manually craft every line — don't auto-generate with `/init`
   - Keep it lean: only universally applicable instructions
+- [ ] Create `AGENTS.md` at project root (adapt from `AGENTS.md.template`)
+  - This is the Codex compatibility layer for cc-rpi projects
+  - Point Codex at `CLAUDE.md`, `.claude/commands/`, `.claude/rules/`,
+    and `.claude/skills/` as the source of truth
+  - Keep it focused on workflow translation, not duplicate project docs
 - [ ] Create `.claude/commands/` and copy slash commands from `templates/commands/`
 - [ ] Create `.claude/skills/` for domain-specific knowledge (loaded on demand):
   - Each skill is a **folder** with a `SKILL.md` entry point, plus optional `references/`, `scripts/`, `examples/`, `assets/` subdirectories
@@ -58,6 +63,11 @@ Two file pairs follow the same split pattern:
 
 **`settings.local.json`** — Personal permission overrides (e.g., broader `Bash(*)` for your machine), local env vars. Gitignored.
 
+**`AGENTS.md`** — Codex compatibility bridge. Teaches Codex how to
+interpret the existing cc-rpi layout (`CLAUDE.md`, `.claude/commands/`,
+`.claude/rules/`, `.claude/skills/`) without changing the methodology.
+Committed.
+
 ## CLAUDE.md Configuration
 
 ### Authoring Principles
@@ -83,6 +93,12 @@ Two file pairs follow the same split pattern:
 - [ ] Document deployment pipeline (which branch deploys where)
 - [ ] Document git workflow (default branch, production branch)
 - [ ] Add project-specific context (key routes, data types, code ownership)
+- [ ] Keep `AGENTS.md` aligned with the project's workflow conventions:
+  - Slash-style commands dispatch to `.claude/commands/*.md`
+  - `.claude/rules/` remains the rule source of truth
+  - `.claude/skills/` remains the skill source of truth
+  - Claude-native commands (`/simplify`, `/batch`, `/worktree`) are
+    translated to Codex-equivalent behavior
 
 ## Slash Commands
 
@@ -96,6 +112,10 @@ Copy and adapt from `templates/commands/`:
 - [ ] `/triage` — Morning agent report processing and action
 
 Adjust file paths in each command to match your project's docs directory.
+
+For Codex compatibility, `AGENTS.md` should instruct Codex to treat each
+file in `.claude/commands/` as the workflow spec when the user invokes
+the matching slash-style command.
 
 **Slash commands vs skills:** Commands (`.claude/commands/`) are user-invoked workflows. Skills (`.claude/skills/`) are knowledge + workflows that Claude can also auto-detect. Use commands for RPI phases; use skills for domain conventions and reusable task patterns.
 
@@ -193,9 +213,10 @@ The sync uses `.claude/cc-rpi-sync.json` to track the last synced commit. On eac
 1. Pulls the latest cc-rpi
 2. Uses `git diff` to identify what changed since last sync (efficient — no full re-read)
 3. Updates slash commands (direct replacement from templates)
-4. Updates blueprint-managed CLAUDE.md sections (smart merge — preserves project-specific content)
-5. Adds new settings.json permissions (additive — never removes project-specific entries)
-6. Commits changes with `chore: sync with cc-rpi blueprint <version>`
+4. Updates the Codex compatibility layer in `AGENTS.md`
+5. Updates blueprint-managed CLAUDE.md sections (smart merge — preserves project-specific content)
+6. Adds new settings.json permissions (additive — never removes project-specific entries)
+7. Commits changes with `chore: sync with cc-rpi blueprint <version>`
 
 The shell script reads update instructions from cc-rpi at runtime, so when cc-rpi improves the `/update` command, all projects automatically get the new logic.
 
@@ -245,6 +266,11 @@ The shell script reads update instructions from cc-rpi at runtime, so when cc-rp
 - [ ] For large features, have Claude interview you before planning (AskUserQuestion)
 - [ ] Follow TDD: write failing tests before implementation code
 - [ ] Monitor CI after every push — never push and forget
+- [ ] Keep the methodology stable across agents:
+  - Claude Code uses `.claude/commands/`, `.claude/rules/`,
+    `.claude/skills/`
+  - Codex uses `AGENTS.md` to interpret those same artifacts
+  - The workflow stays the same; only the harness translation changes
 
 ## Project-Type Adaptation
 

@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Added
+
+- **Codex compatibility layer** -- new `templates/AGENTS.md.template`
+  teaches Codex / GPT-5.x how to interpret the existing cc-rpi project
+  structure: `CLAUDE.md`, `.claude/commands/`, `.claude/rules/`, and
+  `.claude/skills/`. This keeps the methodology stable across Claude
+  Code and Codex without changing the workflow itself.
+- **Repo-local `AGENTS.md`** -- cc-rpi itself now includes a Codex
+  compatibility file so the blueprint can be operated directly in Codex.
+
+### Changed
+
+- **`/bootstrap` and `/adopt`** -- now create `AGENTS.md` by default so
+  newly bootstrapped or adopted projects are Codex compatible unless the
+  user explicitly opts out.
+- **`/update`** -- now syncs the Codex compatibility layer via
+  `templates/AGENTS.md.template` and tracks it in `.claude/cc-rpi-sync.json`.
+- **`/detach`** -- now inventories `AGENTS.md` as a blueprint-managed
+  artifact and warns before deleting customized Codex compatibility
+  files.
+- **Setup and onboarding docs** -- README, GUIDE, CLAUDE.md, and
+  `templates/setup-checklist.md` now document the cross-harness pattern:
+  Claude Code owns `.claude/*`; Codex uses `AGENTS.md` to interpret the
+  same methodology.
+
 ## [1.15.0] - 2026-04-11
 
 ### Changed
