@@ -31,6 +31,12 @@ Bootstrapped and adopted projects now also get an `AGENTS.md`
 compatibility layer so the same methodology can be operated from Codex /
 GPT-5.x without changing the workflow.
 
+If you also use Codex, the blueprint ships a Codex-only
+`codex-simplify` skill at `cc-rpi/.codex/skills/codex-simplify/`.
+Copy it into `~/.codex/skills/codex-simplify/` if you want a reusable
+equivalent of Claude Code's native `/simplify` without creating a
+project skill named `simplify`.
+
 ## Guide
 
 New here? Read **[GUIDE.md](GUIDE.md)** — a human-readable walkthrough of the philosophy, the workflow, and every command. It covers everything you need to know without diving into every file. Also works great as source material for NotebookLM podcasts or articles.
@@ -72,6 +78,9 @@ Ready-to-use starting points for new projects:
 
 - **CLAUDE.md template** — Slim project configuration (~70 lines) with universal instructions
 - **AGENTS.md template** — Codex compatibility layer that teaches Codex how to interpret the cc-rpi `.claude/` layout
+- **Codex-only skills** — `.codex/skills/` holds personal Codex helpers
+  that intentionally stay outside `.claude/skills/`; currently includes
+  `codex-simplify`
 - **Rule templates** — `.claude/rules/` files with conditional loading (deployment, Supabase, testing) and universal rules (RPI details, push accountability)
 - **settings.json template** — `.claude/settings.json` with Agent Teams, hooks, and permissions
 - **Setup checklist** — Step-by-step guide including rules, skills, hooks, CI, and scheduled agents

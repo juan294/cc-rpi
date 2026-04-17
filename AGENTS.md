@@ -14,6 +14,8 @@ Source of truth for this repo:
 - `templates/rules/*.md` -- canonical exported rule templates
 - `.claude/skills/*/SKILL.md` and `templates/skills/*/SKILL.md` --
   skill content
+- `.codex/skills/*/SKILL.md` -- Codex-only skills that intentionally
+  stay outside `.claude/skills/`
 
 ## Command Dispatch
 
@@ -29,8 +31,9 @@ When the user invokes a slash-style command:
 
 ## Claude-to-Codex Translation
 
-- `/simplify` -- run a dedicated post-implementation quality pass for
-  reuse, cleanliness, and efficiency
+- `/simplify` -- prefer `codex-simplify` when available; otherwise run a
+  dedicated post-implementation quality pass for reuse, cleanliness, and
+  efficiency
 - `/batch` -- use parallel agents and isolated worktrees for
   `[batch-eligible]` work
 - `/worktree` or `EnterWorktree` -- implement in an isolated worktree
@@ -48,6 +51,8 @@ When the user invokes a slash-style command:
 - Read `.claude/rules/contributing.md` when changing docs, templates, or
   patterns
 - Load `.claude/skills/drawio/SKILL.md` when diagram work is requested
+- Load `.codex/skills/codex-simplify/SKILL.md` when a Codex session
+  needs a `/simplify`-style cleanup pass
 
 ## Repo-Specific Notes
 
@@ -55,6 +60,8 @@ When the user invokes a slash-style command:
 - `templates/` is the exported blueprint; keep it canonical
 - `.claude/` is the repo's own self-applied installation of the
   blueprint
+- `.codex/skills/` holds blueprint-shipped Codex-only skills; sync them
+  into `~/.codex/skills/` for local Codex discovery
 - Research and plan docs in `docs/research/` and `docs/plans/` are
   committed history; `docs/agents/` is operational output and remains
   local-only

@@ -66,6 +66,18 @@ cp cc-rpi/templates/commands/detach.md ~/.claude/commands/detach.md
 
 Edit all four files to set the correct path to where you cloned cc-rpi on your machine.
 
+If you also use Codex, install the bundled Codex-only simplify skill
+into your personal Codex skill directory:
+
+```bash
+mkdir -p ~/.codex/skills
+cp -R cc-rpi/.codex/skills/codex-simplify ~/.codex/skills/
+```
+
+This is intentionally a personal Codex skill, not a project
+`.claude/skills/simplify/` folder. Claude Code keeps its native
+`/simplify`; Codex uses `codex-simplify`.
+
 Now you have four commands available everywhere:
 
 | Command | Use Case |
@@ -116,6 +128,10 @@ If you switch to Codex, the workflow names stay the same. `AGENTS.md`
 teaches Codex to interpret `.claude/commands/`, `.claude/rules/`, and
 `.claude/skills/` as the source of truth, so the methodology stays
 stable while the harness changes.
+
+For the `/simplify` step specifically, keep Claude Code on the native
+command and invoke `codex-simplify` from your personal Codex skill
+install when you want the same cleanup pass in Codex.
 
 ## Command Cheat Sheet
 
@@ -168,7 +184,7 @@ The recommended pre-release sequence:
 
 | Command | What It Does | When to Use |
 |---------|-------------|-------------|
-| `/simplify` | Spawns 3 parallel agents (code reuse, code quality, efficiency) to review changed code and apply fixes. Anthropic-maintained. | After reviewer approval in `/implement`. After `/pre-launch` audit. Anytime after significant code changes. |
+| `/simplify` | Spawns 3 parallel agents (code reuse, code quality, efficiency) to review changed code and apply fixes. Anthropic-maintained. In Codex, use `codex-simplify` instead of defining a project skill named `simplify`. | After reviewer approval in `/implement`. After `/pre-launch` audit. Anytime after significant code changes. |
 | `/batch [instruction]` | Decomposes work into 5-30 independent units, executes each in a parallel git worktree, opens a PR per unit. | For `[batch-eligible]` plan phases. Migrations, bulk refactors, multi-issue sprints. |
 | `/clear` | Resets the conversation context. | Between unrelated tasks. The most underused command. |
 | `/compact [focus]` | Summarizes the current conversation with a focus area. | Same task, but context is getting heavy. |

@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Added
+
+- **Codex-only `codex-simplify` skill** -- new
+  `.codex/skills/codex-simplify/SKILL.md` provides a portable
+  Codex-side equivalent of Claude Code's native `/simplify` without
+  introducing a conflicting project skill named `simplify`.
+
+### Changed
+
+- **Codex compatibility docs** -- `AGENTS.md`,
+  `templates/AGENTS.md.template`, `templates/setup-checklist.md`,
+  `README.md`, `GUIDE.md`, and `CLAUDE.md` now document the
+  non-conflicting `codex-simplify` pattern and the install path under
+  `~/.codex/skills/`.
+
 ## [1.16.0] - 2026-04-15
 
 ### Added

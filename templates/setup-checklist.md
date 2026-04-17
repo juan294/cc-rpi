@@ -22,6 +22,8 @@ Use this when setting up a new project to follow cc-rpi best practices.
   - This is the Codex compatibility layer for cc-rpi projects
   - Point Codex at `CLAUDE.md`, `.claude/commands/`, `.claude/rules/`,
     and `.claude/skills/` as the source of truth
+  - Keep Codex-only helpers that would collide with Claude-native
+    commands out of `.claude/skills/`
   - Keep it focused on workflow translation, not duplicate project docs
 - [ ] Create `.claude/commands/` and copy slash commands from `templates/commands/`
 - [ ] Create `.claude/skills/` for domain-specific knowledge (loaded on demand):
@@ -99,6 +101,8 @@ Committed.
   - `.claude/skills/` remains the skill source of truth
   - Claude-native commands (`/simplify`, `/batch`, `/worktree`) are
     translated to Codex-equivalent behavior
+  - Codex-only helpers that would shadow native Claude commands stay in
+    `~/.codex/skills/`, not `.claude/skills/`
 
 ## Slash Commands
 
@@ -129,6 +133,16 @@ the matching slash-style command.
   - Supabase projects: also `supabase/`
 - [ ] Review installed skills -- remove any that don't apply to your stack
 - [ ] Add project-specific skills as needed (see `methodology/agent-design.md` for the skill taxonomy)
+
+### Codex-Only Skill Setup (Optional)
+
+- [ ] Do not create a project skill literally named `simplify` in a
+  Claude-compatible repo
+- [ ] If Codex users want a `/simplify` equivalent, copy
+  `cc-rpi/.codex/skills/codex-simplify/` to
+  `~/.codex/skills/codex-simplify/`
+- [ ] In `AGENTS.md`, state explicitly that Claude keeps native
+  `/simplify` while Codex users invoke `codex-simplify`
 
 ## Rules Setup
 

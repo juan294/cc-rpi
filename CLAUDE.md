@@ -2,7 +2,11 @@
 
 ## One-liner
 
-Blueprint repository for Claude Code projects, with Codex compatibility via `AGENTS.md`. Contains the RPI methodology, 63 known agent error patterns, 73 operational rules, and templates for CLAUDE.md, AGENTS.md, slash commands, skills, rules, and project setup.
+Blueprint repository for Claude Code projects, with Codex compatibility
+via `AGENTS.md` plus Codex-only helper skills in `.codex/skills/`.
+Contains the RPI methodology, 63 known agent error patterns, 73
+operational rules, and templates for CLAUDE.md, AGENTS.md, slash
+commands, skills, rules, and project setup.
 
 ## Stack
 
@@ -22,6 +26,8 @@ The agent should:
 6. Copy `templates/commands/` into the new project's `.claude/commands/`
 7. Copy relevant `templates/skills/` into `.claude/skills/`
 8. Copy relevant `templates/rules/` into `.claude/rules/`
+9. If Codex-only helpers are needed, sync them from `.codex/skills/`
+   into `~/.codex/skills/`
 
 The error-patterns skill provides condensed error reference on demand. The full catalog (`patterns/agent-errors.md`) is available but not required for onboarding.
 
@@ -83,6 +89,7 @@ Go directly to these paths -- never search the codebase for them.
 | Operational rules | `patterns/quick-reference.md` | 73 rules with scope/stack tags |
 | Deployment safety | `patterns/deployment-safety.md` | Resource efficiency rules |
 | Skill templates | `templates/skills/` | 9 domain skills |
+| Codex-only skills | `.codex/skills/` | Personal Codex helpers such as `codex-simplify` |
 | Rule templates | `templates/rules/` | 5 conditional/universal rules |
 | Active rules | `.claude/rules/` | cc-rpi's own rules |
 | Methodology | `methodology/` | 11 files, order in README.md |
