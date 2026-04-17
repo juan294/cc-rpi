@@ -37,6 +37,11 @@ Copy it into `~/.codex/skills/codex-simplify/` if you want a reusable
 equivalent of Claude Code's native `/simplify` without creating a
 project skill named `simplify`.
 
+The workflow now exposes a simple routing model before command choice:
+`quick` for orientation, `standard` for normal RPI delivery, `deep` for
+high-ambiguity investigation or audits, and `batch` for explicitly
+independent planned work.
+
 ## Guide
 
 New here? Read **[GUIDE.md](GUIDE.md)** — a human-readable walkthrough of the philosophy, the workflow, and every command. It covers everything you need to know without diving into every file. Also works great as source material for NotebookLM podcasts or articles.
@@ -84,6 +89,9 @@ Ready-to-use starting points for new projects:
 - **Rule templates** — `.claude/rules/` files with conditional loading (deployment, Supabase, testing) and universal rules (RPI details, push accountability)
 - **settings.json template** — `.claude/settings.json` with Agent Teams, hooks, and permissions
 - **Setup checklist** — Step-by-step guide including rules, skills, hooks, CI, and scheduled agents
+- **Bundle manifests** — thin `INSTALL.md` / `VERIFY.md` files for
+  representative reusable bundles such as `templates/commands/` and
+  `templates/scripts/agents/`
 - **Slash commands** — `/bootstrap`, `/adopt`, `/update`, `/research`, `/plan`, `/implement`, `/validate`, `/describe-pr`, `/pre-launch`, `/remediate`, `/triage`, `/status`, `/fix-ci` — plus Anthropic-native `/simplify` and `/batch`
 - **Scheduled agent scripts** — Nightly blueprint sync and multi-project morning triage with launchd/cron templates
 

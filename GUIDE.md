@@ -107,9 +107,24 @@ The agent reads the blueprint, then audits your project with three parallel agen
 
 The key difference: `/bootstrap` creates from templates. `/adopt` respects what exists and merges in what's missing.
 
+For reusable bundles that carry their own moving parts, the blueprint
+now colocates thin local manifests next to the bundle itself:
+
+- `templates/commands/INSTALL.md` and `templates/commands/VERIFY.md`
+- `templates/scripts/agents/INSTALL.md` and
+  `templates/scripts/agents/VERIFY.md`
+
+The setup checklist still acts as the top-level walkthrough; the bundle
+manifests hold local prerequisites and verification steps.
+
 Both commands now install `AGENTS.md` by default, so after setup the
 same `/research`, `/plan`, `/implement`, `/pre-launch`, `/update-docs`,
 and `/release` workflows can be driven from Codex too.
+
+During setup, adapt the branch model to the project instead of copying a
+single default blindly. Some projects use an integration-branch ->
+production flow such as `develop` -> `main`; others release directly
+from `main`.
 
 ### Step 3: Start Working
 
@@ -123,6 +138,16 @@ Once your project is set up (by either command), your daily workflow uses four s
 ```
 
 That's it. Those four commands are 90% of your interaction with the methodology.
+
+Before choosing among them, route the task:
+
+- `quick` — small, low-risk orientation work; usually `/status`
+- `standard` — normal delivery through RPI; usually `/plan`,
+  `/implement`, `/validate`
+- `deep` — research-heavy or audit-heavy work with unclear blast radius;
+  usually `/research` or `/pre-launch`
+- `batch` — only when planning already proved the remaining phases are
+  independent; triggered from `/implement` via `/batch`
 
 If you switch to Codex, the workflow names stay the same. `AGENTS.md`
 teaches Codex to interpret `.claude/commands/`, `.claude/rules/`, and
@@ -152,6 +177,19 @@ install when you want the same cleanup pass in Codex.
 | `/plan [feature]` | Creates a phased implementation plan with pseudocode, success criteria, and test requirements. Saves to `docs/plans/`. | After research is reviewed and approved. |
 | `/implement [plan path]` | Executes the plan one phase at a time. Reviewer checks plan compliance, then `/simplify` handles code quality. Stops after each phase. | After the plan is reviewed and approved. |
 | `/validate [plan path]` | Runs every automated check from the plan, verifies all phases are complete, produces a validation report. Recommends `/simplify` for quality findings. | After implementation is done. |
+
+### Routing Modes
+
+| Mode | Pick it when | Command mapping |
+|------|--------------|-----------------|
+| `quick` | Ambiguity is low, blast radius is small, and the next step is easy to reverse. | `/status` |
+| `standard` | The task already fits normal RPI execution with review gates. | `/plan`, `/implement`, `/validate` |
+| `deep` | Ambiguity is high, blast radius is unclear, or verification is hard without more investigation. | `/research`, `/pre-launch` |
+| `batch` | Planning has already marked the remaining phases `[batch-eligible]`. | `/batch` from `/implement` |
+
+The intake rule is simple: if ambiguity, blast radius, irreversibility,
+or verification difficulty increases, route deeper before you write
+code.
 
 ### Supporting Commands
 
@@ -216,10 +254,10 @@ You type `/plan add rate limiting to the login endpoint` and the agent:
 2. Explores the codebase for additional context.
 3. Asks you focused questions (only things the code can't answer).
 4. Proposes design options with trade-offs.
-5. Writes a phased implementation plan with pseudocode, file-by-file changes, and success criteria.
+5. Writes a phased implementation plan with pseudocode, file-by-file changes, a compact verifier section for each phase, and success criteria.
 6. Saves it to `docs/plans/` with separate files for each phase.
 
-Plans use a compact pseudocode notation so you can see exactly what changes in each file without reading full code blocks. Each phase has automated success criteria — tests that prove the phase works.
+Plans use a compact pseudocode notation so you can see exactly what changes in each file without reading full code blocks. Each phase also carries a verifier section that states target behavior, checks, setup assumptions, edge cases, and any allowed manual exceptions. The success criteria then turn that contract into concrete commands and review gates.
 
 **Your job:** Read the plan carefully. This is where your time has the highest leverage. A bad plan leads to hundreds of bad lines of code. Push back, ask questions, iterate until the plan is right.
 
@@ -246,8 +284,9 @@ You type `/validate docs/plans/2026-02-21-rate-limiting.md` and the agent:
 
 1. Re-reads the plan.
 2. Runs every automated verification command.
-3. Checks that all marked-complete items are actually done.
-4. Thinks about edge cases.
+3. Checks each phase against its verifier section.
+4. Checks that all marked-complete items are actually done.
+5. Thinks about edge cases.
 5. Produces a validation report.
 
 **Your job:** Review the report. If there are manual testing items (there should be very few), do them. Then you're done.
@@ -371,7 +410,11 @@ your-project/
 
 **Invest in your CLAUDE.md.** This file is the highest-leverage configuration point in the entire system. Every session reads it. Craft every line manually. If removing a line wouldn't cause mistakes, remove it.
 
-**Log your errors and successes.** When something goes wrong, write it down. When something goes perfectly, write it down. After 3 instances of the same pattern, promote it to a rule. This is how the blueprint itself was built.
+**Log your errors and successes.** When something goes wrong, write it
+down. When something goes perfectly, write it down. After 3 instances of
+the same pattern, promote it into the smallest durable asset that fits:
+rule, hook, scripted verifier, or golden-case fixture. This is how the
+blueprint itself was built.
 
 ## Advanced Setup
 

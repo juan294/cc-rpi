@@ -14,8 +14,11 @@ Read these files from cc-rpi IN ORDER. Do not skip any.
 The error-patterns skill provides condensed error reference on demand. The full catalog (`patterns/agent-errors.md`) is available but not required for onboarding.
 3. `templates/setup-checklist.md` — Understand the target state for a fully set up project.
 4. `templates/CLAUDE.md.template` — Know what a well-configured CLAUDE.md looks like.
-5. `templates/AGENTS.md.template` — Know what the Codex compatibility layer should contain.
+5. `templates/AGENTS.md.template` — Know what the Codex/OpenCode compatibility layer should contain.
 6. `templates/settings.json.template` — Know what settings.json should contain.
+7. `templates/opencode.json.template` — Know how OpenCode should load instructions.
+8. `templates/commands/INSTALL.md` and `templates/commands/VERIFY.md` — Know the local command-bundle install and verification expectations.
+9. `templates/scripts/agents/INSTALL.md` and `templates/scripts/agents/VERIFY.md` — Know the local scheduled-agent install and verification expectations when those bundles are adopted.
 
 ## Phase 2: Audit This Project
 
@@ -24,8 +27,10 @@ Now investigate THIS project. Spawn parallel Explore agents to assess the curren
 **Agent 1 — Configuration Audit:**
 - Does CLAUDE.md exist? If so, read it fully. How complete is it vs the template?
 - Does AGENTS.md exist? If so, read it fully. Does it bridge Codex to the existing `.claude/*` structure?
+- Does `opencode.json` exist? If so, does it load `CLAUDE.md` and `.claude/rules/*.md`?
 - Does `.claude/settings.json` exist? What permissions and env vars are configured?
 - Does `.claude/commands/` exist? Which slash commands are present?
+- Does `.opencode/commands/` exist? Which wrapper commands are present?
 - Does `.claude/skills/` exist? Which skills are installed?
 - Does `.claude/rules/` exist? Which rules are installed? (New in blueprint v2)
 - Does `.claude/agents/` exist?
@@ -62,6 +67,7 @@ List gaps organized by priority:
 **HIGH — Core workflow (blocks effective RPI usage):**
 - Missing or incomplete CLAUDE.md
 - Missing or incomplete AGENTS.md Codex compatibility layer
+- Missing `opencode.json` or missing `.opencode/commands/` OpenCode compatibility layer
 - No slash commands for /research, /plan, /implement, /validate
 - No settings.json or Agent Teams not enabled
 - No docs/ directory structure
@@ -92,11 +98,12 @@ List things that exist but differ from the blueprint. For each, explain the gap 
 Propose a phased order for the migration. Always start with the highest-leverage items:
 1. CLAUDE.md (affects every session)
 2. AGENTS.md (makes the same workflow operable in Codex)
-3. settings.json + Agent Teams (affects Claude agent capabilities)
-4. Slash commands (affects daily workflow)
-5. docs/ directory structure (affects research/plan storage)
-6. Pre-commit hooks and CI (affects quality enforcement)
-7. Logging, scheduled agents (polish)
+3. opencode.json + `.opencode/commands/` (makes the same workflow operable in OpenCode)
+4. settings.json + Agent Teams (affects Claude agent capabilities)
+5. Slash commands (affects daily workflow)
+6. docs/ directory structure (affects research/plan storage)
+7. Pre-commit hooks and CI (affects quality enforcement)
+8. Logging, scheduled agents (polish)
 
 ## Phase 4: Get Approval and Execute
 
@@ -107,17 +114,21 @@ After presenting the report:
 3. **Create a migration plan** as a checklist based on their decisions.
 4. **Execute the plan item by item**, confirming after each major change.
 5. **Create or update `AGENTS.md`** — adapt from `cc-rpi/templates/AGENTS.md.template`:
-   - Point Codex at `CLAUDE.md`, `.claude/commands/`, `.claude/rules/`, and `.claude/skills/`
-   - Preserve any project-specific Codex notes already present
-   - Unless the user explicitly opts out, always make the adopted project Codex compatible
-   - If the user says "make this Codex compatible", treat that as explicit approval to create or repair this layer
-6. **Install `.claude/rules/`** — copy rule templates from `cc-rpi/templates/rules/`:
+   - Point Codex and OpenCode at `CLAUDE.md`, `.claude/commands/`, `.claude/rules/`, and `.claude/skills/`
+   - Preserve any project-specific compatibility notes already present
+   - Unless the user explicitly opts out, always make the adopted project Codex/OpenCode compatible
+   - If the user says "make this Codex compatible" or "make this OpenCode compatible", treat that as explicit approval to create or repair this layer
+6. **Create or update `opencode.json` and `.opencode/commands/`**:
+   - Adapt from `cc-rpi/templates/opencode.json.template`
+   - Copy wrapper commands from `cc-rpi/templates/opencode/commands/`
+   - Keep wrappers thin so `.claude/commands/` remains the workflow source of truth
+7. **Install `.claude/rules/`** — copy rule templates from `cc-rpi/templates/rules/`:
    - Always: `rpi-details.md`, `push-accountability.md`
    - If deployment pipeline: `deployment-safety.md`
    - If Supabase: `supabase.md`
    - If tests: `testing.md`
    - Adapt `paths` in frontmatter to match the project's file structure.
-7. **Migrate `<important if>` blocks** — if the project's CLAUDE.md has `<important if>` blocks:
+8. **Migrate `<important if>` blocks** — if the project's CLAUDE.md has `<important if>` blocks:
    - Extract each block's content
    - Create a `.claude/rules/` file with `paths` frontmatter
    - Remove the block from CLAUDE.md
@@ -127,13 +138,14 @@ After presenting the report:
 
 After completing the migration:
 
-5. Save the following to auto memory so future sessions start with full awareness:
+1. Save the following to auto memory so future sessions start with full awareness:
     - Project name, type, and stack
     - What was already in place vs what was migrated
     - Key decisions made during adoption (what the user chose to keep, skip, or adapt)
     - Any project-specific conventions or constraints discovered during the audit
     - CI/CD pipeline behavior, deployment targets, environment quirks
-    - Whether the project is now Codex compatible via `AGENTS.md`
+    - Whether the project is now Codex/OpenCode compatible via
+      `AGENTS.md`, `opencode.json`, and `.opencode/commands/`
     - The operational rules and error patterns you internalized from Phase 1
 
 This ensures the next session doesn't start from zero — the agent already knows the project context, the rules, and the migration decisions.
@@ -151,7 +163,7 @@ This is optional but recommended — it gives adopters a clear picture of their 
 - **Audit first, change nothing.** Phase 2 and 3 are entirely read-only. No files are modified until the user approves the plan.
 - **Respect what exists.** This project has history. Don't overwrite working configurations without asking.
 - **Merge, don't replace.** If CLAUDE.md already exists with useful content, add the missing pieces — don't replace the whole file.
-- **Keep the methodology portable.** Unless the user opts out, add the Codex compatibility layer via `AGENTS.md`.
+- **Keep the methodology portable.** Unless the user opts out, add the Codex/OpenCode compatibility layer via `AGENTS.md`, `opencode.json`, and `.opencode/commands/`.
 - **Preserve project identity.** The project's name, description, stack choices, and conventions are theirs. The blueprint provides structure, not opinions about technology choices.
 - **Ask before assuming.** When in doubt about whether to change something, ask.
 - **Keep CLAUDE.md lean.** Target ~70 lines. Domain rules go in `.claude/rules/` and `.claude/skills/`, not CLAUDE.md.

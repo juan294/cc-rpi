@@ -42,6 +42,8 @@ On incremental syncs (lastSyncCommit exists), prioritize reading files that appe
      - If it exists in both locations and the cc-rpi version is different → replace the project version.
      - If it exists in cc-rpi but not in this project → add it.
      - If it exists only in this project → leave it (project-specific command).
+   - If command-bundle behavior is unclear, use `templates/commands/INSTALL.md`
+     and `templates/commands/VERIFY.md` as the local bundle reference.
 
 ## Phase 4: Update Skills
 
@@ -64,50 +66,65 @@ On incremental syncs (lastSyncCommit exists), prioritize reading files that appe
    - Skip stack-irrelevant rules: if not using Supabase, skip `supabase.md`. If no test framework, skip `testing.md`. If no deployment pipeline, skip `deployment-safety.md`.
    - **Never delete** project-added custom rule files.
 
-## Phase 4c: Update AGENTS.md
+## Phase 4c: Update AGENTS.md and OpenCode Layer
 
 10. Read this project's `AGENTS.md` if it exists.
 11. Read cc-rpi's `templates/AGENTS.md.template`.
-12. If `AGENTS.md` does not exist, create it from the template.
-13. If it exists:
+12. Read this project's `opencode.json` if it exists.
+13. Read any files in this project's `.opencode/commands/` if they exist.
+14. Read cc-rpi's `templates/opencode.json.template`.
+15. Read the wrapper command files in `cc-rpi/templates/opencode/commands/`.
+16. If `AGENTS.md` does not exist, create it from the template.
+17. If it exists:
     - Update the compatibility sections so Codex still points at
       `CLAUDE.md`, `.claude/commands/`, `.claude/rules/`, and
-      `.claude/skills/`
+      `.claude/skills/`, and OpenCode still points at the same sources
     - Preserve project-specific sections such as stack notes or custom
-      Codex guidance
+      compatibility guidance
     - If the file has been heavily customized beyond recognition, skip
       and report: "skipped — heavily customized"
+18. If `opencode.json` does not exist, create it from the template.
+19. If it exists, ensure it still loads `CLAUDE.md` and `.claude/rules/*.md` while preserving project-specific OpenCode config.
+20. Compare each file in `cc-rpi/templates/opencode/commands/` against this project's `.opencode/commands/`:
+    - If it exists in both and the cc-rpi version is different → replace the project version.
+    - If it exists in cc-rpi but not in this project → add it.
+    - If it exists only in this project → leave it (project-specific wrapper).
+
+For scheduled-agent sync work, use
+`templates/scripts/agents/INSTALL.md` and
+`templates/scripts/agents/VERIFY.md` as the local reference for what
+the reusable bundle is expected to provide.
 
 ## Phase 5: Update CLAUDE.md
 
-14. Read this project's CLAUDE.md fully.
-15. Read cc-rpi's `templates/CLAUDE.md.template`.
-16. Identify **blueprint-managed sections** by their headers. These sections come from the template and should be kept in sync:
+21. Read this project's CLAUDE.md fully.
+22. Read cc-rpi's `templates/CLAUDE.md.template`.
+23. Identify **blueprint-managed sections** by their headers. These sections come from the template and should be kept in sync:
     - `## RPI Workflow`
     - `## Agent Behavior` (was `## Agent Autonomy` + `## Memory` in older templates)
     - `## Project File Locations`
     - If the project has older sections now moved to `.claude/rules/` (`## Working Patterns`, `## TDD Protocol`, `## Push Accountability`, `<important if>` blocks), remove them and ensure the corresponding rule file exists in `.claude/rules/`.
-17. For each blueprint-managed section:
+24. For each blueprint-managed section:
     - If the project's version differs from the template → update to match.
     - If the project has added project-specific content *within* a blueprint section (e.g., extra rules), preserve it — only update the parts that came from the template.
     - If a section doesn't exist in the project → **add it** from the template. Place it after the last existing blueprint-managed section, preserving the order from the template. New blueprint sections are new knowledge — `/update` is responsible for delivering them.
-18. **Do NOT touch** project-specific sections: One-liner, Stack, Key Commands, Git Workflow, Deployment, Commit Messages, Research Documents, Implementation Plans, or any custom section.
-19. If CLAUDE.md still contains `<important if>` blocks, migrate them to `.claude/rules/` files with `paths` frontmatter and remove the blocks from CLAUDE.md.
-20. The verification sequencing rule ("Run verification sequentially with `;` or `&&`") should be a one-liner in the Git Workflow section, not a separate subsection.
+25. **Do NOT touch** project-specific sections: One-liner, Stack, Key Commands, Git Workflow, Deployment, Commit Messages, Research Documents, Implementation Plans, or any custom section.
+26. If CLAUDE.md still contains `<important if>` blocks, migrate them to `.claude/rules/` files with `paths` frontmatter and remove the blocks from CLAUDE.md.
+27. The verification sequencing rule ("Run verification sequentially with `;` or `&&`") should be a one-liner in the Git Workflow section, not a separate subsection.
 
 ## Phase 6: Update settings.json
 
-21. Read this project's `.claude/settings.json`.
-22. Compare against cc-rpi's `templates/settings.json.template`.
-23. Add any new `permissions.allow` entries from the template that are missing in the project.
-24. Add any new `env` entries from the template that are missing.
-25. **Never remove** project-specific permissions, env vars, hooks, or deny rules.
+28. Read this project's `.claude/settings.json`.
+29. Compare against cc-rpi's `templates/settings.json.template`.
+30. Add any new `permissions.allow` entries from the template that are missing in the project.
+31. Add any new `env` entries from the template that are missing.
+32. **Never remove** project-specific permissions, env vars, hooks, or deny rules.
 
 ## Phase 7: Write Sync Metadata
 
-26. Get the current HEAD commit hash of cc-rpi: `git -C <cc-rpi-path> rev-parse HEAD`
-27. Get the current version tag: `git -C <cc-rpi-path> describe --tags --abbrev=0 2>/dev/null`
-28. Write/update `.claude/cc-rpi-sync.json`:
+33. Get the current HEAD commit hash of cc-rpi: `git -C <cc-rpi-path> rev-parse HEAD`
+34. Get the current version tag: `git -C <cc-rpi-path> describe --tags --abbrev=0 2>/dev/null`
+35. Write/update `.claude/cc-rpi-sync.json`:
     ```json
     {
       "lastSyncCommit": "<commit-hash>",
@@ -121,17 +138,18 @@ On incremental syncs (lastSyncCommit exists), prioritize reading files that appe
 
 ## Phase 8: Report and Commit
 
-29. If any project files were changed (commands, skills, rules, AGENTS.md, CLAUDE.md, settings.json):
+36. If any project files were changed (commands, wrapper commands, skills, rules, AGENTS.md, opencode.json, CLAUDE.md, settings.json):
     - Stage only the changed files (not unrelated changes).
     - Commit with: `chore: sync with cc-rpi blueprint <version-tag>`
     - Always update the sync metadata even if no other files changed.
 
-30. Present a summary:
+37. Present a summary:
     - cc-rpi version synced to (tag + commit hash)
     - Commands updated/added (list them)
     - Skills updated/added (list them)
     - Rules updated/added (list them)
-    - AGENTS.md updated/added (state whether Codex compatibility was installed or synced)
+    - AGENTS.md updated/added (state whether Codex/OpenCode compatibility was installed or synced)
+    - opencode.json updated/added and wrapper commands updated/added
     - CLAUDE.md sections updated/added (list them)
     - settings.json changes (list them)
     - Notable new content: new error patterns, new rules, methodology changes
@@ -141,7 +159,7 @@ On incremental syncs (lastSyncCommit exists), prioritize reading files that appe
 
 - **Never delete project content.** Only add or update blueprint-managed sections.
 - **Preserve project identity.** Stack, deployment, key commands, commit conventions — these are the project's own.
-- **Preserve Codex compatibility.** `AGENTS.md` is part of the blueprint-managed compatibility layer.
+- **Preserve Codex/OpenCode compatibility.** `AGENTS.md`, `opencode.json`, and `.opencode/commands/` are part of the blueprint-managed compatibility layer.
 - **Be idempotent.** Running twice with no cc-rpi changes should produce zero file changes.
 - **Commit atomically.** All sync changes go in one commit with the sync metadata.
 - **If unsure, skip and report.** When a section has been heavily customized beyond the template, leave it alone and note it in the report as "skipped — heavily customized."

@@ -33,6 +33,9 @@ Check for these files and note which exist:
 
 For each command file that exists, diff it against `<cc-rpi-path>/templates/commands/<name>` to detect customization. Mark as "unmodified" or "customized."
 
+Use `<cc-rpi-path>/templates/commands/INSTALL.md` and `VERIFY.md` as the
+bundle-local reference for what belongs to the command bundle.
+
 For `AGENTS.md`, diff it against `<cc-rpi-path>/templates/AGENTS.md.template` to detect customization. Mark as "unmodified" or "customized."
 
 For `guard-bash.sh`, check if content exists below the `# Project-specific guards below this line` marker. If so, mark as "customized."
@@ -62,6 +65,10 @@ Read `.claude/settings.json` and identify:
 Check for a launchd plist for the cc-rpi update agent:
 
 - `~/Library/LaunchAgents/*cc-rpi*` or `~/Library/LaunchAgents/*blueprint*`
+
+Use `<cc-rpi-path>/templates/scripts/agents/INSTALL.md` and
+`VERIFY.md` as the bundle-local reference for scheduled-agent
+artifacts.
 
 ### Tier 4: User work products
 

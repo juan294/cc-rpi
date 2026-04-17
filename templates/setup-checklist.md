@@ -19,13 +19,22 @@ Use this when setting up a new project to follow cc-rpi best practices.
   - Manually craft every line — don't auto-generate with `/init`
   - Keep it lean: only universally applicable instructions
 - [ ] Create `AGENTS.md` at project root (adapt from `AGENTS.md.template`)
-  - This is the Codex compatibility layer for cc-rpi projects
-  - Point Codex at `CLAUDE.md`, `.claude/commands/`, `.claude/rules/`,
-    and `.claude/skills/` as the source of truth
+  - This is the Codex/OpenCode compatibility layer for cc-rpi projects
+  - Point Codex and OpenCode at `CLAUDE.md`, `.claude/commands/`,
+    `.claude/rules/`, and `.claude/skills/` as the source of truth
   - Keep Codex-only helpers that would collide with Claude-native
     commands out of `.claude/skills/`
   - Keep it focused on workflow translation, not duplicate project docs
 - [ ] Create `.claude/commands/` and copy slash commands from `templates/commands/`
+- [ ] Create `.opencode/commands/` and copy wrapper commands from
+  `templates/opencode/commands/`
+  - Keep these wrappers thin; they should delegate back to
+    `.claude/commands/*.md`
+  - Do not duplicate the workflow text into OpenCode-only command files
+- [ ] Create `opencode.json` at project root
+  - Adapt from `templates/opencode.json.template`
+  - Load `CLAUDE.md` and `.claude/rules/*.md` through `instructions`
+  - Keep command discovery in `.opencode/commands/`
 - [ ] Create `.claude/skills/` for domain-specific knowledge (loaded on demand):
   - Each skill is a **folder** with a `SKILL.md` entry point, plus optional `references/`, `scripts/`, `examples/`, `assets/` subdirectories
   - Start with library reference and code quality skills (highest immediate value)
@@ -65,10 +74,14 @@ Two file pairs follow the same split pattern:
 
 **`settings.local.json`** — Personal permission overrides (e.g., broader `Bash(*)` for your machine), local env vars. Gitignored.
 
-**`AGENTS.md`** — Codex compatibility bridge. Teaches Codex how to
-interpret the existing cc-rpi layout (`CLAUDE.md`, `.claude/commands/`,
-`.claude/rules/`, `.claude/skills/`) without changing the methodology.
-Committed.
+**`AGENTS.md`** — Codex/OpenCode compatibility bridge. Teaches those
+agents how to interpret the existing cc-rpi layout (`CLAUDE.md`,
+`.claude/commands/`, `.claude/rules/`, `.claude/skills/`) without
+changing the methodology. Committed.
+
+**`opencode.json`** — OpenCode instruction loader. Pulls `CLAUDE.md`
+and `.claude/rules/*.md` into OpenCode without duplicating the content
+in `AGENTS.md`. Committed.
 
 ## CLAUDE.md Configuration
 
@@ -97,10 +110,12 @@ Committed.
 - [ ] Add project-specific context (key routes, data types, code ownership)
 - [ ] Keep `AGENTS.md` aligned with the project's workflow conventions:
   - Slash-style commands dispatch to `.claude/commands/*.md`
+  - OpenCode slash-style commands dispatch via `.opencode/commands/*.md`
+    wrappers back to `.claude/commands/*.md`
   - `.claude/rules/` remains the rule source of truth
   - `.claude/skills/` remains the skill source of truth
   - Claude-native commands (`/simplify`, `/batch`, `/worktree`) are
-    translated to Codex-equivalent behavior
+    translated to Codex/OpenCode-equivalent behavior
   - Codex-only helpers that would shadow native Claude commands stay in
     `~/.codex/skills/`, not `.claude/skills/`
 
@@ -117,9 +132,18 @@ Copy and adapt from `templates/commands/`:
 
 Adjust file paths in each command to match your project's docs directory.
 
+- [ ] Read the local command-bundle manifests before large command sync or
+  setup changes:
+  - `templates/commands/INSTALL.md`
+  - `templates/commands/VERIFY.md`
+
 For Codex compatibility, `AGENTS.md` should instruct Codex to treat each
 file in `.claude/commands/` as the workflow spec when the user invokes
 the matching slash-style command.
+
+For OpenCode compatibility, each file in `.opencode/commands/` should be
+a thin wrapper that points back to the matching file in
+`.claude/commands/`.
 
 **Slash commands vs skills:** Commands (`.claude/commands/`) are user-invoked workflows. Skills (`.claude/skills/`) are knowledge + workflows that Claude can also auto-detect. Use commands for RPI phases; use skills for domain conventions and reusable task patterns.
 
@@ -188,19 +212,21 @@ the matching slash-style command.
   - (Optional) Security audit, E2E tests
 - [ ] Mark critical CI jobs as required for PR merges
 - [ ] Enable branch protection on the production branch (require CI + review)
-- [ ] Verify CI runs successfully on the development branch
+- [ ] Verify CI runs successfully on the branch used for active development
 
 ## Git Setup
 
-- [ ] Initialize repo with `main` as production branch
-- [ ] Create `develop` as default working branch
+- [ ] Choose a branch strategy and document it in `CLAUDE.md`:
+  - Branch-based release flow: `main` is production and `develop` (or another integration branch) is the default working branch
+  - Main-only flow: `main` is both the default and production branch, usually with tagged releases
+- [ ] Initialize the repo branches to match that strategy
 - [ ] Set up branch protection rules on GitHub
 - [ ] Configure pre-commit hooks (typecheck, lint, test) — see Pre-Commit Hooks above
 
 ## Push Accountability
 
 - [ ] Add push accountability instructions to CLAUDE.md or CLAUDE.local.md:
-  - After every push to develop, spawn a background CI monitor
+  - After every push to the branch used for active development, spawn a background CI monitor
   - Background agent polls, investigates failures, fixes, and re-pushes
   - Main terminal stays unblocked
 - [ ] Test the workflow: push a deliberate failure, verify the background agent catches it
@@ -237,6 +263,9 @@ The shell script reads update instructions from cc-rpi at runtime, so when cc-rp
 ## Scheduled Agents (Optional)
 
 - [ ] Create `scripts/agents/` and `scripts/agents/lib/` directories
+- [ ] Read the local scheduled-agent manifests before installing:
+  - `templates/scripts/agents/INSTALL.md`
+  - `templates/scripts/agents/VERIFY.md`
 - [ ] Copy `lib/agent-utils.sh` from `cc-rpi/templates/scripts/agents/lib/agent-utils.sh` to `scripts/agents/lib/`
 - [ ] Copy `install-agents.sh` from `cc-rpi/templates/scripts/agents/install-agents.sh` to `scripts/agents/`
 - [ ] Create `docs/agents/` directory for agent reports and shared context
@@ -283,6 +312,8 @@ The shell script reads update instructions from cc-rpi at runtime, so when cc-rp
 - [ ] Keep the methodology stable across agents:
   - Claude Code uses `.claude/commands/`, `.claude/rules/`,
     `.claude/skills/`
+  - OpenCode uses `AGENTS.md`, `opencode.json`, `.opencode/commands/`,
+    and also understands `.claude/skills/`
   - Codex uses `AGENTS.md` to interpret those same artifacts
   - The workflow stays the same; only the harness translation changes
 
@@ -296,7 +327,8 @@ The standard setup applies as-is. Typical stack badges: framework (Next.js, Remi
 
 ### Library / npm Package
 
-- **Git workflow:** May use `main` only (no `develop`) if releases are tagged from `main`
+- **Git workflow:** Often uses `main` only (no `develop`) when releases
+  are tagged directly from `main`
 - **CI additions:** Add `npm pack` or `pnpm pack` verification, publish dry-run
 - **Testing:** Prioritize unit tests and type-level tests. Add consumer integration tests (test the package from a downstream project's perspective)
 - **CLAUDE.md:** Document the public API surface. Add "do not change exports without a major version bump" rule
@@ -312,7 +344,9 @@ The standard setup applies as-is. Typical stack badges: framework (Next.js, Remi
 
 ### Monorepo
 
-- **Git workflow:** Same `develop`/`main` pattern, but CI runs per-package with change detection
+- **Git workflow:** Often keeps the same integration-branch /
+  production-branch split, but CI runs per-package with change
+  detection
 - **CI additions:** Use `turbo`/`nx` affected detection. Only run checks for changed packages
 - **CLAUDE.md:** Document the workspace structure, how packages depend on each other, which package owns which feature
 - **Pre-commit:** Run typecheck across ALL workspace packages (not just changed ones — cross-package type errors are common)
@@ -329,7 +363,8 @@ The standard setup applies as-is. Typical stack badges: framework (Next.js, Remi
 
 ### Static Site / Documentation
 
-- **Git workflow:** May deploy directly from `main` (no `develop` needed for simple sites)
+- **Git workflow:** May deploy directly from `main` when the project
+  does not need a separate integration branch
 - **CI:** Build verification + link checking + image optimization check
 - **Testing:** Minimal — focus on build success and broken link detection
 - **CLAUDE.md:** Keep lean. Document build command, content directory structure, frontmatter conventions

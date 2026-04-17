@@ -1,23 +1,42 @@
 # Project: [PROJECT NAME]
 
-## Codex Compatibility
+## Codex and OpenCode Compatibility
 
 This project follows the cc-rpi methodology and is configured to work
-with both Claude Code and Codex / GPT-5.x.
+with Claude Code, Codex / GPT-5.x, and OpenCode.
 
-When operating in Codex, treat these files as the source of truth:
+When operating in Codex or OpenCode, treat these files as the source of
+truth:
 
 - `CLAUDE.md` -- project overview, workflow, commands, git/deploy context
 - `.claude/commands/*.md` -- workflow definitions for `/research`, `/plan`,
   `/implement`, `/validate`, `/pre-launch`, `/update-docs`, `/release`,
   and related commands
+- `.opencode/commands/*.md` -- thin OpenCode wrappers that dispatch to
+  the canonical `.claude/commands/*.md` files without duplicating the
+  workflow logic
 - `.claude/rules/*.md` -- reusable rules and path-scoped constraints
 - `.claude/skills/*/SKILL.md` -- on-demand skills and domain procedures
+- `opencode.json` -- OpenCode instruction loading for `CLAUDE.md` and
+  `.claude/rules/*.md`
 
-If the user says "make this Codex compatible", ensure this file exists
-and is kept in sync with the compatibility conventions below.
+If the user says "make this Codex compatible" or "make this OpenCode
+compatible", ensure this file exists and is kept in sync with the
+compatibility conventions below.
 
 ## Command Dispatch
+
+Route the task before picking a command:
+
+- `quick` -- short orientation, low ambiguity, low blast radius,
+  reversible next step; usually `/status`
+- `standard` -- normal RPI delivery path with phase gates; usually
+  `/plan`, `/implement`, `/validate`
+- `deep` -- high ambiguity, unclear blast radius, hard verification, or
+  launch-readiness investigation; usually `/research` or `/pre-launch`
+- `batch` -- only after planning proves the remaining work is
+  independent and marked `[batch-eligible]`; executed through `/batch`
+  from `/implement`
 
 When the user invokes a slash-style workflow such as `/research`,
 `/plan`, `/implement`, `/validate`, `/pre-launch`, `/update-docs`,
@@ -31,10 +50,22 @@ When the user invokes a slash-style workflow such as `/research`,
 If the command file references a plan path or research path, read that
 document fully before doing anything else.
 
-## Claude-to-Codex Translation
+## OpenCode Command Dispatch
 
-The command files are written for Claude Code. In Codex, translate the
-Claude-native parts to the closest equivalent behavior:
+When the user invokes a slash-style workflow in OpenCode:
+
+1. Check for the matching file in `.opencode/commands/`.
+2. Read that command file completely before acting.
+3. Treat it as a wrapper that points back to the canonical
+   `.claude/commands/<name>.md` workflow spec.
+4. Preserve the existing slash command names; do not fork the command
+   logic into separate OpenCode-only workflow files unless the command
+   surface itself must change.
+
+## Claude-to-Codex/OpenCode Translation
+
+The command files are written for Claude Code. In Codex or OpenCode,
+translate the Claude-native parts to the closest equivalent behavior:
 
 - `/simplify` -- if `codex-simplify` is installed, use it; otherwise run
   a dedicated post-implementation review for reuse, quality, and
@@ -82,6 +113,9 @@ Treat `.claude/skills/*/SKILL.md` as on-demand skills:
 
 Personal Codex-only skills may also exist in `~/.codex/skills/`.
 Use them only when they do not shadow Claude-native command names.
+
+OpenCode also discovers project skills in `.claude/skills/` and can
+load `CLAUDE.md` plus `.claude/rules/*.md` through `opencode.json`.
 
 ## Outputs and Gates
 
