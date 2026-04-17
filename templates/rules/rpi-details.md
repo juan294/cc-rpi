@@ -44,3 +44,14 @@ description: RPI workflow details -- phase rules, pre-release sequence, implemen
 Prefer automated verification.
 Manual only for: sudo, hardware, new installs, visual-only.
 Don't use Claude for linting/formatting -- use tools and hooks.
+
+## Verification Contract
+
+- Each plan phase should include a compact **Verifier** section.
+- Verifier contents:
+  - target behavior
+  - automated checks
+  - fixtures/data/setup
+  - failure cases or edge conditions
+  - allowed manual exceptions
+- `/validate` should read the verifier before running checks.

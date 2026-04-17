@@ -78,6 +78,20 @@ The current guard script enforces:
 - **Error #33**: `git pull --rebase` with uncommitted changes (checks `git status --porcelain`)
 - **Error #44**: `git push --tags` instead of specific tag names (pattern match)
 
+### Hooks vs Verifiers vs Golden Cases
+
+Not every recurring failure belongs in a hook.
+
+| Promotion target | Best for | Example |
+|------------------|----------|---------|
+| **Hook** | bad actions detectable before execution | block `git pull --rebase` on a dirty tree |
+| **Scripted verifier** | bad states detectable after code changes | smoke-test a critical route during `/validate` |
+| **Golden-case fixture** | fragile behavior that needs a durable regression sample | known expired token, known malformed payload |
+
+The escalation path should stay continuous:
+logs -> rule -> hook or verifier -> golden-case fixture when a reusable
+example is the strongest protection.
+
 ### Three-Tier Error Prevention Model
 
 | Tier | Mechanism | Reliability | When to Use |
@@ -86,7 +100,12 @@ The current guard script enforces:
 | **Prompt** | Command recipes in CLAUDE.md | Medium — agent copies the pattern | Frequent operations. Give compound commands to copy instead of compose. |
 | **Document** | agent-errors.md, quick-reference.md | Low — advisory only | Long tail. Reference for when things go wrong. |
 
-Rules graduate upward: a pattern documented in tier 3 that keeps recurring gets promoted to tier 2 (recipe in CLAUDE.md) or tier 1 (hook). The error processing routine should track repeat offenders across batches and promote accordingly.
+Rules graduate upward: a pattern documented in tier 3 that keeps
+recurring gets promoted to tier 2 (recipe in CLAUDE.md) or tier 1
+(hook). When the pattern is better caught after implementation than
+before execution, promote it to a scripted verifier or a golden-case
+fixture instead. The error processing routine should track repeat
+offenders across batches and promote accordingly.
 
 Skills can extend this model with **on-demand hooks** — guardrails that activate only when a specific skill is invoked and last for the session. Use these for rules too restrictive to run permanently but essential in certain contexts (e.g., blocking destructive commands when touching production). See [agent-design.md](agent-design.md) "On-Demand Hooks" for examples.
 

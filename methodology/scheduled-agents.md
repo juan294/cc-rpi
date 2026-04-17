@@ -97,6 +97,12 @@ The `# SCHEDULE:` comment is read by `install-agents.sh` to auto-generate launch
 
 The `install-agents.sh` script (in `templates/scripts/agents/`) auto-discovers agent scripts and generates launchd plists. It reads the `# SCHEDULE:` comment from each script to determine when it runs.
 
+For bundle-local setup and verification, keep the colocated manifests
+next to the reusable bundle:
+
+- `templates/scripts/agents/INSTALL.md`
+- `templates/scripts/agents/VERIFY.md`
+
 ```bash
 # Install all agents (auto-discovers scripts with SCHEDULE comments):
 bash scripts/agents/install-agents.sh

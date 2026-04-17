@@ -207,6 +207,7 @@ Claude: Starting Phase 3: Fix refresh token bug + cleanup
 [deletes src/utils/token.ts — all logic now in AuthService]
 [removes dead imports from auth.ts and auth routes]
 [adds regression test for the refresh token expiry bug]
+[preserves the expired-token sample as a named golden-case fixture]
 [reviewer: plan compliance PASS]
 [/simplify: flagged unused error type export from old token.ts re-export. Removed.]
 [runs full test suite]
@@ -214,6 +215,8 @@ Claude: Starting Phase 3: Fix refresh token bug + cleanup
 Phase 3 complete:
 - [x] Refresh token bug fixed (rejects expired tokens before refreshing)
 - [x] Regression test: expired token refresh returns 401
+- [x] Golden-case fixture: expired token sample preserved for future
+  validation
 - [x] src/utils/token.ts deleted
 - [x] No dead imports remaining
 - [x] /simplify: 1 fix applied (stale re-export cleanup)
@@ -272,3 +275,8 @@ Refactoring is the riskiest type of change for AI agents. Without structure:
 - No phased approach means there's no safe rollback point. With RPI, after Phase 1, the old code still works. After Phase 2, you can verify the migration before removing anything. Phase 3 is just cleanup — the risky work is already done.
 
 The research document is especially valuable here. It becomes a map of the territory you're refactoring. If the map is wrong, throw it out and research again — that's 5 minutes. If the refactor is wrong, you're reverting commits and starting over — that's hours.
+
+When a bug like the refresh-token expiry issue has enough blast radius
+or enough recurrence history, don't stop at "we fixed it once." Promote
+it into a regression test plus a golden-case fixture so future validate
+or triage passes have a concrete sample to check.

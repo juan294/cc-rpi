@@ -38,6 +38,14 @@ Asked Claude to "add validation to the API" without specifying which endpoints o
 3. Explicitly exclude areas that should not be touched
 4. Define "done" with concrete criteria, not adjectives like "properly"
 
+## Promotion Outcome
+
+- **Immediate:** add a rule to `patterns/quick-reference.md` about
+  scoping API changes to explicit endpoint paths
+- **If repeated 3+ times:** add a scripted verifier that checks only the
+  allowed endpoint files changed for the task, or otherwise flags the
+  over-broad edit set during validation or triage
+
 ## One-Line Lesson
 
 Scope API changes to specific endpoint paths and exclude what shouldn't be touched.

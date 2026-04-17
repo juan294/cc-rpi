@@ -29,3 +29,14 @@ Refactors need existing coverage. No "tests later."
 
 Run checks sequentially, never as parallel Bash calls
 (hook enforced). Chain: `typecheck ; lint ; test`
+
+## Phase Verifier
+
+Each plan phase should include a compact verifier section so the
+validator knows:
+
+1. What target behavior to confirm
+2. Which automated checks to run
+3. Which fixtures or setup assumptions matter
+4. Which edge cases to inspect
+5. Which manual exceptions are allowed, with WHY

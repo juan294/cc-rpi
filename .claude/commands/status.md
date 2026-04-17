@@ -1,5 +1,11 @@
 Quick project status check. Output a concise orientation and stop.
 
+Routing mode: `quick`
+
+Use this mode when the task is low-ambiguity, low-blast-radius, easily
+reversible, and you only need orientation before deciding whether to
+stop or move into the standard RPI flow.
+
 Run these commands and present the results in a compact summary:
 
 1. `git branch --show-current` — current branch

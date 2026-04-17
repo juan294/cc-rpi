@@ -44,6 +44,14 @@ Implementation notes:
 - Extract Redis key generation if shared with session storage
 - Ensure consistent error handling with existing patterns in `src/auth/tokens.ts:40-42`
 
+## Verifier
+
+- **Target behavior:** The rate limiter enforces the planned behavior and fails open when Redis is unavailable.
+- **Automated checks:** `pnpm test tests/auth/rate-limiter.test.ts`, `pnpm run typecheck`, `pnpm run lint`
+- **Fixtures / data / setup:** Real Redis test instance and isolated test keys
+- **Failure cases / edge conditions:** limit boundary, reset after expiry, retry-after value, concurrent increments, Redis outage
+- **Allowed manual exceptions:** None
+
 ## Verification
 
 ```bash

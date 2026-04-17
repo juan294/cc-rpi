@@ -36,6 +36,33 @@ Always separate into two sections:
 - [ ] [Step] — WHY manual: [requires sudo / hardware / visual-only]
 ```
 
+## Verification Contract
+
+Each plan phase should also define a compact **Verifier** section that
+`/validate` can consume directly.
+
+```markdown
+### Verifier
+
+- **Target behavior:** What should be true when the phase is complete
+- **Automated checks:** Exact commands or inspections to run
+- **Fixtures / data / setup:** Required inputs, seed data, or environment assumptions
+- **Failure cases / edge conditions:** Specific cases the validator should inspect
+- **Allowed manual exceptions:** Only the checks that truly cannot be automated, with WHY
+```
+
+The verifier is not a replacement for success criteria. It is the
+compact contract that tells the validator what evidence to gather and
+how to judge the phase.
+
+When a repeated failure survives prose-only guidance, strengthen the
+verifier with an executable check:
+
+- add a **scripted verifier** when a command or inspection can detect
+  the failure reliably
+- add a **golden-case fixture** when the behavior needs a stable sample
+  input/output pair or regression scenario
+
 ## TDD Protocol
 
 Test-Driven Development is mandatory for all code changes. No exceptions — not even "small" changes.
@@ -53,6 +80,9 @@ Test-Driven Development is mandatory for all code changes. No exceptions — not
 - **Refactors need existing tests.** Before refactoring, ensure tests cover the current behavior. If they don't, write them first.
 - **No "I'll add tests later."** There is no later. Tests are written in the same worktree, in the same commit sequence, before the implementation.
 - **Tests are the spec.** A failing test IS the specification for what the code should do. Write the test as if the feature already works, then make it true.
+- **Repeated regressions should become golden cases.** If the same class
+  of bug keeps returning, preserve the reproducer as a named fixture or
+  representative sample, not just an ad hoc one-off test.
 
 ### In the RPI Workflow
 
@@ -64,6 +94,10 @@ TDD integrates into the Implement phase:
 5. Stop and wait for human review
 
 The tests written in step 2 become the automated verification for the phase.
+
+The phase verifier records the same intent in a compact, reusable
+format so `/validate` can check the implementation against the plan
+instead of relying on generic verification wording.
 
 ## Phase Completion Protocol
 

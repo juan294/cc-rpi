@@ -54,7 +54,10 @@ Run verification sequentially with `&&` or `;`, NEVER as parallel Bash calls.
 
 ## Git Workflow
 
-**`main` is the only branch. Documentation project -- no develop/main split.**
+**Repo-local policy for this repository:** `main` is the only branch.
+This is how `cc-rpi` itself is maintained as a documentation-first
+blueprint. It is not the exported default for every project that adopts
+the blueprint.
 
 1. All work happens directly on `main`
 2. Always run markdownlint before committing

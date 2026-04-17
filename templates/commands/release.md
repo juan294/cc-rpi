@@ -32,7 +32,7 @@ Gather release context before making any changes.
    - Check if current branch is main/master
    - Check git log for merge commits from feature/release branches
    - If on main AND no merge-branch pattern: **main-only**
-   - Otherwise: **feature-branch**
+   - Otherwise: **branch-based**
 
 6. **Present findings** to the user:
    - Project type and version source
@@ -134,7 +134,7 @@ and published, then proceed only after approval.
    If the project has a registry publish step, remind the user:
    "Release is published. When ready, run `npm publish` / `cargo publish` / etc."
 
-### Feature-branch flow
+### Branch-based flow
 
 1. Create a release branch and commit:
 

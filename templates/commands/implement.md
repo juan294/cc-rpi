@@ -2,6 +2,14 @@ Implement the plan at: $ARGUMENTS
 
 Model tier: **sonnet** — Sonnet 4.6 (1M context) session. All subagents: `model: "sonnet"`.
 
+Routing mode: `standard`, with an optional `batch` branch when every
+remaining phase is marked `[batch-eligible]`.
+
+Choose `standard` when the path is already planned, the blast radius is
+bounded by the approved phase, and the work should proceed through the
+normal implement-review-verify gate. Upgrade to `batch` only when the
+plan explicitly says the remaining phases are independent.
+
 Process:
 1. Read the plan completely. Check for existing checkmarks.
 2. Spawn Explore agents (model: `"sonnet"`) to gather relevant context.

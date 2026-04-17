@@ -39,6 +39,13 @@ fail: Redis down -> allow request (fail-open)
 risk: clock skew across replicas
 ```
 
+**Verifier:**
+- **Target behavior:** The rate limiter returns allow/limit decisions with retry metadata and fails open when Redis is unavailable.
+- **Automated checks:** `pnpm test tests/auth/rate-limiter.test.ts`, `pnpm run typecheck`, `pnpm run lint`
+- **Fixtures / data / setup:** Real Redis test instance with deterministic test keys
+- **Failure cases / edge conditions:** limit boundary, window reset, concurrent increments, Redis outage
+- **Allowed manual exceptions:** None
+
 **Success criteria:**
 - Automated:
   - [ ] Unit tests pass: `pnpm test tests/auth/rate-limiter.test.ts`
@@ -65,6 +72,13 @@ fx: HTTP 429 response; Retry-After header
 fail: malformed body -> skip email limit (IP-only)
 ```
 
+**Verifier:**
+- **Target behavior:** Middleware blocks limited login attempts and preserves normal auth flow for allowed requests.
+- **Automated checks:** `pnpm test tests/integration/rate-limit.test.ts`, `pnpm test tests/auth/`, `pnpm run typecheck`
+- **Fixtures / data / setup:** Request fixtures covering IP-only and email-aware checks
+- **Failure cases / edge conditions:** malformed body, IP-limited requests, email-limited requests
+- **Allowed manual exceptions:** None
+
 **Success criteria:**
 - Automated:
   - [ ] Integration tests pass: `pnpm test tests/integration/rate-limit.test.ts`
@@ -87,6 +101,13 @@ do:
 fx: route now has rate limiting; config externalizes limits
 risk: middleware ordering (rate limit must run before body parsing if body-dependent)
 ```
+
+**Verifier:**
+- **Target behavior:** The login route is wired to rate limiting with configuration exposed through project settings.
+- **Automated checks:** `pnpm test`, `pnpm run build`, `pnpm run typecheck`, `pnpm run lint`
+- **Fixtures / data / setup:** Environment defaults present for the rate-limit config
+- **Failure cases / edge conditions:** middleware ordering, missing env overrides, auth regressions
+- **Allowed manual exceptions:** None
 
 **Success criteria:**
 - Automated:

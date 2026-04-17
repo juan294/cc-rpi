@@ -18,3 +18,8 @@
 ## The One-Paragraph Summary
 
 Every significant change goes through four phases: **Research** (understand the codebase as-is), **Plan** (create a phased implementation spec), **Implement** (execute one phase at a time with review gates), **Validate** (verify implementation against the plan). Each phase runs in its own conversation to manage context. Errors amplify downstream — a bad line of research becomes thousands of bad lines of code — so human review is focused on research and plans, not generated code.
+
+Before choosing a command, route the task by effort level:
+`quick` for short orientation, `standard` for normal RPI work, `deep`
+for high-ambiguity investigation or audits, and `batch` for explicitly
+independent plan phases that can run in parallel.

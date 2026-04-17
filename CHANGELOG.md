@@ -6,6 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Added
+
+- explicit routing modes (`quick`, `standard`, `deep`, `batch`) across
+  methodology docs, command specs, templates, and OpenCode wrappers so
+  users can choose workflow depth before choosing a command
+- log-promotion guidance that extends repeated patterns beyond prose-only
+  rules into hooks, scripted verifiers, and golden-case fixtures, with
+  matching triage and example updates
+- thin `INSTALL.md` / `VERIFY.md` manifests for the command bundle and
+  scheduled-agent bundle, with setup docs pointing to those local
+  references
+
+### Changed
+
+- **Branch-strategy guidance alignment** -- repo-local docs now state
+  explicitly that `cc-rpi` itself is maintained on `main`, while
+  exported template and methodology docs describe reusable branch
+  strategies more generically. Push-accountability, deployment-safety,
+  setup-checklist, and deployment-safety skill examples now refer to an
+  active development or integration branch where appropriate instead of
+  assuming every project uses `develop`.
+- **Plan/validate verification contract** -- planning docs, validation
+  docs, rules, guide text, and implementation-plan examples now define
+  a compact per-phase **Verifier** section with target behavior,
+  automated checks, fixtures/setup, edge cases, and allowed manual
+  exceptions, and `/validate` now reads against that contract.
+
 ## [1.17.0] - 2026-04-17
 
 ### Added

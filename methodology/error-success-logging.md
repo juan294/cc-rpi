@@ -96,14 +96,71 @@ Maintain a `docs/logs/README.md` with one-line lessons extracted from each log e
 - **Before `/research`**: Read the lessons index to prime the agent with known patterns.
 - **Before `/plan`**: Check if similar features had error logs — avoid repeating mistakes.
 - **After a session goes wrong**: Write the error log before closing the session, while context is fresh.
-- **Periodically**: Review the index for recurring patterns. If you see 3+ entries about the same category, add a rule to CLAUDE.md or `patterns/quick-reference.md`.
+- **During `/triage`**: Review carried items and repeated findings. If the
+  same pattern keeps reappearing, propose a promotion destination.
+- **Periodically**: Review the index for recurring patterns. If you see
+  3+ entries about the same category, promote the pattern beyond prose.
 
-### Graduating Logs to Rules
+### Promotion Destinations
 
-When a pattern appears 3 or more times in your logs:
-1. Extract it as a rule in CLAUDE.md or `patterns/quick-reference.md`
-2. Add a detailed entry to `patterns/agent-errors.md` if it's a Claude Code error
-3. The log entries remain as historical evidence, but the rule becomes the primary reference
+When a pattern appears 3 or more times, keep the logs as evidence but
+promote the pattern into the smallest executable asset that will
+actually prevent or detect it.
+
+| Destination | Use it when | Outcome |
+|-------------|-------------|---------|
+| **Rule** | The pattern needs judgment and is not cleanly machine-detectable | Add or update `CLAUDE.md` or `patterns/quick-reference.md` |
+| **Hook** | The bad action is mechanically detectable before it executes | Block it with a PreToolUse or related hook |
+| **Scripted verifier** | The failure must be checked repeatedly during validation or triage | Add a deterministic command, smoke check, or inspection script |
+| **Golden-case fixture** | The behavior needs a reusable regression example with known-good input/output | Add a test fixture or representative sample case that must keep passing |
+
+### Choosing the Right Promotion
+
+Ask these questions in order:
+
+1. Can a script detect the bad action before it happens?
+   If yes, promote to a **hook**.
+2. Can a script detect the bad state after implementation or during
+   validation?
+   If yes, promote to a **scripted verifier**.
+3. Does the repeated issue come from a fragile behavior that needs a
+   stable example?
+   If yes, promote to a **golden-case fixture**.
+4. If none of the above fit, promote to a **rule** and keep watching.
+
+### Promotion Flow
+
+1. Log the error or success normally.
+2. Add the one-line lesson to `docs/logs/README.md`.
+3. When the same pattern repeats 3+ times, choose a promotion
+   destination.
+4. Record the promotion in the next triage cycle so it becomes part of
+   operational history.
+5. Keep the original logs as evidence for why the rule, hook, verifier,
+   or fixture exists.
+
+### Example Promotion Outcomes
+
+- Repeated dirty `git pull --rebase` attempts:
+  logs -> quick-reference rule -> hook block in `guard-bash.sh`
+- Repeated "tests passed locally but critical route still broken":
+  logs -> scripted verifier that curls the route during validation
+- Repeated refresh-token expiry regressions:
+  logs -> regression test plus a golden-case expired-token fixture
+- Repeated vague planning prompts that cannot be machine-detected:
+  logs -> stronger planning rule in `patterns/quick-reference.md`
+
+### Promotion and Triage
+
+`/triage` is where promotions become operational. Triage should identify
+repeated carried items, recommend the destination, and make the outcome
+visible in shared operational history.
+
+### Detailed Error Catalog
+
+If the repeated pattern is an agent or harness failure, also add or
+update the longer explanation in `patterns/agent-errors.md`. The short
+rule teaches the behavior; the catalog preserves the deeper why.
 
 ### Compression Over Time
 

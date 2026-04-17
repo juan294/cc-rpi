@@ -171,6 +171,10 @@ Skills: `[skill:name]` points to `.claude/skills/name/` for full examples.
 
 71. **Use timestamp-based discovery for triage** `[frequent]` -- touch `docs/agents/.last-triage` after each run. Next triage uses `find ... -newer .last-triage`. On first run, process all reports.
 
+74. **Promote repeated failures beyond prose** `[frequent]` -- after 3
+recurrences, choose the smallest durable asset: rule, hook, scripted
+verifier, or golden-case fixture.
+
 ---
 
 For detailed symptoms, root causes, and examples, see [agent-errors.md](agent-errors.md).

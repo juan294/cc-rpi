@@ -18,6 +18,10 @@
 #   bash scripts/agents/install-agents.sh --status     # Show agent status
 #   bash scripts/agents/install-agents.sh --list       # List discoverable agents
 #
+# Bundle-local docs:
+#   - INSTALL.md  # prerequisites and install steps
+#   - VERIFY.md   # post-install verification checks
+#
 # Prerequisites:
 #   - macOS with launchd
 #   - Claude CLI installed (claude setup-token for non-interactive auth)

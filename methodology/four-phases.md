@@ -36,6 +36,27 @@ User
 - **Separation of concerns**: Locators find *where* things are. Analyzers explain *how* things work. Pattern finders show *examples*. They don't overlap.
 - **Phase gates**: Implementation stops between phases. Validation is a separate explicit step.
 
+## Routing Before Command Selection
+
+Routing is a front-door choice, not a second workflow. Pick the effort
+mode first, then choose the command that already implements it.
+
+| Mode | Use it when | Typical command surface |
+|------|-------------|-------------------------|
+| `quick` | Ambiguity is low, blast radius is small, the step is easily reversible, and you mainly need orientation | `/status` |
+| `standard` | The task fits the normal RPI path and should move through research, plan, implement, and validate with review gates | `/plan`, `/implement`, `/validate` after the relevant handoff |
+| `deep` | Ambiguity is high, blast radius is unclear, reversibility is poor without more investigation, or verification is hard | `/research`, `/pre-launch` |
+| `batch` | Work is already planned and the remaining phases are explicitly marked `[batch-eligible]` | `/batch` via `/implement` |
+
+Use these intake questions:
+
+1. How ambiguous is the task right now?
+2. What is the blast radius if we guess wrong?
+3. How reversible is the next step?
+4. How hard will verification be if we skip deeper investigation?
+
+If the answers drift upward, route deeper before writing code.
+
 ### Mapping to Claude Code
 
 | Concept | Claude Code Equivalent |
@@ -232,6 +253,7 @@ Research is **NOT done** if:
 4. **Detailed plan writing:**
    - Write main plan file + separate file per phase.
    - Use pseudocode notation (see [pseudocode-notation.md](pseudocode-notation.md)).
+   - Add a compact verifier section to each phase file.
    - Separate automated vs. manual success criteria.
    - Maximum 3 `[NEEDS CLARIFICATION]` markers; resolve all before finalizing.
 
@@ -250,6 +272,7 @@ Research is **NOT done** if:
 A plan is **done** when:
 - [ ] Every phase has specific files to create/modify (no "update relevant files")
 - [ ] Every phase has automated success criteria with exact commands to run
+- [ ] Every phase file has a verifier section with target behavior, checks, setup, edge conditions, and allowed manual exceptions
 - [ ] Pseudocode notation is used for non-trivial logic changes
 - [ ] The scope exclusion list is explicit ("NOT doing: ...")
 - [ ] Zero `[NEEDS CLARIFICATION]` markers remain
@@ -340,12 +363,13 @@ An implementation phase is **NOT done** if:
 **Process:**
 
 1. Locate the plan (provided or discovered via git log).
-2. Gather evidence: git log, git diff, run test suites.
+2. Gather baseline evidence: git log, git diff, existing verification output, and any artifacts referenced by the verifier.
 3. For each phase:
    - Verify completion status matches reality.
-   - Run every automated verification command.
-   - Assess manual criteria.
-   - Think about edge cases.
+   - Read the phase verifier and check target behavior against the codebase state.
+   - Run every automated verification command listed in the verifier.
+   - Assess fixtures, setup assumptions, and manual exceptions.
+   - Check listed edge cases.
 4. Generate a validation report.
 
 **Validation report structure:**
@@ -360,6 +384,11 @@ An implementation phase is **NOT done** if:
 ### Automated Verification Results
 - [x] Build passes
 - [ ] Linting issues (details)
+
+### Verifier Results
+- Phase 1 target behavior: [met / not met]
+- Phase 1 setup assumptions: [matched / mismatched]
+- Phase 1 edge cases: [covered / missing]
 
 ### Code Review Findings
 #### Matches Plan
@@ -376,6 +405,7 @@ An implementation phase is **NOT done** if:
 
 Validation is **done** when:
 - [ ] Every plan phase has been checked against the actual code
+- [ ] Every phase verifier has been read and checked against the implementation
 - [ ] All automated verification commands have been run and results recorded
 - [ ] Deviations from the plan are documented with explanations
 - [ ] The validation report is complete with a clear verdict

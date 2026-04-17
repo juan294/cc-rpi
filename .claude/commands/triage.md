@@ -92,6 +92,9 @@ Read-only. Do not modify any files.
    - Cross-reference findings (e.g., coverage report flags X needs tests, code quality report flags X has lint issues -- group them).
    - Identify patterns (multiple agents flagging the same area).
    - Check shared-context.md recommendations against report findings.
+   - If a carried item or repeated finding appears 3+ times, recommend a
+     promotion destination: rule, hook, scripted verifier, or
+     golden-case fixture.
 
 5. **Draft the action plan:**
 
@@ -148,6 +151,7 @@ Reports are NEVER committed (Rule #70). Only code fixes enter version control.
    - **Reports processed**: N
    - **Action items resolved**: M
    - **Summary**: [1-line summary of what was fixed]
+   - **Promotions proposed**: [rule / hook / scripted verifier / golden-case fixture, or "none"]
    **Cross-agent recommendations:**
    - [Agent]: recommendation based on triage findings
    <!-- ENTRY:END -->
@@ -209,6 +213,10 @@ Generate a triage report at `docs/agents/triage-report.md`:
 
 ## Carried Items (if any)
 [Items that persist across multiple triage cycles -- track for escalation]
+
+## Promotion Recommendations (if any)
+| Pattern | Evidence | Destination | Next step |
+|---------|----------|-------------|-----------|
 ```
 
 Present the report summary to the user.
@@ -222,6 +230,9 @@ Present the report summary to the user.
 - **Fix everything (Rule #58).** Categorize findings by severity, but implement 100% of action items. No deferring. No "nothing urgent."
 - **Read every report completely.** No skimming, no summaries-of-summaries. Extract ALL action items from every report.
 - **shared-context.md integration.** Read before analysis, append triage entry after completion.
+- **Promote repeated patterns.** If the same issue keeps returning,
+  recommend the smallest durable promotion: rule, hook, scripted
+  verifier, or golden-case fixture.
 - **CI accountability.** Push is not done until CI is green. Max 3 fix iterations.
 - **Branch verification before every commit.** Run `git branch --show-current` first (Error #33).
 - Run verification commands sequentially, never as parallel Bash calls.

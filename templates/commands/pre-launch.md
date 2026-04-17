@@ -6,6 +6,12 @@ handoff.
 
 Model tier: **opus** — Claude Opus 4.6. All specialists: `model: "opus"`.
 
+Routing mode: `deep`
+
+Use this mode when the task demands a harsh, system-wide investigation
+with high blast radius and difficult verification, rather than a normal
+delivery pass.
+
 ## Mindset
 
 > Assume this product will be publicly launched soon and judged by users

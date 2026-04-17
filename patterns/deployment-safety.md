@@ -30,7 +30,9 @@ This means:
 
 - **Dependabot PRs target `main` by default.** Merging them deploys to production immediately.
 - **"Clean up the PRs" means close or retarget them** — not merge them to production.
-- **The correct workflow for Dependabot:** cherry-pick updates to `develop`, close the Dependabot PR, release via the normal `develop` -> `main` process.
+- **The correct workflow for Dependabot:** cherry-pick updates to your
+  integration branch, close the Dependabot PR, and release through the
+  project's normal integration -> production process.
 - **"Merge the PRs" is never authorization to deploy to production** unless the user explicitly says "deploy to production" or "merge to main."
 
 ---
@@ -126,9 +128,9 @@ Once production is stable on the rollback:
 
 **Never promote a broken deployment "briefly" to capture logs.** That causes another outage. Use the platform's log retention, or deploy to a preview URL to reproduce the error.
 
-### Step 3: Fix Forward on `develop`
+### Step 3: Fix Forward on the Integration Branch
 
-1. Create the fix on `develop` (or a feature branch)
+1. Create the fix on the integration branch (or a feature branch)
 2. Test locally
 3. Deploy to a preview URL and verify
 4. Only after preview verification, create a PR to `main`
@@ -190,13 +192,15 @@ Agent merges 7 Dependabot PRs one-by-one. Each merge invalidates checks on remai
 
 Agent told to "clean up Dependabot PRs." Interprets this as "merge them." Dependabot PRs target `main`. Each merge triggers a production deployment. One dependency has a production-only bug. Site goes down.
 
-**Fix:** Understand that merging to `main` = deploying to production. Cherry-pick updates to `develop` instead.
+**Fix:** Understand that merging to `main` = deploying to production.
+Cherry-pick updates to the integration branch instead.
 
 ### The Panic Recovery
 
 Production is down. Agent promotes the broken deployment "briefly" to capture logs — site goes down again. Deploys maintenance mode with TypeScript errors — fails. Deploys again with env var issues — fails. Each failed attempt is another billed deployment and another outage window.
 
-**Fix:** Roll back immediately. Investigate on non-production. Fix forward on `develop`. Never improvise recovery.
+**Fix:** Roll back immediately. Investigate on non-production. Fix
+forward on the integration branch. Never improvise recovery.
 
 ### The Untested Framework Upgrade
 
@@ -217,6 +221,6 @@ Agent merges Next.js minor version bump after CI passes. Build succeeds, tests p
 | Assess risk | Framework upgrades need preview verification; dev patches need CI only |
 | Preview before prod | Deploy to preview URL and verify before merging to `main` |
 | Roll back first | When production is down, restore service before investigating |
-| Fix forward | Create fixes on `develop`, verify on preview, then release to `main` |
+| Fix forward | Create fixes on the integration branch, verify on preview, then release to `main` |
 | Count the cost | Track CI runs and deployments — stop if exceeding estimates |
 | Local first | Test locally before pushing; build locally before deploying |

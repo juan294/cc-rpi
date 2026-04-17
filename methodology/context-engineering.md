@@ -129,11 +129,22 @@ Aim to keep context utilization at **40-60%** of the window. Above 60%, output q
 
 This is why the RPI phases are separate conversations, not one long session.
 
-## Research on Main, Implement in Worktrees
+## Research on the Default Branch, Implement in Worktrees
 
-Research and planning should happen on the `main`/`develop` branch — they don't modify code, so there's no risk. Implementation should happen in a git worktree or feature branch, keeping the default branch clean. This also means multiple research/planning sessions can happen in parallel without conflicts.
+Research and planning should happen on the project's default integration
+branch — in many projects this is `main`, while branch-based release
+workflows may use `develop` or another integration branch. These phases
+don't modify code, so there's no risk. Implementation should happen in
+a git worktree or feature branch, keeping the default integration
+branch clean. This also means multiple research/planning sessions can
+happen in parallel without conflicts.
 
 In Claude Code: use the `/worktree` command or `EnterWorktree` tool when starting implementation.
+
+This branch split also lines up with the routing model: `quick` and
+`deep` work usually stay on the default integration branch because they
+orient, investigate, or audit. `standard` and `batch` work move into
+isolated implementation environments before edits begin.
 
 ## Multiple Research Passes
 

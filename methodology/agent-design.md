@@ -69,6 +69,19 @@ This means:
 6. **Wait for ALL agents** before synthesizing.
 7. **Verify subagent results** — if something seems off, spawn a follow-up.
 
+## Routing Modes and Agent Depth
+
+The routing model controls how much orchestration to bring in:
+
+- `quick` — no team build-out; one lightweight orientation pass is enough
+- `standard` — normal RPI orchestration with targeted subagents and one
+  reviewer
+- `deep` — heavier parallel research or specialist audit coverage before
+  decisions are made
+- `batch` — multiple independent execution units in isolated worktrees
+
+This keeps "how many agents?" tied to task shape instead of habit.
+
 ---
 
 ## Subagent Catalog
@@ -583,7 +596,7 @@ Classify every action by its risk level to determine autonomy:
 |--------|----------|----------|
 | **Read-only** | Searching code, reading files, running tests, `git status`, `git log` | Fully autonomous |
 | **Low** | Writing code per approved plan, creating branches, committing to feature branches | Fully autonomous |
-| **Medium** | Pushing to `develop`, creating PRs, running `npm install` | Autonomous with post-action verification |
+| **Medium** | Pushing to the active development branch, creating PRs, running `npm install` | Autonomous with post-action verification |
 | **High** | Merging PRs, pushing to `main`/production, deploying, modifying external services | Human-gated — always ask first |
 | **Critical** | Deleting branches, force-pushing, dropping databases, modifying CI/CD pipelines | Human-gated — explain consequences before asking |
 
@@ -596,10 +609,10 @@ Classify every action by its risk level to determine autonomy:
 | Writing code per approved plan | Yes | Plan was already human-approved |
 | Creating git branches | Yes | Reversible, local scope |
 | Committing to feature branches | Yes | Reversible, local scope |
-| Pushing to `develop` | Yes, with CI monitor | Medium risk; background agent verifies |
+| Pushing to the active development branch | Yes, with CI monitor | Medium risk; background agent verifies |
 | Creating PRs | Yes | PR creation is proposing, not acting |
 | Adding PR descriptions | Yes | Informational, not destructive |
-| Merging PRs to `develop` | Ask first | Affects shared branch |
+| Merging PRs to the active development branch | Ask first | Affects shared branch |
 | Merging PRs to `main`/production | Always ask | Affects production |
 | Deploying to any environment | Always ask | External side effects |
 | Modifying CI/CD workflows | Always ask | Affects all contributors |

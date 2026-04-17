@@ -1,6 +1,6 @@
 # Known Agent Errors -- Universal Catalog
 
-63 documented error patterns from real recurring issues across projects.
+64 documented error patterns from real recurring issues across projects.
 Each entry: symptom, root cause, correct approach, anti-pattern.
 
 **Note:** This file is the source of truth for error patterns. The condensed
@@ -2332,3 +2332,39 @@ pytest -x --numprocesses=2
 ```
 
 **Key detail:** This compounds with Error #1 — if any agent's test run fails, sibling tool calls are killed, but the underlying test processes (spawned via Bash) continue running. The agent loses the ability to manage or cancel them. Prevention is the only fix: scope tests narrowly and limit concurrency.
+
+---
+
+## Error #64: Repeated failure documented, but never promoted to an executable check
+
+**Symptom:** The same issue appears in logs, reports, or postmortems
+multiple times. Everyone "knows" the lesson, but the harness still
+relies on memory and prose, so the failure keeps resurfacing.
+
+**Root cause:** The team stopped at documentation. The pattern was real,
+repeatable, and costly, but never graduated into a rule, hook, scripted
+verifier, or golden-case fixture.
+
+**Correct approach — always do this:**
+```text
+1. Keep the logs as evidence.
+2. After 3 recurrences, choose a promotion target:
+   - rule for judgment-heavy guidance
+   - hook for mechanically detectable bad actions
+   - scripted verifier for repeatable validation checks
+   - golden-case fixture for fragile regressions or known-good samples
+3. Record the promotion during triage so it becomes operational history.
+```
+
+**Never do this:**
+```text
+- "Let's just remember this next time."
+- "It's already in the wiki, so we're covered."
+- Adding another prose note when the failure is script-detectable.
+```
+
+**Examples:**
+- Dirty `git pull --rebase` attempts -> hook
+- Critical route keeps breaking despite green tests -> scripted verifier
+- Refresh-token expiry bug keeps returning -> regression test with
+  golden-case expired-token fixture

@@ -33,3 +33,11 @@ This pattern works well for any "add a new feature that mirrors an existing one.
 2. Reference that pattern explicitly in the plan
 3. Constrain the first phase to the core functionality only
 4. Defer cross-cutting concerns (auth, error handling, edge cases) to later phases
+
+## Promotion Outcome
+
+- Promote the lesson to a reusable planning rule: explicitly reference
+  an existing code pattern when the feature should mirror it
+- If the same mirrored feature shape succeeds repeatedly, preserve one
+  representative implementation and its test inputs as a golden-case
+  fixture for future planning and validation

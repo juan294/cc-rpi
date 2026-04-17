@@ -2,6 +2,12 @@ Research the codebase to answer: $ARGUMENTS
 
 Model tier: **opus** — Opus session. All subagents: `model: "opus"`.
 
+Routing mode: `deep`
+
+Choose this mode when ambiguity is high, the blast radius is unclear,
+the work is not yet reversible because you do not understand the system,
+or verification will depend on an accurate model of the current code.
+
 Process:
 1. Read any directly mentioned files FULLY before doing anything else.
 2. Break down the question into research areas.
