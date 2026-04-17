@@ -6,7 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
-### Changed
+## [1.17.1] - 2026-04-17
+
+### Fixed
 
 - **Blueprint consistency alignment** -- workflow and onboarding docs now
   use one coherent model across `methodology/`, `templates/`,
