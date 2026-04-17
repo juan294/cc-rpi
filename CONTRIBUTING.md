@@ -15,6 +15,9 @@ If you've encountered a recurring Claude Code agent error that isn't in the cata
 Or submit a PR directly:
 1. Add the detailed entry to `patterns/agent-errors.md` following the existing format.
 2. Add a one-liner to `patterns/quick-reference.md`.
+3. Update any hard-coded counts or references in onboarding docs and
+   skills (for example `README.md`, `GUIDE.md`, bootstrap docs, and the
+   error-patterns skill).
 
 ### Proposing a Methodology Improvement
 
@@ -26,6 +29,21 @@ If you've discovered a better workflow, a new best practice, or a refinement to 
 Or submit a PR:
 1. Add or modify the appropriate file under `methodology/`.
 2. If it's a new topic, create a new file and update `methodology/README.md`.
+
+### Consistency Sweep for Workflow Changes
+
+If your change affects workflow, topology guidance, commands, rules,
+skills, hooks, or onboarding instructions, include a consistency sweep
+before merging.
+
+Check these layers together:
+
+1. `methodology/`
+2. `templates/`
+3. Repo-local `.claude/` self-application
+4. `CLAUDE.md` and `AGENTS.md`
+5. `README.md` and `GUIDE.md`
+6. `CHANGELOG.md`
 
 ### Improving Templates
 
@@ -41,6 +59,9 @@ If the CLAUDE.md template, setup checklist, or slash commands could be better:
 - **Use file:line references** instead of code snippets in documentation — snippets go stale.
 - **Test your patterns.** If you're adding an error pattern, confirm the solution works across at least two sessions.
 - **Follow existing format.** Match the structure and tone of existing entries.
+- **Sweep all documentation layers** when workflow guidance changes.
+  Don't update a template without checking the repo-local copy and
+  onboarding docs.
 
 ## Commit Messages
 

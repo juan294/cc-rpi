@@ -196,8 +196,12 @@ Beyond automated checks, guardrails include process rules that prevent common mi
 ### Branch Protection
 
 - **Production branch** (`main`/`master`) — Protected. No direct pushes. PRs only, with required CI and review.
-- **Development branch** (`develop`) — Semi-protected. Agents can push directly, but push accountability monitors CI.
-- **Feature branches** — Unprotected. Agents create, push, and clean up freely.
+- **Integration branch** (for example `develop` or `main`) —
+  Protected or semi-protected depending on topology. This is the shared
+  branch that receives reviewed work and whose CI must stay green.
+- **Implementation branches/worktrees** — Temporary, isolated branches
+  where agents do the actual coding before opening a PR or merging to
+  the integration branch.
 
 ### Environment Safety
 
@@ -213,7 +217,11 @@ Beyond automated checks, guardrails include process rules that prevent common mi
 
 ## Guardrails and Agent Autonomy
 
-Guardrails are what make agent autonomy safe. When pre-commit hooks catch errors, CI verifies builds, and branch protection prevents unauthorized merges, agents can operate with high autonomy on the development branch without risk of damage.
+Guardrails are what make agent autonomy safe. When pre-commit hooks
+catch errors, CI verifies builds, and branch protection prevents
+unauthorized merges, agents can operate with high autonomy on temporary
+implementation branches and, where the topology allows it, on
+non-production integration branches without risking production damage.
 
 The relationship is:
 - **More guardrails** → more agent autonomy is safe

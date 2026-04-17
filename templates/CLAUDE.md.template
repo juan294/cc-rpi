@@ -33,14 +33,12 @@ pnpm run build          # Production build
 
 ## Git Workflow
 
-**Adapt this section to your project's branch strategy.**
+Document the actual branch topology for this repo:
 
-Common patterns:
-
-- Branch-based release flow: `develop` (or another integration branch)
-  is the default working branch and `main` is production
-- Main-only flow: `main` is both the default and production branch,
-  usually with tagged releases
+- Integration branch: `[e.g. main or develop]`
+- Production branch: `[e.g. main, release branch, or none]`
+- Implementation happens in git worktrees or temporary branches,
+  not directly on the long-lived branch
 
 Conventional commits:
 `feat|fix|test|refactor|chore|docs(scope): description`

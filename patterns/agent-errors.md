@@ -1657,7 +1657,7 @@ git add . && git commit -m "feat: add feature" && git push
 # ← May push to main, master, or wrong feature branch
 
 # Don't assume the branch from conversation context:
-# User said "push to develop" 50 messages ago — verify git state NOW
+# User said "push to the integration branch" 50 messages ago — verify git state NOW
 ```
 
 **Key detail:** This is especially damaging when pushing to `main`/`master` (production). The guard hook (`guard-bash.sh`) blocks direct pushes to protected branches, but the agent should also verify before committing to any branch. Sub-agents are particularly prone to this — they don't inherit the parent's conversation context about which branch to target.

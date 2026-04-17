@@ -63,9 +63,12 @@ if [[ "$COMMAND" == *"git push"* ]]; then
     exit 2
   fi
 
-  # Error #48: direct push to main/master instead of the development branch.
-  # DISABLED for cc-rpi — this project uses main-only workflow (no develop branch).
-  # The template at templates/hooks/guard-bash.sh keeps this guard for other projects.
+  # Error #48: direct push to main/master instead of a non-production path.
+  # Intentionally not enforced for cc-rpi. This repo's long-lived branch is
+  # main, so validated changes may still be pushed there after explicit user
+  # approval. The policy is "high-stakes and exceptional", not "never".
+  # The template at templates/hooks/guard-bash.sh keeps the generic guard for
+  # repos where production/main protection should be enforced directly.
   # if [[ "$COMMAND" =~ (^|[[:space:]])(main|master)($|[[:space:]]|:) ]] \
   #    && [[ "$COMMAND" != *"--follow-tags"* ]]; then
   #   echo "BLOCKED by guard-bash.sh — Error #48: direct push to protected branch"

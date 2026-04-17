@@ -72,7 +72,10 @@ Research documents and plans become the primary mechanism for keeping team membe
 
 11. **Subagents are context control, not role-playing.** The value of subagents is that they consume context in their window and return only the distilled result.
 
-12. **Research on main, implement in worktrees.** Research and planning don't modify code, so they're safe on main. Implementation should happen in isolated branches.
+12. **Research on the integration branch, implement in worktrees.**
+Research and planning don't modify code, so they can happen against the
+shared integration branch. Implementation should happen in isolated
+worktrees or temporary branches regardless of the repo's topology.
 
 13. **Multiple research passes are normal.** The first research pass may be wrong. Read it critically, and if it's off-base, throw it out and steer harder.
 

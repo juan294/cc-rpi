@@ -33,6 +33,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
   automated checks, fixtures/setup, edge cases, and allowed manual
   exceptions, and `/validate` now reads against that contract.
 
+## [1.17.1] - 2026-04-17
+
+### Fixed
+
+- **Blueprint consistency alignment** -- workflow and onboarding docs now
+  use one coherent model across `methodology/`, `templates/`,
+  repo-local `.claude/`, `CLAUDE.md`, `AGENTS.md`, `README.md`, and
+  `GUIDE.md`. Worktree-based implementation is documented as universal,
+  branch-topology guidance is labeled consistently, outdated
+  error-catalog count references are updated to `63`, and contributor
+  guidance now requires a cross-layer consistency sweep when workflow
+  docs change.
+
 ## [1.17.0] - 2026-04-17
 
 ### Added

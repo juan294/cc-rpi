@@ -12,6 +12,9 @@ description: RPI workflow details for cc-rpi development -- phase rules, context
   Use `/compact` when context is heavy but the task continues.
 - Subagents are context control mechanisms --
   they search/read in their window and return only distilled results.
+- Research and planning happen against `main`.
+  Implementation happens in isolated worktrees or temporary branches.
+  `main` is the canonical branch, not the default edit target.
 
 ## Rules for All Phases
 

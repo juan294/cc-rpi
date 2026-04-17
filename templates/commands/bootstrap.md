@@ -9,7 +9,10 @@ Read these files from cc-rpi IN ORDER. Do not skip any.
 1. `patterns/quick-reference.md` — Internalize every operational rule. These apply to ALL your work from now on.
 2. `methodology/README.md` — Read the one-paragraph summary and the reading order. You do NOT need to read every methodology file right now — you'll reference them as needed during actual work.
 
-The error-patterns skill provides condensed error reference on demand during debugging. The full 62-error catalog (`patterns/agent-errors.md`) is available but not required for onboarding.
+The error-patterns skill provides condensed error reference on demand
+during debugging. The full 63-error catalog
+(`patterns/agent-errors.md`) is available but not required for
+onboarding.
 
 ## Phase 2: Understand the Templates
 

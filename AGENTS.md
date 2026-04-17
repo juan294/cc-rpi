@@ -74,7 +74,9 @@ When the user invokes a slash-style command in OpenCode:
 
 ## Repo-Specific Notes
 
-- `main` is the only branch for this repo
+- `main` is the long-lived canonical branch for this repo
+- Implementation still happens in isolated worktrees or temporary branches
+- Direct pushes to `main` are high-stakes and require explicit user confirmation
 - `templates/` is the exported blueprint; keep it canonical
 - `.claude/` is the repo's own self-applied installation of the
   blueprint

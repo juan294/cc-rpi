@@ -13,11 +13,18 @@ Wrong -- merge Dependabot PR thinking it's cleanup:
 gh pr merge 42 --merge  # Dependabot targets main = production deploy
 ```
 
-Right -- cherry-pick to the integration branch, close the PR:
+Right -- move the update onto the non-production integration path,
+close the PR, and release normally:
 
 ```bash
-git checkout <integration-branch> && git cherry-pick <commit>
-gh pr close 42  # release via normal integration -> main process
+# develop/main topology:
+git checkout develop && git cherry-pick <commit>
+gh pr close 42  # release via develop -> main
+
+# main-only topology:
+git checkout -b chore/dependency-updates main
+git cherry-pick <commit>
+gh pr close 42  # validate on branch/PR before merging back to main
 ```
 
 ## Dependency Batching
@@ -32,7 +39,12 @@ gh pr merge 1 && gh pr merge 2 && gh pr merge 3
 Right -- batch into a single branch:
 
 ```bash
-git checkout -b chore/dependency-updates <integration-branch>
+# develop/main topology:
+git checkout -b chore/dependency-updates develop
+
+# main-only topology:
+git checkout -b chore/dependency-updates main
+
 # Apply all updates, run CI once, merge one PR
 ```
 
@@ -80,7 +92,8 @@ Right -- roll back first, investigate second:
 ```bash
 vercel rollback  # Step 1: restore service immediately
 # Step 2: investigate on non-production (logs, preview URL)
-# Step 3: fix on the integration branch, verify on preview, then PR to main
+# Step 3: fix on the integration path, verify on preview,
+# then merge to the production branch
 ```
 
 ## Justify Every Action

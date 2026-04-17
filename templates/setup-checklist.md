@@ -106,7 +106,8 @@ in `AGENTS.md`. Committed.
 - [ ] Fill in project name, description, and stack
 - [ ] Document build/test/lint commands
 - [ ] Document deployment pipeline (which branch deploys where)
-- [ ] Document git workflow (default branch, production branch)
+- [ ] Document git workflow (integration branch, production branch,
+  implementation isolation)
 - [ ] Add project-specific context (key routes, data types, code ownership)
 - [ ] Keep `AGENTS.md` aligned with the project's workflow conventions:
   - Slash-style commands dispatch to `.claude/commands/*.md`
@@ -212,21 +213,28 @@ a thin wrapper that points back to the matching file in
   - (Optional) Security audit, E2E tests
 - [ ] Mark critical CI jobs as required for PR merges
 - [ ] Enable branch protection on the production branch (require CI + review)
-- [ ] Verify CI runs successfully on the branch used for active development
+- [ ] Verify CI runs successfully on the chosen integration branch
 
 ## Git Setup
 
-- [ ] Choose a branch strategy and document it in `CLAUDE.md`:
-  - Branch-based release flow: `main` is production and `develop` (or another integration branch) is the default working branch
-  - Main-only flow: `main` is both the default and production branch, usually with tagged releases
-- [ ] Initialize the repo branches to match that strategy
+- [ ] Choose a documented branch topology:
+  - `main-only` — `main` is the long-lived integration branch, and may
+    also be the production branch
+  - `develop/main` — `develop` is integration, `main` is production
+- [ ] Document the integration branch in `CLAUDE.md`
+- [ ] Document the production branch in `CLAUDE.md` (or state that the
+  repo has no separate production branch)
+- [ ] Require implementation to happen in worktrees or temporary
+  branches regardless of topology
 - [ ] Set up branch protection rules on GitHub
-- [ ] Configure pre-commit hooks (typecheck, lint, test) — see Pre-Commit Hooks above
+- [ ] Configure pre-commit hooks (typecheck, lint, test) — see
+  Pre-Commit Hooks above
 
 ## Push Accountability
 
 - [ ] Add push accountability instructions to CLAUDE.md or CLAUDE.local.md:
-  - After every push to the branch used for active development, spawn a background CI monitor
+  - After every push to the branch under active CI verification,
+    spawn a background CI monitor
   - Background agent polls, investigates failures, fixes, and re-pushes
   - Main terminal stays unblocked
 - [ ] Test the workflow: push a deliberate failure, verify the background agent catches it
@@ -303,7 +311,8 @@ The shell script reads update instructions from cc-rpi at runtime, so when cc-rp
 - [ ] Run `/triage` every morning to process overnight agent reports
 - [ ] Use `/clear` between unrelated tasks to reset context
 - [ ] Run each RPI phase in its own conversation
-- [ ] Research and plan on the default branch; implement in worktrees
+- [ ] Research and plan against the integration branch; implement in
+  worktrees
 - [ ] Read research output critically — throw out and redo if wrong
 - [ ] Invest most review time on research and plans, not generated code
 - [ ] For large features, have Claude interview you before planning (AskUserQuestion)
@@ -323,12 +332,17 @@ The defaults above assume a web application. Adapt these sections based on your 
 
 ### Web Application (default)
 
-The standard setup applies as-is. Typical stack badges: framework (Next.js, Remix), runtime (Node.js), language (TypeScript). Add a license badge only if the project is open source.
+The standard setup applies as-is. Choose either a `main-only` or a
+`develop/main` topology, then document which branch is integration and
+which branch deploys to production. Typical stack badges: framework
+(Next.js, Remix), runtime (Node.js), language (TypeScript). Add a
+license badge only if the project is open source.
 
 ### Library / npm Package
 
-- **Git workflow:** Often uses `main` only (no `develop`) when releases
-  are tagged directly from `main`
+- **Git workflow:** `main-only` is often simplest if releases are tagged
+  from `main`, but implementation still happens in worktrees or
+  temporary branches
 - **CI additions:** Add `npm pack` or `pnpm pack` verification, publish dry-run
 - **Testing:** Prioritize unit tests and type-level tests. Add consumer integration tests (test the package from a downstream project's perspective)
 - **CLAUDE.md:** Document the public API surface. Add "do not change exports without a major version bump" rule
@@ -344,9 +358,9 @@ The standard setup applies as-is. Typical stack badges: framework (Next.js, Remi
 
 ### Monorepo
 
-- **Git workflow:** Often keeps the same integration-branch /
-  production-branch split, but CI runs per-package with change
-  detection
+- **Git workflow:** Use the same explicit topology choice as the base
+  project (`main-only` or `develop/main`), but CI runs per-package with
+  change detection
 - **CI additions:** Use `turbo`/`nx` affected detection. Only run checks for changed packages
 - **CLAUDE.md:** Document the workspace structure, how packages depend on each other, which package owns which feature
 - **Pre-commit:** Run typecheck across ALL workspace packages (not just changed ones — cross-package type errors are common)
@@ -363,8 +377,8 @@ The standard setup applies as-is. Typical stack badges: framework (Next.js, Remi
 
 ### Static Site / Documentation
 
-- **Git workflow:** May deploy directly from `main` when the project
-  does not need a separate integration branch
+- **Git workflow:** `main-only` is often enough for simple sites, but
+  implementation should still happen in worktrees or temporary branches
 - **CI:** Build verification + link checking + image optimization check
 - **Testing:** Minimal — focus on build success and broken link detection
 - **CLAUDE.md:** Keep lean. Document build command, content directory structure, frontmatter conventions

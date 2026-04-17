@@ -1,7 +1,7 @@
 # cc-rpi — Claude Code Reference & Project Intelligence
 
 [![CI](https://github.com/juan294/cc-rpi/actions/workflows/validate.yml/badge.svg)](https://github.com/juan294/cc-rpi/actions/workflows/validate.yml)
-[![Version: v1.17.0](https://img.shields.io/badge/Version-v1.17.0-orange.svg)](https://github.com/juan294/cc-rpi/releases/tag/v1.17.0)
+[![Version: v1.17.1](https://img.shields.io/badge/Version-v1.17.1-orange.svg)](https://github.com/juan294/cc-rpi/releases/tag/v1.17.1)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Status: Active](https://img.shields.io/badge/Status-Active-brightgreen.svg)]()
 [![Claude Code](https://img.shields.io/badge/Built%20for-Claude%20Code-blueviolet.svg)](https://docs.anthropic.com/en/docs/claude-code)
@@ -25,7 +25,7 @@ git clone https://github.com/juan294/cc-rpi.git
 
 Then tell Claude Code in your target project:
 
-> Go read the cc-rpi repository and set up this project following all the best practices. Read the quick reference, error catalog, and methodology, then configure CLAUDE.md, AGENTS.md, and slash commands for this project.
+> Go read the cc-rpi repository and set up this project following all the best practices. Read the quick reference and methodology first, use the error-patterns skill or full error catalog only if needed, then configure CLAUDE.md, AGENTS.md, and slash commands for this project.
 
 Bootstrapped and adopted projects now also get an `AGENTS.md`
 compatibility layer so the same methodology can be operated from Codex /

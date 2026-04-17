@@ -254,9 +254,15 @@ When multiple agents operate in parallel (sub-agents, teammates, or `/batch` uni
 
 ### Branch Verification Before Every Commit
 
-Before any `git commit`, the agent must run `git branch --show-current` and verify the result matches the intended target. This applies even when the user said "push to develop" earlier in the conversation — git state is the source of truth, not conversation memory.
+Before any `git commit`, the agent must run `git branch --show-current`
+and verify the result matches the intended target. This applies even
+when the user said "push to the integration branch" earlier in the
+conversation — git state is the source of truth, not conversation
+memory.
 
-The `guard-bash.sh` hook blocks `git push origin main/master` as a last line of defense, but verification should happen before the commit, not after.
+The `guard-bash.sh` hook should block direct pushes to protected
+production branches as a last line of defense, but verification should
+happen before the commit, not after.
 
 ### File Ownership for Parallel Agents
 
@@ -372,7 +378,7 @@ description: When writing or modifying REST API endpoints, handlers, or middlewa
 
 ## References
 See `references/` for the full endpoint catalog and error codes.
-See `examples/pagination.ts` for the canonical pagination pattern.
+See `examples/` for the canonical pagination pattern.
 ```
 
 #### Writing Effective Skills
@@ -596,7 +602,7 @@ Classify every action by its risk level to determine autonomy:
 |--------|----------|----------|
 | **Read-only** | Searching code, reading files, running tests, `git status`, `git log` | Fully autonomous |
 | **Low** | Writing code per approved plan, creating branches, committing to feature branches | Fully autonomous |
-| **Medium** | Pushing to the active development branch, creating PRs, running `npm install` | Autonomous with post-action verification |
+| **Medium** | Pushing to a non-production integration branch, creating PRs, running `npm install` | Autonomous with post-action verification |
 | **High** | Merging PRs, pushing to `main`/production, deploying, modifying external services | Human-gated — always ask first |
 | **Critical** | Deleting branches, force-pushing, dropping databases, modifying CI/CD pipelines | Human-gated — explain consequences before asking |
 
@@ -609,10 +615,10 @@ Classify every action by its risk level to determine autonomy:
 | Writing code per approved plan | Yes | Plan was already human-approved |
 | Creating git branches | Yes | Reversible, local scope |
 | Committing to feature branches | Yes | Reversible, local scope |
-| Pushing to the active development branch | Yes, with CI monitor | Medium risk; background agent verifies |
+| Pushing to a non-production integration branch | Yes, with CI monitor | Medium risk; background agent verifies |
 | Creating PRs | Yes | PR creation is proposing, not acting |
 | Adding PR descriptions | Yes | Informational, not destructive |
-| Merging PRs to the active development branch | Ask first | Affects shared branch |
+| Merging PRs to a shared integration branch | Ask first | Affects a shared branch |
 | Merging PRs to `main`/production | Always ask | Affects production |
 | Deploying to any environment | Always ask | External side effects |
 | Modifying CI/CD workflows | Always ask | Affects all contributors |
