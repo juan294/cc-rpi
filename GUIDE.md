@@ -54,7 +54,9 @@ git clone https://github.com/juan294/cc-rpi.git
 
 Keep this repository somewhere permanent on your machine. You'll reference it from every project.
 
-Then install the two user-level commands that make everything work. These go in your home directory, so they're available in every project — even ones that haven't been set up yet:
+Then install the four user-level commands that make everything work.
+These go in your home directory, so they're available in every project
+even ones that haven't been set up yet:
 
 ```bash
 mkdir -p ~/.claude/commands
@@ -346,7 +348,7 @@ your-project/
 │   └── skills/                  # Domain knowledge (loaded on demand)
 │       ├── git-workflow/        # Push sequences, worktree management
 │       ├── ci-workflow/         # Push accountability, verification
-│       ├── error-patterns/      # Known error catalog (top 20 + index)
+│       ├── error-patterns/      # Condensed error reference (top 20 + index)
 │       └── ...                  # + deployment-safety, multi-agent, etc.
 ├── docs/
 │   ├── research/                # Research documents

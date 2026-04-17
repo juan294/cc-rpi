@@ -127,7 +127,7 @@ Skills: `[skill:name]` points to `.claude/skills/name/` for full examples.
 
 ## Deployment & Resources `[skill:deployment-safety]`
 
-62. **Merging to main IS deploying to production** `[universal]` -- in projects with CI/CD, a merge is a deployment. Dependabot PRs target main by default.
+62. **Merging to the production branch IS deploying to production** `[universal]` -- in projects with CI/CD, a merge to the protected production branch is a deployment. Dependabot PRs often target that branch by default.
 
 63. **Batch dependency updates into a single PR** `[frequent]` -- merging N PRs one-by-one with "require up-to-date" creates O(n^2) CI waste. Create one branch, apply all updates, run CI once.
 
@@ -135,7 +135,7 @@ Skills: `[skill:name]` points to `.claude/skills/name/` for full examples.
 
 65. **Framework upgrades need preview verification** `[frequent]` -- CI passing is necessary but not sufficient. Build != Runtime. Deploy to a preview URL and verify the site loads before merging.
 
-66. **When production is down: roll back first** `[universal]` -- restore service immediately. Investigate on a non-production environment. Fix forward on develop, verify on preview, release to main.
+66. **When production is down: roll back first** `[universal]` -- restore service immediately. Investigate on a non-production environment. Fix forward on the integration path, verify on preview, then release to the production branch.
 
 67. **Justify every external action before triggering** `[universal]` -- before any CI run, deployment, or API call: Is this needed? Is this justified? Is this verifiable? If any answer is "no", stop.
 

@@ -11,7 +11,10 @@ Read these files from cc-rpi IN ORDER. Do not skip any.
 1. `patterns/quick-reference.md` — Internalize every operational rule.
 2. `methodology/README.md` — Read the one-paragraph summary and reading order.
 
-The error-patterns skill provides condensed error reference on demand. The full catalog (`patterns/agent-errors.md`) is available but not required for onboarding.
+The error-patterns skill provides condensed error reference on demand.
+The full catalog (`patterns/agent-errors.md`) is available when the
+audit uncovers a debugging pattern that needs deeper detail, but it is
+not required for onboarding.
 3. `templates/setup-checklist.md` — Understand the target state for a fully set up project.
 4. `templates/CLAUDE.md.template` — Know what a well-configured CLAUDE.md looks like.
 5. `templates/AGENTS.md.template` — Know what the Codex compatibility layer should contain.
@@ -127,7 +130,7 @@ After presenting the report:
 
 After completing the migration:
 
-5. Save the following to auto memory so future sessions start with full awareness:
+1. Save the following to auto memory so future sessions start with full awareness:
     - Project name, type, and stack
     - What was already in place vs what was migrated
     - Key decisions made during adoption (what the user chose to keep, skip, or adapt)

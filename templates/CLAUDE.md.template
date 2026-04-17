@@ -33,7 +33,12 @@ pnpm run build          # Production build
 
 ## Git Workflow
 
-**`develop` is the default branch. `main` is production.**
+Document the actual branch topology for this repo:
+
+- Integration branch: `[e.g. main or develop]`
+- Production branch: `[e.g. main, release branch, or none]`
+- Implementation happens in git worktrees or temporary branches,
+  not directly on the long-lived branch
 
 Conventional commits:
 `feat|fix|test|refactor|chore|docs(scope): description`

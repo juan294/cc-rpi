@@ -25,7 +25,7 @@ git clone https://github.com/juan294/cc-rpi.git
 
 Then tell Claude Code in your target project:
 
-> Go read the cc-rpi repository and set up this project following all the best practices. Read the quick reference, error catalog, and methodology, then configure CLAUDE.md, AGENTS.md, and slash commands for this project.
+> Go read the cc-rpi repository and set up this project following all the best practices. Read the quick reference and methodology first, use the error-patterns skill or full error catalog only if needed, then configure CLAUDE.md, AGENTS.md, and slash commands for this project.
 
 Bootstrapped and adopted projects now also get an `AGENTS.md`
 compatibility layer so the same methodology can be operated from Codex /

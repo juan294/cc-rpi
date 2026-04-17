@@ -63,7 +63,7 @@ if [[ "$COMMAND" == *"git push"* ]]; then
     exit 2
   fi
 
-  # Error #48: direct push to main/master instead of the development branch.
+  # Error #48: direct push to main/master instead of a non-production path.
   # Matches "main" or "master" anywhere in the push args (handles flags like -u
   # appearing before the remote name: git push -u origin main).
   # Allows --follow-tags (release flow).
@@ -74,8 +74,9 @@ if [[ "$COMMAND" == *"git push"* ]]; then
     echo "Pushing directly to main/master is a high-stakes action."
     echo "If this is intentional (e.g., a release), ask the user first."
     echo ""
-    echo "For normal development, push to the development branch:"
-    echo "  git push origin develop"
+    echo "For normal development, push to a non-production branch, for example:"
+    echo "  git push origin develop                 # develop/main topology"
+    echo "  git push -u origin feature/my-change    # main-only or PR flow"
     echo ""
     echo "For releases with tags:"
     echo "  git push origin main --follow-tags"

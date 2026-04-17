@@ -30,7 +30,10 @@ Read these files from cc-rpi to internalize the latest rules and patterns:
 4. `patterns/quick-reference.md` — All operational rules.
 5. `methodology/README.md` — Methodology overview.
 
-The error-patterns skill provides condensed error reference on demand. The full catalog (`patterns/agent-errors.md`) is available on incremental syncs when error patterns changed in the diff.
+The error-patterns skill provides condensed error reference on demand.
+On incremental syncs, read the full catalog
+(`patterns/agent-errors.md`) only when the diff changes error-pattern
+content and the added detail is needed.
 
 On incremental syncs (lastSyncCommit exists), prioritize reading files that appear in the git diff. You can skip unchanged methodology files.
 

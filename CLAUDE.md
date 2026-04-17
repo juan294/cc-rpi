@@ -54,12 +54,14 @@ Run verification sequentially with `&&` or `;`, NEVER as parallel Bash calls.
 
 ## Git Workflow
 
-**`main` is the only branch. Documentation project -- no develop/main split.**
+**`main` is the long-lived canonical branch for this repo.**
 
-1. All work happens directly on `main`
-2. Always run markdownlint before committing
-3. Always commit before pulling (hook enforced)
-4. Verify current branch before any commit
+1. Research and planning happen against `main`
+2. Implementation happens in temporary branches or isolated worktrees
+3. Direct pushes to `main` are exceptional/high-stakes, not the default path
+4. Always run markdownlint before committing
+5. Always commit before pulling (hook enforced)
+6. Verify current branch before any commit
 
 ### Commit Messages
 
@@ -73,9 +75,9 @@ release: vX.Y.Z         # Version bumps
 
 ## Push Accountability
 
-After every push, verify CI:
+After every push, verify CI on the branch you just pushed:
 
-1. `gh run list --branch main --limit 1` to check status
+1. `gh run list --branch $(git branch --show-current) --limit 1` to check status
 2. If CI fails -- investigate with `gh run view <id> --log-failed`, fix, re-push
 3. The push isn't done until CI is green
 

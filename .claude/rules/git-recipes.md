@@ -1,5 +1,5 @@
 ---
-description: Git recipes and push sequences for cc-rpi -- main-only workflow, tag management, worktree cleanup
+description: Git recipes and push sequences for cc-rpi -- canonical main branch, high-stakes main pushes, worktree cleanup
 ---
 
 # Git Recipes
@@ -7,9 +7,14 @@ description: Git recipes and push sequences for cc-rpi -- main-only workflow, ta
 Hooks enforce critical steps (Errors #33, #44, #48).
 
 ```bash
-# Push sequence -- ALWAYS commit before pulling
+# Normal implementation branch push sequence
 git add <files> && git commit -m "msg"
 git pull --rebase && git push
+
+# High-stakes push to main -- only after validation / explicit approval
+git checkout main && git pull --rebase
+git merge --ff-only <implementation-branch>
+git push origin main
 
 # Push with tag -- NEVER use --tags
 git push origin main && git push origin v1.0.0
