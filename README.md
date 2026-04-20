@@ -6,6 +6,8 @@
 [![Status: Active](https://img.shields.io/badge/Status-Active-brightgreen.svg)]()
 [![Claude Code](https://img.shields.io/badge/Built%20for-Claude%20Code-blueviolet.svg)](https://docs.anthropic.com/en/docs/claude-code)
 
+![Chapa Badge](https://chapa.thecreativetoken.com/u/juan294/badge.svg)
+
 A blueprint repository for setting up and running projects with [Claude Code](https://docs.anthropic.com/en/docs/claude-code), with a Codex compatibility layer via `AGENTS.md`. Contains the RPI (Research-Plan-Implement) methodology, a catalog of known agent errors, and operational rules learned from hundreds of real sessions.
 
 ---
