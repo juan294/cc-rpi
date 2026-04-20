@@ -1,7 +1,7 @@
 # cc-rpi — Claude Code Reference & Project Intelligence
 
 [![CI](https://github.com/juan294/cc-rpi/actions/workflows/validate.yml/badge.svg)](https://github.com/juan294/cc-rpi/actions/workflows/validate.yml)
-[![Version: v1.17.1](https://img.shields.io/badge/Version-v1.17.1-orange.svg)](https://github.com/juan294/cc-rpi/releases/tag/v1.17.1)
+[![Version: v1.17.2](https://img.shields.io/badge/Version-v1.17.2-orange.svg)](https://github.com/juan294/cc-rpi/releases/tag/v1.17.2)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Status: Active](https://img.shields.io/badge/Status-Active-brightgreen.svg)]()
 [![Claude Code](https://img.shields.io/badge/Built%20for-Claude%20Code-blueviolet.svg)](https://docs.anthropic.com/en/docs/claude-code)
@@ -36,6 +36,32 @@ If you also use Codex, the blueprint ships a Codex-only
 Copy it into `~/.codex/skills/codex-simplify/` if you want a reusable
 equivalent of Claude Code's native `/simplify` without creating a
 project skill named `simplify`.
+
+## Harness Scope
+
+**Principle: one harness per blueprint.** cc-rpi is authored for Claude
+Code and maintained for a single author syncing 15+ downstream
+projects. Every additional harness is ongoing sync surface --
+parallel command trees, parallel wrappers, extra work in `/update` on
+every blueprint bump -- so by default new harness support lives
+outside this repo.
+
+**Codex is the one exception.** `AGENTS.md` is a widely adopted
+cross-agent markdown convention that Codex reads natively, so the
+compatibility layer is a single file and a handful of translations,
+not a parallel command tree. The ongoing cost is low enough to carry
+upstream without dragging on `/update` across every project.
+
+Other harnesses (OpenCode, GitHub Copilot, etc.) are better served by
+sibling projects or community-maintained overlays. [copilot-rpi][] is
+maintained as a separate repository rather than layered on top of
+cc-rpi for exactly this reason. For an ad-hoc harness such as
+OpenCode, the recommended path is a small overlay repo with a
+generator script that derives the harness-specific command directory
+from `.claude/commands/`, a long-lived downstream fork, or a minimal
+`AGENTS.md` + harness config file with no command wrappers at all.
+
+[copilot-rpi]: https://github.com/juan294/copilot-rpi
 
 ## Guide
 

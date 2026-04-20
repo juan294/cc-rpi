@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.17.2] - 2026-04-18
+
+### Changed
+
+- **Harness scope policy documented in `README.md`** -- new "Harness
+  Scope" section states the one-harness-per-blueprint principle,
+  explains why Codex is the one exception (single `AGENTS.md` bridge,
+  not a parallel command tree), and points OpenCode, GitHub Copilot,
+  and other harnesses at sibling repos, community overlays, or forks.
+  Links `copilot-rpi` as the canonical precedent for a sibling-repo
+  harness layer.
+
 ## [1.17.1] - 2026-04-17
 
 ### Fixed
