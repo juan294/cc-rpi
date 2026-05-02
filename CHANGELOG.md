@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.18.0] - 2026-05-02
+
 ### Added
 
 - **Rule #72: Triage processes Dependabot PRs.** `/triage` now scans
