@@ -171,6 +171,8 @@ Skills: `[skill:name]` points to `.claude/skills/name/` for full examples.
 
 71. **Use timestamp-based discovery for triage** `[frequent]` -- touch `docs/agents/.last-triage` after each run. Next triage uses `find ... -newer .last-triage`. On first run, process all reports.
 
+72. **Triage processes Dependabot PRs** `[universal]` -- `/triage` lists open Dependabot PRs (`gh pr list --author "app/dependabot"`) and merges what it can. **Patch + minor with green CI:** auto-merge via `gh pr merge --squash --auto --delete-branch`. **Major bumps:** defer for human review (breaking changes need judgment). **CI red, fix obvious:** one attempt to regenerate snapshots/lockfiles, then auto-merge if green or defer. **Conflicts:** rebase via `gh pr update-branch`, then re-evaluate. Dependabot processing happens last so a flaky dependency PR can't block triage code fixes.
+
 ---
 
 For detailed symptoms, root causes, and examples, see [agent-errors.md](agent-errors.md).

@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Added
+
+- **Rule #72: Triage processes Dependabot PRs.** `/triage` now scans
+  open Dependabot PRs (`gh pr list --author "app/dependabot"`) as part
+  of Step 1 Discovery and processes them in a new Step 5 (after the
+  triage commit is pushed). Patch and minor updates with green CI
+  auto-merge via `gh pr merge --squash --auto --delete-branch`. Major
+  bumps defer for human review. CI red with an obvious fix (snapshot
+  drift, lockfile, generated files) gets one fix attempt before
+  deferring. Conflicts are rebased via `gh pr update-branch` and
+  re-evaluated. Dependabot processing happens last so a flaky dependency
+  PR can't block triage code fixes. Updated:
+  `patterns/quick-reference.md`, `methodology/scheduled-agents.md`
+  Morning Triage section, `.claude/commands/triage.md` and template
+  counterpart, and `GUIDE.md`.
+
 ### Changed
 
 - **Rule #70 is now conditional on repo visibility.** Previously, agent

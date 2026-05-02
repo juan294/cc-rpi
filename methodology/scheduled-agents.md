@@ -414,17 +414,19 @@ For private repos, omit these entries — the directories are tracked normally.
 
 ## Morning Triage
 
-After scheduled agents finish their overnight runs, use `/triage` to process all reports:
+After scheduled agents finish their overnight runs, use `/triage` to process all reports and the Dependabot PR queue:
 
 1. Checks the `.last-triage` marker to discover reports modified since the last triage run
 2. If no marker exists (first run), processes ALL reports in `docs/agents/`
 3. Checks `logs/` for agent failures (a missing report might mean a crashed agent)
-4. Reads all reports and shared-context.md
-5. Synthesizes findings and drafts an action plan
-6. Implements all fixes (fix everything — Rule #58)
-7. Commits code fixes (and reports too, on private repos — Rule #70)
-8. Updates shared-context.md with triage results
-9. Touches `docs/agents/.last-triage` to mark reports as processed
+4. Lists open Dependabot PRs and classifies each by update type and CI status (Rule #72)
+5. Reads all reports and shared-context.md
+6. Synthesizes findings and drafts an action plan
+7. Implements all fixes (fix everything — Rule #58)
+8. Commits code fixes (and reports too, on private repos — Rule #70)
+9. Updates shared-context.md with triage results
+10. Touches `docs/agents/.last-triage` to mark reports as processed
+11. Processes Dependabot PRs last (Rule #72): auto-merges patch/minor with green CI, attempts one fix for obvious CI failures, defers majors and non-obvious failures
 
 For multi-project orchestration, the `morning-triage.sh` script template (in `templates/scripts/`) runs `/triage` across all configured projects sequentially, producing a cross-project summary.
 

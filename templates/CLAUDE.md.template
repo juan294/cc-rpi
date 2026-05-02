@@ -69,7 +69,7 @@ Go directly to these paths -- never search for them.
 
 | Topic | Path | Notes |
 |-------|------|-------|
-| Agent reports | `docs/agents/*-report.md` | Gitignored |
+| Agent reports | `docs/agents/*-report.md` | Gitignored on public repos; tracked on private (Rule #70) |
 | Research | `docs/research/YYYY-MM-DD-*.md` | |
 | Plans | `docs/plans/YYYY-MM-DD-*.md` | `-phases/` |
 | ADRs | `docs/decisions/` | |

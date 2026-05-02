@@ -65,5 +65,6 @@ When the user invokes a slash-style command:
 - `.codex/skills/` holds blueprint-shipped Codex-only skills; sync them
   into `~/.codex/skills/` for local Codex discovery
 - Research and plan docs in `docs/research/` and `docs/plans/` are
-  committed history; `docs/agents/` is operational output and remains
-  local-only
+  committed history; `docs/agents/` is operational output whose commit
+  policy depends on repo visibility (Rule #70) -- gitignored on public
+  repos, tracked on private repos as a historical audit trail
