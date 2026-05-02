@@ -2,7 +2,7 @@
 
 Model tier: **sonnet** — Sonnet 4.6 (1M context) session.
 
-Process all overnight agent reports. Discovers every report using timestamp-based discovery, checks for agent failures, synthesizes findings, proposes an action plan, and implements all fixes. Reports are never committed -- they stay on disk as local operational history (Rule #70).
+Process all overnight agent reports. Discovers every report using timestamp-based discovery, checks for agent failures, synthesizes findings, proposes an action plan, and implements all fixes. Report commit policy depends on repo visibility: public repos keep reports local, private repos commit them as historical artifacts (Rule #70).
 
 ## Input
 
@@ -138,7 +138,14 @@ After user approval, implement all action items.
 
 ## Step 4: Commit & Push
 
-Reports are NEVER committed (Rule #70). Only code fixes enter version control.
+Commit policy depends on repo visibility (Rule #70). Determine visibility before staging:
+
+```bash
+gh repo view --json visibility --jq '.visibility' 2>/dev/null
+# PUBLIC -> commit code fixes only (reports gitignored)
+# PRIVATE / INTERNAL -> commit code fixes AND reports
+# (no remote / gh unavailable) -> treat as PUBLIC (fail-safe)
+```
 
 1. **Append triage entry to shared-context.md:**
 
@@ -153,14 +160,23 @@ Reports are NEVER committed (Rule #70). Only code fixes enter version control.
    <!-- ENTRY:END -->
    ```
 
-2. **Commit code fixes only** (if any fixes were made):
+2. **Commit changes:**
+
+   On a **public repo** (or no remote), commit code fixes only:
 
    ```bash
    git add <changed-files>
    git commit -m "fix: resolve agent report findings [triage]"
    ```
 
-   Do NOT `git add` anything in `docs/agents/` or `logs/`. These directories are gitignored.
+   `docs/agents/`, `logs/`, and `scripts/agents/` are gitignored — do NOT `git add` anything in them.
+
+   On a **private repo**, commit code fixes and reports together:
+
+   ```bash
+   git add <changed-files> docs/agents/ logs/ scripts/agents/
+   git commit -m "fix: resolve agent report findings [triage]"
+   ```
 
 3. **Push to remote. Monitor CI:**
 
@@ -216,7 +232,7 @@ Present the report summary to the user.
 ## Rules
 
 - **Exhaustive discovery.** Use timestamp-based scan (Rule #71). Never assume how many reports exist. Present the full count before processing.
-- **Never commit reports (Rule #70).** Reports stay on disk as local operational history. Only code fixes are committed. `docs/agents/`, `logs/`, and `scripts/agents/` are gitignored.
+- **Report commit policy is visibility-conditional (Rule #70).** Public repos: reports stay local, only code fixes are committed (`docs/agents/`, `logs/`, `scripts/agents/` gitignored). Private repos: reports are committed alongside code fixes as historical artifacts.
 - **Touch `.last-triage` after completion.** This marks all current reports as processed for the next triage run.
 - **Check for agent failures.** Scan `logs/` BEFORE analyzing reports. A missing report might mean a failed agent, not "nothing to report."
 - **Fix everything (Rule #58).** Categorize findings by severity, but implement 100% of action items. No deferring. No "nothing urgent."

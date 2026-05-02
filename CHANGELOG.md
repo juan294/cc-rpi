@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Changed
+
+- **Rule #70 is now conditional on repo visibility.** Previously, agent
+  operational directories (`docs/agents/`, `logs/`, `scripts/agents/`)
+  were gitignored across all projects. They are now gitignored only on
+  public repos so operational details (security findings, internal
+  metrics, agent status) don't leak. On private repos these directories
+  are tracked, and `/triage` commits reports alongside code fixes as a
+  historical audit trail. Visibility is detected via
+  `gh repo view --json visibility`; missing remote or `gh` unavailable
+  fail-safes to PUBLIC behavior. Updated:
+  `patterns/quick-reference.md` (Rule #70),
+  `methodology/scheduled-agents.md` (Report Lifecycle, gitignore
+  section, Prerequisites), `templates/setup-checklist.md`,
+  `templates/commands/bootstrap.md`,
+  `.claude/commands/triage.md` and template counterpart,
+  `.claude/commands/pre-launch.md` and template counterpart, and
+  `GUIDE.md`.
+
 ## [1.17.2] - 2026-04-18
 
 ### Changed

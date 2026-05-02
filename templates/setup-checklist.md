@@ -251,14 +251,21 @@ The shell script reads update instructions from cc-rpi at runtime, so when cc-rp
 - [ ] Copy `install-agents.sh` from `cc-rpi/templates/scripts/agents/install-agents.sh` to `scripts/agents/`
 - [ ] Create `docs/agents/` directory for agent reports and shared context
 - [ ] Create `logs/` directory for agent output capture
-- [ ] **Gitignore all agent operational directories** (Rule #70 — reports are never committed):
+- [ ] **Determine repo visibility** (Rule #70 — commit policy depends on it):
+  ```bash
+  gh repo view --json visibility --jq '.visibility' 2>/dev/null
+  # PUBLIC -> gitignore the directories below (next step)
+  # PRIVATE / INTERNAL -> SKIP the gitignore step; agent dirs are tracked
+  # (no remote / gh unavailable) -> treat as PUBLIC (fail-safe)
+  ```
+- [ ] **(Public repos only) Gitignore agent operational directories** so operational details don't leak:
   ```gitignore
-  # Agent operational output (never committed)
+  # Agent operational output (gitignored on public repos; tracked on private repos)
   docs/agents/
   logs/
   scripts/agents/
   ```
-  This applies to ALL projects — open-source and closed-source alike. Reports stay on disk for historical access but never enter version control.
+  On private repos, omit this — reports are committed by `/triage` as historical artifacts.
 - [ ] Write at least one agent script (e.g., test-health, security-audit) — source `lib/agent-utils.sh` and add a `# SCHEDULE:` comment
 - [ ] Run `claude setup-token` for non-interactive auth (required for launchd/cron)
 - [ ] Install agents: `bash scripts/agents/install-agents.sh` (auto-generates plists from `# SCHEDULE:` comments)

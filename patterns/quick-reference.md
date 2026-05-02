@@ -167,7 +167,7 @@ Skills: `[skill:name]` points to `.claude/skills/name/` for full examples.
 
 ## Agent Reports
 
-70. **Do not commit agent reports to the repository** `[universal]` -- `docs/agents/`, `logs/`, `scripts/agents/` are gitignored. Reports are local operational tools. The only triage commits are code fixes.
+70. **Agent report commit policy depends on repo visibility** `[universal]` -- check `gh repo view --json visibility` at setup time. **Public repos:** gitignore `docs/agents/`, `logs/`, `scripts/agents/` so operational details don't leak. Reports stay local; only code fixes are committed. **Private repos:** track all three directories. Triage commits reports alongside code fixes as historical artifacts.
 
 71. **Use timestamp-based discovery for triage** `[frequent]` -- touch `docs/agents/.last-triage` after each run. Next triage uses `find ... -newer .last-triage`. On first run, process all reports.
 

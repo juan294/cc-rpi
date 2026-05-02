@@ -47,7 +47,7 @@ Now execute the setup checklist against THIS project. Work through it section by
    - Adapt `paths` in frontmatter to match the project's actual file structure.
 9. Create the directory structure (`docs/research/`, `docs/plans/`, `docs/decisions/`).
 10. Set up the README with the standard header.
-11. Add `.claude/settings.local.json` to `.gitignore`.
+11. Add `.claude/settings.local.json` to `.gitignore`. If scheduled agents will be used, also check repo visibility with `gh repo view --json visibility --jq '.visibility'`: on `PUBLIC` (or no remote), add `docs/agents/`, `logs/`, and `scripts/agents/` to `.gitignore` (Rule #70); on `PRIVATE`/`INTERNAL`, leave them tracked.
 12. Walk through the remaining checklist items (pre-commit hooks, CI, git setup) — ask me for decisions where needed.
 13. Unless the user explicitly opts out, always make the project Codex compatible by creating `AGENTS.md`.
 14. If the user says "make this Codex compatible", treat that as an explicit instruction to create or update `AGENTS.md` and verify the Codex compatibility layer is complete.

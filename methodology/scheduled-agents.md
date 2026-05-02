@@ -373,30 +373,44 @@ The shared context file (`docs/agents/shared-context.md`) is a cross-agent intel
 
 ## Report Lifecycle
 
-Agent reports are internal operational tools, not project artifacts. They follow a strict lifecycle that applies to all projects — open-source and closed-source alike (Rule #70):
+Agent reports are internal operational tools. Their commit policy is conditional on repo visibility (Rule #70):
 
 1. **Agents write reports to `docs/agents/`** on disk during overnight runs.
 2. **Reports accumulate historically** — never deleted, always available for review.
-3. **Reports are never committed to version control.** `docs/agents/`, `logs/`, and `scripts/agents/` are gitignored.
-4. **Triage discovers reports via timestamps** (Rule #71), not git status. A `.last-triage` marker file in `docs/agents/` tracks which reports have been processed.
-5. **Only code fixes are committed.** When triage resolves findings, the fix goes into git. The report that triggered the fix stays local.
+3. **Commit policy depends on repo visibility:**
+   - **Public repos:** `docs/agents/`, `logs/`, and `scripts/agents/` are gitignored. Reports stay local; only code fixes are committed.
+   - **Private repos:** all three directories are tracked. Triage commits reports alongside code fixes as historical artifacts.
+4. **Triage discovers reports via timestamps** (Rule #71), not git status. A `.last-triage` marker file in `docs/agents/` tracks which reports have been processed — this is independent of whether reports are committed.
 
-This separation means:
-- Public repositories never expose operational details (security audit findings, internal metrics, agent status).
-- Private repositories don't clutter git history with machine-generated reports.
-- Historical reports remain on disk indefinitely for the operator to review.
+The rationale:
+- Public repositories must never expose operational details (security audit findings, internal metrics, agent status).
+- Private repositories benefit from a committed audit trail of what agents found and when.
+- Historical reports remain on disk indefinitely for the operator to review either way.
 - Triage works identically regardless of git tracking — no git status dependency.
 
-### Required `.gitignore` entries
+### Detecting repo visibility
 
-Every project using scheduled agents must gitignore these directories:
+At setup time and during triage, check visibility with:
+
+```bash
+gh repo view --json visibility --jq '.visibility'
+# Returns: PUBLIC | PRIVATE | INTERNAL
+```
+
+Treat `PUBLIC` as "gitignore the operational directories." Treat `PRIVATE` and `INTERNAL` as "track them." If `gh` is unavailable or the repo has no remote, default to gitignoring (fail-safe — never leak by accident).
+
+### `.gitignore` entries (public repos only)
+
+For public repos, add to `.gitignore`:
 
 ```gitignore
-# Agent operational output (never committed)
+# Agent operational output (gitignored on public repos; tracked on private repos)
 docs/agents/
 logs/
 scripts/agents/
 ```
+
+For private repos, omit these entries — the directories are tracked normally.
 
 ## Morning Triage
 
@@ -408,7 +422,7 @@ After scheduled agents finish their overnight runs, use `/triage` to process all
 4. Reads all reports and shared-context.md
 5. Synthesizes findings and drafts an action plan
 6. Implements all fixes (fix everything — Rule #58)
-7. Commits code fixes only — reports stay on disk (Rule #70)
+7. Commits code fixes (and reports too, on private repos — Rule #70)
 8. Updates shared-context.md with triage results
 9. Touches `docs/agents/.last-triage` to mark reports as processed
 
@@ -422,4 +436,4 @@ For multi-project orchestration, the `morning-triage.sh` script template (in `te
 - `lib/agent-utils.sh` copied to `scripts/agents/lib/` (provides env setup, logging, shared context utilities)
 - Project dependencies installed (agents may run test/build commands)
 - `docs/agents/` and `logs/` directories exist (created automatically by `agent-utils.sh`)
-- `docs/agents/`, `logs/`, and `scripts/agents/` gitignored (Rule #70)
+- `docs/agents/`, `logs/`, and `scripts/agents/` gitignored on public repos; tracked on private repos (Rule #70)
