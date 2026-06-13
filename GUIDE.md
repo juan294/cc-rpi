@@ -168,6 +168,16 @@ install when you want the same cleanup pass in Codex.
 | `/release` | Detects project type and branching strategy, bumps versions everywhere, generates CHANGELOG entry, creates release commit and tag, publishes GitHub release, advises on registry publish. | When ready to cut a new version. Run `/update-docs` first. |
 | `/fix-ci` | Self-healing CI: gets failure logs, spawns parallel fix agents per failure category, iterates until green or retry budget exhausted. | When CI is red. Automates the diagnose-fix-verify loop. |
 
+### Model Tiers at a Glance
+
+Each command runs on a model tier — frontier where reasoning matters, the cheap floor where the task is mechanical. Run the floor by default. See [methodology/cost-monitoring.md](methodology/cost-monitoring.md).
+
+| Tier | Commands | Why |
+|------|----------|-----|
+| **opus** (frontier) | `/research`, `/plan`, `/pre-launch` | Deep reasoning — a bad output amplifies downstream. |
+| **sonnet** (mid) | `/implement`, `/validate`, `/remediate`, `/fix-ci`, `/triage`, `/bootstrap`, `/adopt`, `/detach`, `/release`, `/update-docs`, `/update` | Executes against a reviewed plan. |
+| **haiku** (floor) | `/status`, `/describe-pr` | Mechanical read-and-summarize. |
+
 The recommended daily workflow:
 
 ```
@@ -276,7 +286,7 @@ This sounds restrictive, but it's the single most impactful rule for research qu
 
 ### Error Prevention
 
-The blueprint includes 73 operational rules learned from real sessions. These aren't theoretical — they're patterns that caused actual failures and wasted time. Rather than loading all rules into every session, the blueprint uses **progressive disclosure** across three layers: a slim CLAUDE.md (~70 lines) for universal instructions, `.claude/rules/` for conditional rules that load only when working with matching files, and `.claude/skills/` for detailed domain knowledge that loads on demand. This keeps the agent's context window clean and focused.
+The blueprint includes 75 operational rules learned from real sessions. These aren't theoretical — they're patterns that caused actual failures and wasted time. Rather than loading all rules into every session, the blueprint uses **progressive disclosure** across three layers: a slim CLAUDE.md (~70 lines) for universal instructions, `.claude/rules/` for conditional rules that load only when working with matching files, and `.claude/skills/` for detailed domain knowledge that loads on demand. This keeps the agent's context window clean and focused.
 
 The 9 blueprint-provided skills cover: git workflow, CI verification, deployment safety, multi-agent coordination, GitHub CLI, Python, macOS, Supabase, and error patterns. The 5 rule templates cover: RPI details, push accountability, deployment safety, Supabase, and testing.
 
@@ -419,8 +429,9 @@ The blueprint repository contains detailed documentation on every topic mentione
 | Plan notation | `methodology/pseudocode-notation.md` | How to write and read implementation plans |
 | Testing approach | `methodology/testing.md` | TDD protocol, verification hierarchy |
 | CI ownership | `methodology/push-accountability.md` | Background CI monitoring, fix-and-repush |
+| Model economics | `methodology/cost-monitoring.md` | Cost pools, model-tier binding, access tiers, cost-per-outcome |
 | Error patterns | `patterns/agent-errors.md` | 63 documented errors with symptoms and solutions |
-| Operational rules | `patterns/quick-reference.md` | 73 rules with scope/stack tags, organized by domain |
+| Operational rules | `patterns/quick-reference.md` | 75 rules with scope/stack tags, organized by domain |
 | Domain skills | `templates/skills/` | 9 blueprint-provided skills for progressive disclosure |
 | Rule templates | `templates/rules/` | 5 conditional/modular rules for `.claude/rules/` |
 | Deployment safety | `patterns/deployment-safety.md` | Resource efficiency and production deployment rules |

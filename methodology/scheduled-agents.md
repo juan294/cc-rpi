@@ -195,6 +195,7 @@ launchd provides a minimal execution environment that breaks Claude CLI in four 
 | **Dependency health** | Weekly | Outdated packages, version conflicts, lockfile integrity |
 | **Performance check** | Weekly | Bundle sizes, build times, regression detection |
 | **Documentation sync** | Weekly | Stale docs, undocumented public APIs, broken links |
+| **Cost report** | Weekly | AI spend per workflow and per outcome, tier-adherence drift (see [cost-monitoring.md](cost-monitoring.md)) |
 
 ## Concrete Agent Prompts
 
@@ -291,6 +292,37 @@ Write your report to docs/agents/dependency-health-report.md with sections:
 Append to shared-context.md:
 - Packages needing urgent updates
 - Any dependency conflicts that affect other agents"
+```
+
+### Cost Report Agent
+
+Run this agent on the **floor tier (haiku)** — it reads and summarizes usage data, it does not reason.
+
+```bash
+PROMPT="You are the cost-report scheduled agent. You turn raw AI usage data into
+cost-per-outcome numbers so the team can tell which workflows pay back.
+
+Perform these checks:
+1. Pull this period's Claude Code / Anthropic API usage export (usage or billing
+   export). If no export is reachable, write a YELLOW report saying so and stop --
+   do not guess numbers.
+2. Attribute spend to workflows where possible: map runs to /research, /plan,
+   /implement, /triage, /fix-ci, etc. (e.g. by branch, session label, or commit trailer).
+3. Compute cost-per-outcome: total spend / PRs merged this period, and average
+   cost per run for each recurring workflow.
+4. Compute the floor ratio: share of spend on the everyday floor tier vs frontier.
+5. Compare each workflow's per-run cost to the previous report; flag any that grew.
+
+Write your report to docs/agents/cost-report.md with sections:
+- Summary (1 line: GREEN/YELLOW/RED + total spend + floor ratio)
+- Cost Per Outcome (cost per merged PR; trend vs last period)
+- Per-Workflow Cost (workflow, runs, avg cost/run, delta vs last period)
+- Tier Drift (any workflow trending above its declared tier or its historical cost)
+- Recommendations (re-tier, re-codify, or gate any workflow that is drifting)
+
+Append to shared-context.md:
+- Total spend and floor ratio for the period
+- Any workflow flagged for re-tiering"
 ```
 
 ## Resilience Patterns

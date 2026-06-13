@@ -310,15 +310,33 @@ Agents inherit environment variables from the shell. For projects that need API 
 - Never hardcode secrets in CLAUDE.md or skills — reference `.env` instead
 - For headless/CI mode, pass variables via the environment: `API_KEY=xxx claude -p "prompt"`
 
-### Model Selection
+### Model Selection — Tier Each Workflow
 
-Different tasks benefit from different models. Use `--model` or configure per-agent:
+Model choice is the biggest single lever on your inference bill. The same task on a frontier model can cost 10-30x what it costs on the floor model, and for most of the RPI loop the frontier model buys you nothing — `/status` does not reason, it summarizes. The discipline: **explore once at frontier cost, then run the codified loop on the cheapest model that still does the job.**
 
-- **Complex reasoning** (architecture, debugging, planning) → most capable model
-- **Routine tasks** (formatting, simple edits, file operations) → faster model
-- **Bulk operations** (migrating many files, batch formatting) → fastest model
+Every command in this blueprint declares a **model tier** on the line directly under its title (e.g. `Model tier: **sonnet**`). Three tiers:
 
-In custom agent definitions (`.claude/agents/`), set the `model` field to match the task complexity.
+| Tier | Use for | Commands | Why |
+|------|---------|----------|-----|
+| **opus** (frontier) | Deep reasoning where a bad output amplifies downstream | `/research`, `/plan`, `/pre-launch` | A bad line of research → thousands of bad lines of code. Spend here. |
+| **sonnet** (mid) | Building and executing against a reviewed plan | `/implement`, `/validate`, `/remediate`, `/fix-ci`, `/triage`, `/bootstrap`, `/adopt`, `/detach`, `/release`, `/update-docs`, `/update` | The plan already removed the ambiguity; this tier executes it reliably. |
+| **haiku** (floor) | Mechanical read-and-summarize, no judgment | `/status`, `/describe-pr` | Deterministic-ish output. Frontier models are pure waste here. |
+
+This blueprint is Claude-bound, so each tier maps to a concrete model already:
+
+| Tier | Concrete model |
+|------|----------------|
+| opus | Claude Opus 4.x |
+| sonnet | Claude Sonnet 4.x (1M context) |
+| haiku | Claude Haiku 4.x |
+
+Bind the tier per workflow, not per session: run each command in a session on its declared model, and in custom agent definitions (`.claude/agents/`) set the `model` field to the tier the agent serves. The tier travels with the workflow so the choice re-applies every time anyone runs it, rather than defaulting to whatever model happens to be selected.
+
+**Subagents inherit the tier.** Fan-out commands spawn helpers — `/pre-launch`'s 8 specialists, `/remediate`'s parallel TDD agents, `/research`'s locator/analyzer/pattern agents. A frontier parent that spawns 8 frontier children multiplies the bill by 8. Pin spawned agents to the same tier as their workflow (or lower) — which is why each command's tier line says `All subagents: model: "..."`. Only raise a child above its parent's tier when it genuinely needs to reason harder.
+
+**Override upward, never silently downward.** The tier is the default, not a ceiling. If a task turns out harder than its tier — a gnarly `/implement` phase, a `/validate` that uncovers a design flaw — bump that session up a tier and note why. Never quietly drop a workflow below its declared tier to save tokens; that trades a small bill for a large downstream error. See [cost-monitoring.md](cost-monitoring.md) for measuring whether a tier change actually paid back.
+
+**Don't switch tiers mid-conversation to save money** — prompt caches are per-model (see [Session Stability](#session-stability-and-prompt-caching) below). Pick the tier when you start the session; if you need a cheaper model for a sub-task, spawn a subagent rather than switching the active model.
 
 ### Session Stability and Prompt Caching
 

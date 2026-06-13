@@ -13,7 +13,8 @@
 7. **[push-accountability.md](push-accountability.md)** — Post-push CI ownership: background polling, fix-and-repush cycle.
 8. **[ci-and-guardrails.md](ci-and-guardrails.md)** — Pre-commit hooks, CI workflows, development guardrails, enforcement stack.
 9. **[scheduled-agents.md](scheduled-agents.md)** — Recurring quality agents on cron/launchd, shared context system.
-10. **[error-success-logging.md](error-success-logging.md)** — Framework for systematic skill improvement through logging.
+10. **[cost-monitoring.md](cost-monitoring.md)** — Model economics: cost pools, model-tier binding, access tiers, and measuring cost-per-outcome.
+11. **[error-success-logging.md](error-success-logging.md)** — Framework for systematic skill improvement through logging.
 
 ## The One-Paragraph Summary
 

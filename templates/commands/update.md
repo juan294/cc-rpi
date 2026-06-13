@@ -1,5 +1,7 @@
 # Update Project from cc-rpi Blueprint
 
+Model tier: **sonnet** — Sonnet 4.6 (1M context) session.
+
 You are syncing this project with the latest cc-rpi blueprint. The blueprint lives at `<path-to-your-cc-rpi-clone>/`.
 
 This command works for both interactive use (`/update`) and headless scheduled agents.

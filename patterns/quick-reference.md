@@ -173,6 +173,12 @@ Skills: `[skill:name]` points to `.claude/skills/name/` for full examples.
 
 72. **Triage processes Dependabot PRs** `[universal]` -- `/triage` lists open Dependabot PRs (`gh pr list --author "app/dependabot"`) and merges what it can. **Patch + minor with green CI:** auto-merge via `gh pr merge --squash --auto --delete-branch`. **Major bumps:** defer for human review (breaking changes need judgment). **CI red, fix obvious:** one attempt to regenerate snapshots/lockfiles, then auto-merge if green or defer. **Conflicts:** rebase via `gh pr update-branch`, then re-evaluate. Dependabot processing happens last so a flaky dependency PR can't block triage code fixes.
 
+## Cost & Models
+
+74. **Pin a model tier to every workflow** `[universal]` -- model choice is the biggest lever on the inference bill. Each command declares a `Model tier` (opus/sonnet/haiku) on the line under its title; `/research`, `/plan`, `/pre-launch` are frontier (opus), `/status` and `/describe-pr` are floor (haiku), the rest are mid (sonnet). Subagents inherit their workflow's tier -- a frontier parent spawning 8 frontier children multiplies the bill by 8. Override upward when a task proves harder; never silently downward. See [cost-monitoring.md](../methodology/cost-monitoring.md).
+
+75. **Measure cost per outcome before betting beyond the floor** `[frequent]` -- track cost per merged PR and per workflow run, not per token. Stand up the weekly cost-report agent before investing in custom agents or large fan-outs, so you can confirm net-positive ROI instead of assuming it.
+
 ---
 
 For detailed symptoms, root causes, and examples, see [agent-errors.md](agent-errors.md).

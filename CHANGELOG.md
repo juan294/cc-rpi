@@ -6,6 +6,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.19.0] - 2026-06-13
+
+### Added
+
+- **Model tier economics layer (ported from copilot-rpi v1.16.0).** Added a
+  `haiku` floor tier alongside the existing `opus`/`sonnet` tiers and gave
+  every command an explicit `Model tier` line. `/status` and `/describe-pr`
+  now run on the floor; `/research`, `/plan`, `/pre-launch` stay frontier;
+  the rest run mid-tier.
+- **`methodology/cost-monitoring.md`.** New doc on model economics: the four
+  cost pools, model tiers as the primary lever, access tiers (frontier access
+  for authoring loops, the floor for consumption), measuring cost-per-outcome,
+  and cost-tied approval gates. Added to the methodology reading order (now 12
+  files).
+- **Cost-report scheduled agent.** Weekly agent (runs on the floor tier) that
+  turns Claude Code / Anthropic API usage exports into cost-per-outcome numbers
+  and flags workflows drifting above their declared tier.
+- **Rule #74 (Pin a model tier to every workflow)** and **Rule #75 (Measure
+  cost per outcome before betting beyond the floor)** in the quick-reference,
+  under a new "Cost & Models" section. Now 75 rules.
+- **GUIDE "Model Tiers at a Glance" table** mapping every command to its tier.
+
+### Changed
+
+- **`context-engineering.md` "Model Selection" section rewritten.** Replaced
+  the generic "complex/routine/bulk → different models" guidance — which
+  contradicted the per-command tier lines — with the 3-tier system, a
+  tier→concrete-Claude-model binding table, subagent tier-inheritance, and an
+  override-upward-never-silently-downward rule.
+
 ## [1.18.0] - 2026-05-02
 
 ### Added

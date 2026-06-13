@@ -1,7 +1,7 @@
 # cc-rpi — Claude Code Reference & Project Intelligence
 
 [![CI](https://github.com/juan294/cc-rpi/actions/workflows/validate.yml/badge.svg)](https://github.com/juan294/cc-rpi/actions/workflows/validate.yml)
-[![Version: v1.18.0](https://img.shields.io/badge/Version-v1.18.0-orange.svg)](https://github.com/juan294/cc-rpi/releases/tag/v1.18.0)
+[![Version: v1.19.0](https://img.shields.io/badge/Version-v1.19.0-orange.svg)](https://github.com/juan294/cc-rpi/releases/tag/v1.19.0)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Status: Active](https://img.shields.io/badge/Status-Active-brightgreen.svg)]()
 [![Claude Code](https://img.shields.io/badge/Built%20for-Claude%20Code-blueviolet.svg)](https://docs.anthropic.com/en/docs/claude-code)
@@ -73,7 +73,7 @@ New here? Read **[GUIDE.md](GUIDE.md)** — a human-readable walkthrough of the 
 
 ### Methodology (`methodology/`)
 
-The full Research-Plan-Implement pattern adapted for Claude Code, based on HumanLayer's opencode-rpi and ACE-FCA framework. Organized by topic (10 files, in reading order):
+The full Research-Plan-Implement pattern adapted for Claude Code, based on HumanLayer's opencode-rpi and ACE-FCA framework. Organized by topic (11 files, in reading order):
 
 - **Philosophy** — Core tenets, error amplification principle, mental alignment
 - **Context Engineering** — The foundational discipline: compaction, context quality, settings & permissions
@@ -84,6 +84,7 @@ The full Research-Plan-Implement pattern adapted for Claude Code, based on Human
 - **Push Accountability** — Post-push CI ownership, background polling, fix-and-repush cycle
 - **CI & Guardrails** — Pre-commit hooks, CI workflows, development guardrails, enforcement stack
 - **Scheduled Agents** — Recurring quality agents on cron/launchd, shared context system
+- **Cost Monitoring** — Model economics: cost pools, model-tier binding, access tiers, cost-per-outcome
 - **Error & Success Logging** — Framework for systematic improvement
 
 ### Known Error Patterns (`patterns/`)
