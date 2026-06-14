@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Fixed
+
+- **Nightly `cc-rpi-update` agent could not edit `.claude/` files.** The scheduled
+  `templates/scripts/cc-rpi-update-agent.sh` ran `claude -p` without a permission
+  mode, so Claude Code's sensitive-file guard on `.claude/` edits blocked every
+  blueprint sync in non-interactive mode (the agent detected updates but applied
+  nothing). Added `--permission-mode bypassPermissions` to the invocation —
+  `acceptEdits` does **not** bypass the `.claude/` guard; only `bypassPermissions`
+  does. Required for unattended agents that must edit `.claude/` and commit.
+
 ## [1.20.0] - 2026-06-14
 
 ### Added

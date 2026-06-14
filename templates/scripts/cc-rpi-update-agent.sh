@@ -184,6 +184,7 @@ echo "[$(date)] Blueprint: $CC_RPI_PATH"
 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
   if "$CLAUDE_BIN" -p "$PROMPT" \
     --allowedTools "Read,Write,Edit,Glob,Grep,Bash(git *)" \
+    --permission-mode bypassPermissions \
     --output-format text \
     > "$REPORT_FILE" 2>&1; then
     echo "[$(date)] $AGENT_NAME complete. Report: $REPORT_FILE"
