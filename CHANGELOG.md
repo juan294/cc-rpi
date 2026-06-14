@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.20.0] - 2026-06-14
+
 ### Added
 
 - **Develop-based release flow (`/release`).** `release.md` now detects a third
