@@ -4,7 +4,7 @@
 
 Blueprint repository for Claude Code projects, with Codex compatibility
 via `AGENTS.md` plus Codex-only helper skills in `.codex/skills/`.
-Contains the RPI methodology, 63 known agent error patterns, 75
+Contains the RPI methodology, 63 known agent error patterns, 76
 operational rules, and templates for CLAUDE.md, AGENTS.md, slash
 commands, skills, rules, and project setup.
 
@@ -88,7 +88,7 @@ Go directly to these paths -- never search the codebase for them.
 | Topic | Path | Notes |
 |-------|------|-------|
 | Error catalog | `patterns/agent-errors.md` | 63 errors, source of truth |
-| Operational rules | `patterns/quick-reference.md` | 75 rules with scope/stack tags |
+| Operational rules | `patterns/quick-reference.md` | 76 rules with scope/stack tags |
 | Deployment safety | `patterns/deployment-safety.md` | Resource efficiency rules |
 | Skill templates | `templates/skills/` | 9 domain skills |
 | Codex-only skills | `.codex/skills/` | Personal Codex helpers such as `codex-simplify` |

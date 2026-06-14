@@ -139,6 +139,8 @@ Skills: `[skill:name]` points to `.claude/skills/name/` for full examples.
 
 67. **Justify every external action before triggering** `[universal]` -- before any CI run, deployment, or API call: Is this needed? Is this justified? Is this verifiable? If any answer is "no", stop.
 
+76. **Standardize GitHub repo settings for every project** `[universal]` `[github]` -- apply the canonical configuration at setup so bootstrapped repos don't drift: squash-merge only (disable merge commits and rebase merges), auto-merge enabled, delete-branch-on-merge enabled, Dependabot alerts + security update PRs on, and the Production deployment environment restricted to protected branches only. Squash-only is why worktree cleanup needs `git branch -D` (Rule #15) and why `develop` -> `main` release PRs must NOT use `--delete-branch`. Configure via `gh api -X PATCH repos/{owner}/{repo} -f allow_squash_merge=true -f allow_merge_commit=false -f allow_rebase_merge=false -f delete_branch_on_merge=true -f allow_auto_merge=true`.
+
 ## Supabase `[skill:supabase]`
 
 72. **Test migrations locally before pushing to remote** `[frequent]` -- run `supabase start` + `supabase db reset` locally, verify with `docker exec ... psql`, then `supabase db push`. The local instance has full Postgres with RLS and extensions -- treat it as UAT.

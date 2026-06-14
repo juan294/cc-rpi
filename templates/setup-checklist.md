@@ -203,6 +203,23 @@ the matching slash-style command.
 - [ ] Require implementation to happen in worktrees or temporary
   branches regardless of topology
 - [ ] Set up branch protection rules on GitHub
+- [ ] Apply the canonical GitHub repo settings (Rule #76) so the repo
+  doesn't drift from the blueprint:
+
+  ```bash
+  gh api -X PATCH repos/{owner}/{repo} \
+    -f allow_squash_merge=true -f allow_merge_commit=false \
+    -f allow_rebase_merge=false -f delete_branch_on_merge=true \
+    -f allow_auto_merge=true
+  ```
+
+  - [ ] Squash-merge only (merge commits and rebase merges disabled)
+  - [ ] Auto-merge enabled
+  - [ ] Delete-branch-on-merge enabled (never `--delete-branch` a
+    permanent `develop` branch — it is protected, not an ordinary head)
+  - [ ] Dependabot alerts + security update PRs enabled
+  - [ ] Production deployment environment restricted to protected
+    branches only
 - [ ] Configure pre-commit hooks (typecheck, lint, test) — see
   Pre-Commit Hooks above
 

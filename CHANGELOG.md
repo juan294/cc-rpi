@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Added
+
+- **Develop-based release flow (`/release`).** `release.md` now detects a third
+  branching strategy: a permanent `develop` integration branch that releases via a
+  direct `develop` -> `main` PR (no intermediate `release/vX.Y.Z` branch). Merges
+  squash + auto-merge and never passes `--delete-branch` on the permanent branch.
+- **Rule #76: standardize GitHub repo settings.** Documents the canonical
+  per-project configuration -- squash-only merges, auto-merge, delete-branch-on-merge,
+  Dependabot alerts + security update PRs, and the Production environment restricted
+  to protected branches. Ties to Rule #15 (`git branch -D`) and the develop-based
+  release flow. Now 76 rules.
+
 ## [1.19.0] - 2026-06-13
 
 ### Added
