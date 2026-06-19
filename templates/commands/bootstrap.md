@@ -36,7 +36,7 @@ Now execute the setup checklist against THIS project. Work through it section by
 5. Create `.claude/settings.json` — adapt from the template.
 6. Create `.claude/commands/` — copy slash commands from `cc-rpi/templates/commands/` and adjust file paths.
 7. Install skills from `cc-rpi/templates/skills/` to `.claude/skills/`:
-   - Always install: `git-workflow/`, `multi-agent/`, `deployment-safety/`, `ci-workflow/`, `github-cli/`, `error-patterns/`
+   - Always install: `git-workflow/`, `multi-agent/`, `deployment-safety/`, `ci-workflow/`, `github-cli/`, `error-patterns/`, `systematic-debugging/`
    - If Python project: also install `python-rules/`
    - If macOS development: also install `macos-rules/`
    - If using Supabase: also install `supabase/`

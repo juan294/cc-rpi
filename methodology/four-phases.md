@@ -1,9 +1,17 @@
 # The Four Phases
 
+> Optional pre-step: when the work starts as a vague idea rather than a spec,
+> `/brainstorm` precedes Research. It is an interactive Socratic intake that
+> produces a design brief in `docs/research/`, not a phase of the pipeline
+> below. Skip it whenever the task is already well-specified.
+
 ## Architecture Overview
 
 ```
 User
+ │
+ ├── /brainstorm ────► Brainstorm Facilitator (optional pre-step)
+ │                       └── Socratic Q&A with user → design brief
  │
  ├── /research  ─────► Research Orchestrator
  │                       ├── Codebase Locator (find WHERE)

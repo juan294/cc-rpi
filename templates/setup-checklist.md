@@ -108,6 +108,7 @@ Committed.
 ## Slash Commands
 
 Copy and adapt from `templates/commands/`:
+- [ ] `/brainstorm` — Optional Socratic pre-step for vague/greenfield ideas (feeds `/plan`)
 - [ ] `/research` — Codebase research with parallel subagents
 - [ ] `/plan` — Interactive plan creation with phases
 - [ ] `/implement` — Phase-by-phase execution with review gates
@@ -128,7 +129,7 @@ the matching slash-style command.
 
 - [ ] Create `.claude/skills/` directory
 - [ ] Copy blueprint skills from `cc-rpi/templates/skills/` to `.claude/skills/`:
-  - Always: `git-workflow/`, `multi-agent/`, `deployment-safety/`, `ci-workflow/`, `github-cli/`, `error-patterns/`
+  - Always: `git-workflow/`, `multi-agent/`, `deployment-safety/`, `ci-workflow/`, `github-cli/`, `error-patterns/`, `systematic-debugging/`
   - Python projects: also `python-rules/`
   - macOS development: also `macos-rules/`
   - Supabase projects: also `supabase/`

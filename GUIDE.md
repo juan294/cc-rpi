@@ -89,6 +89,30 @@ Now you have four commands available everywhere:
 | `/update` | **Keep in sync.** Pulls latest cc-rpi changes and updates your project's commands, rules, and settings. Run manually or schedule nightly. |
 | `/detach` | **Part ways.** Cleanly removes all cc-rpi artifacts while preserving your project-specific config and work products. |
 
+#### Alternative: install as a plugin
+
+cc-rpi also ships as a Claude Code plugin. Instead of copying command files,
+add the repo as a marketplace and install — the RPI commands and skills then
+load namespaced (`/cc-rpi:research`, `/cc-rpi:brainstorm`, `/cc-rpi:plan`, …)
+in every project, with no per-file path editing:
+
+```bash
+/plugin marketplace add juan294/cc-rpi
+/plugin install cc-rpi@cc-rpi
+```
+
+For local development of the plugin itself, load it in place and validate:
+
+```bash
+claude --plugin-dir /path/to/cc-rpi      # load without installing
+claude plugin validate /path/to/cc-rpi   # run the marketplace review checks
+```
+
+The plugin and the blueprint/copy model coexist — use whichever fits. The
+plugin gives you the commands everywhere; the blueprint still drives
+project-level setup (`CLAUDE.md`, `AGENTS.md`, rules, CI) via `/bootstrap`
+and `/adopt`.
+
 ### Step 2: Set Up Your Project
 
 **Starting a new project?** Open Claude Code in the project directory and type:
@@ -159,6 +183,7 @@ install when you want the same cleanup pass in Codex.
 
 | Command | What It Does | When to Use |
 |---------|-------------|-------------|
+| `/brainstorm [idea]` | Optional front end to RPI. Refines a vague or greenfield idea through one-question-at-a-time Socratic intake into a design brief at `docs/research/`. Feeds `/plan`. | When the request is a goal, not a spec — and there's no existing code to `/research`. |
 | `/describe-pr` | Generates a PR description from the current branch's diff and commit history. | Before opening or updating a PR. |
 | `/pre-launch` | Spawns 8 parallel specialist agents (Principal Architect, Staff FE, Staff BE, Performance Engineer, DevOps/SRE Lead, Security Reviewer, QA/Reliability Lead, Product Designer/UX Lead) for a deep launch-readiness audit. Produces a 16-section report with 5-tier severity findings, finding IDs, and Before/After/Later time horizons. | Before any production release. Run `/remediate` after to fix findings in 3 waves. |
 | `/remediate` | Parses the 16-section pre-launch report, groups findings by wave (Before / After / Later launch), creates GitHub issues for every finding (Rule #58), spawns parallel TDD agents per wave in worktrees, merges sequentially, verifies CI, runs `/simplify` twice per wave. Wave 3 strategic items are filed as issues but not auto-fixed. | After `/pre-launch` when findings exist. Automates the full fix cycle in 3 waves. |
@@ -174,7 +199,7 @@ Each command runs on a model tier — frontier where reasoning matters, the chea
 
 | Tier | Commands | Why |
 |------|----------|-----|
-| **opus** (frontier) | `/research`, `/plan`, `/pre-launch` | Deep reasoning — a bad output amplifies downstream. |
+| **opus** (frontier) | `/brainstorm`, `/research`, `/plan`, `/pre-launch` | Deep reasoning — a bad output amplifies downstream. |
 | **sonnet** (mid) | `/implement`, `/validate`, `/remediate`, `/fix-ci`, `/triage`, `/bootstrap`, `/adopt`, `/detach`, `/release`, `/update-docs`, `/update` | Executes against a reviewed plan. |
 | **haiku** (floor) | `/status`, `/describe-pr` | Mechanical read-and-summarize. |
 
@@ -216,7 +241,7 @@ You type `/research how does authentication work in this app?` and the agent:
 
 The critical rule here is **documentarian, not critic**. The research describes what exists — it doesn't suggest improvements or identify problems. This keeps the research factual and prevents the agent from jumping to solutions before understanding the problem.
 
-Note: /research is for projects that already have code. If you just bootstrapped a new project and have no code yet, skip /research and start with /plan — there's nothing to research. Once you have code from your first implementation, /research becomes your starting point for every subsequent task.
+Note: /research is for projects that already have code. If you just bootstrapped a new project and have no code yet, skip /research and start with /plan — there's nothing to research. When the idea itself is still vague (a goal, not a spec), run /brainstorm first to turn it into a design brief, then /plan. Once you have code from your first implementation, /research becomes your starting point for every subsequent task.
 
 **Your job:** Read the research document. If it's wrong or incomplete, throw it out and run `/research` again with more specific steering. Multiple passes are normal. Don't approve bad research — it poisons everything downstream.
 
@@ -288,7 +313,7 @@ This sounds restrictive, but it's the single most impactful rule for research qu
 
 The blueprint includes 76 operational rules learned from real sessions. These aren't theoretical — they're patterns that caused actual failures and wasted time. Rather than loading all rules into every session, the blueprint uses **progressive disclosure** across three layers: a slim CLAUDE.md (~70 lines) for universal instructions, `.claude/rules/` for conditional rules that load only when working with matching files, and `.claude/skills/` for detailed domain knowledge that loads on demand. This keeps the agent's context window clean and focused.
 
-The 9 blueprint-provided skills cover: git workflow, CI verification, deployment safety, multi-agent coordination, GitHub CLI, Python, macOS, Supabase, and error patterns. The 5 rule templates cover: RPI details, push accountability, deployment safety, Supabase, and testing.
+The 10 blueprint-provided skills cover: git workflow, CI verification, deployment safety, multi-agent coordination, GitHub CLI, Python, macOS, Supabase, error patterns, and systematic debugging. The 5 rule templates cover: RPI details, push accountability, deployment safety, Supabase, and testing.
 
 ### Agent Teams
 
@@ -432,7 +457,7 @@ The blueprint repository contains detailed documentation on every topic mentione
 | Model economics | `methodology/cost-monitoring.md` | Cost pools, model-tier binding, access tiers, cost-per-outcome |
 | Error patterns | `patterns/agent-errors.md` | 63 documented errors with symptoms and solutions |
 | Operational rules | `patterns/quick-reference.md` | 76 rules with scope/stack tags, organized by domain |
-| Domain skills | `templates/skills/` | 9 blueprint-provided skills for progressive disclosure |
+| Domain skills | `templates/skills/` | 10 blueprint-provided skills for progressive disclosure |
 | Rule templates | `templates/rules/` | 5 conditional/modular rules for `.claude/rules/` |
 | Deployment safety | `patterns/deployment-safety.md` | Resource efficiency and production deployment rules |
 | Worked examples | `examples/README.md` | Sample research docs, plans, logs, pseudocode |

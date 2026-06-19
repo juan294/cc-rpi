@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "cc-rpi",
+  "displayName": "cc-rpi -- RPI Methodology",
+  "description": "Research-Plan-Implement methodology for Claude Code: phased workflow commands, domain skills, and a 63-pattern agent-error knowledge base.",
+  "version": "1.21.0",
+  "author": {
+    "name": "Juan Gonzalez"
+  },
+  "homepage": "https://github.com/juan294/cc-rpi",
+  "repository": "https://github.com/juan294/cc-rpi",
+  "license": "MIT",
+  "keywords": [
+    "rpi",
+    "methodology",
+    "research-plan-implement",
+    "workflow",
+    "agent-errors"
+  ],
+  "skills": "./templates/skills/",
+  "commands": "./templates/commands/"
+}

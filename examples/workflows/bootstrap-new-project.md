@@ -51,7 +51,7 @@ Claude: Setting up your project. Here's what I'm creating:
 
 - CLAUDE.md — project configuration with all operational rules
 - .claude/settings.json — permissions, Agent Teams, hooks
-- .claude/commands/ — all 6 slash commands (research, plan, implement, validate, describe-pr, pre-launch)
+- .claude/commands/ — all 7 slash commands (brainstorm, research, plan, implement, validate, describe-pr, pre-launch)
 - package.json with TypeScript, Jest, ESLint, Prettier
 - tsconfig.json
 - .github/workflows/ci.yml
@@ -74,10 +74,11 @@ Claude: Done. Your project is set up:
 
 - All checks pass (typecheck, lint, tests)
 - Initial commit created
-- 6 slash commands ready to use
+- 7 slash commands ready to use
 
 You can start with /research to explore any existing patterns,
-or /plan to design your first feature.
+or /plan to design your first feature. For a brand-new idea with no
+spec yet, /brainstorm turns it into a design brief first.
 ```
 
 ---
