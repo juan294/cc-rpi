@@ -113,7 +113,7 @@ Ready-to-use starting points for new projects:
 - **Rule templates** — `.claude/rules/` files with conditional loading (deployment, Supabase, testing) and universal rules (RPI details, push accountability)
 - **settings.json template** — `.claude/settings.json` with Agent Teams, hooks, and permissions
 - **Setup checklist** — Step-by-step guide including rules, skills, hooks, CI, and scheduled agents
-- **Slash commands** — `/bootstrap`, `/adopt`, `/update`, `/research`, `/plan`, `/implement`, `/validate`, `/describe-pr`, `/pre-launch`, `/remediate`, `/triage`, `/status`, `/fix-ci` — plus Anthropic-native `/simplify` and `/batch`
+- **Slash commands** — `/bootstrap`, `/adopt`, `/update`, `/brainstorm`, `/research`, `/plan`, `/implement`, `/validate`, `/describe-pr`, `/pre-launch`, `/remediate`, `/triage`, `/status`, `/fix-ci` — plus Anthropic-native `/simplify` and `/batch`
 - **Scheduled agent scripts** — Nightly blueprint sync and multi-project morning triage with launchd/cron templates
 
 ## Adding New Patterns

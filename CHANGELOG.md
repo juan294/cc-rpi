@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Added
+
+- **`/brainstorm` command (optional RPI pre-step).** Socratic, one-question-at-a-time
+  intake for vague or greenfield work where the request is a goal, not a spec and
+  there is no existing code to `/research`. Produces a design brief in
+  `docs/research/YYYY-MM-DD-*-brief.md` that `/plan` consumes. Documented as an
+  optional front end, not a fifth phase. `templates/commands/brainstorm.md`.
+- **`systematic-debugging` skill.** Auto-consulted (`user-invocable: false`)
+  procedure for novel bugs: reproduce -> isolate -> hypothesize -> test ->
+  fix-root-cause -> verify, plus stop-conditions. Routes known tool/git/CI
+  failures to the error-patterns skill. Brings `templates/skills/` to 10.
+- **Installable as a Claude Code plugin.** Added `.claude-plugin/plugin.json`
+  (manifest pointing `skills`/`commands` at the existing `templates/` dirs --
+  no file moves) and `.claude-plugin/marketplace.json` so the repo is its own
+  self-hosted marketplace. Install with
+  `/plugin marketplace add juan294/cc-rpi` then `/plugin install cc-rpi@cc-rpi`.
+  Commands/skills namespace as `/cc-rpi:research`, `/cc-rpi:brainstorm`, etc.
+  Passes `claude plugin validate`. The blueprint/copy model is unchanged and
+  continues to work alongside the plugin.
+
 ### Fixed
 
 - **Nightly `cc-rpi-update` agent could not edit `.claude/` files.** The scheduled

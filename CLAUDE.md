@@ -90,7 +90,7 @@ Go directly to these paths -- never search the codebase for them.
 | Error catalog | `patterns/agent-errors.md` | 63 errors, source of truth |
 | Operational rules | `patterns/quick-reference.md` | 76 rules with scope/stack tags |
 | Deployment safety | `patterns/deployment-safety.md` | Resource efficiency rules |
-| Skill templates | `templates/skills/` | 9 domain skills |
+| Skill templates | `templates/skills/` | 10 domain skills |
 | Codex-only skills | `.codex/skills/` | Personal Codex helpers such as `codex-simplify` |
 | Rule templates | `templates/rules/` | 5 conditional/universal rules |
 | Active rules | `.claude/rules/` | cc-rpi's own rules |
