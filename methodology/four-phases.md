@@ -10,6 +10,9 @@
 ```
 User
  │
+ ├── /brainstorm ────► Brainstorm Facilitator (optional pre-step)
+ │                       └── Socratic Q&A with user → design brief
+ │
  ├── /research  ─────► Research Orchestrator
  │                       ├── Codebase Locator (find WHERE)
  │                       ├── Codebase Analyzer (understand HOW)
