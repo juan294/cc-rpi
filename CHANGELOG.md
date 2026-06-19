@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.21.0] - 2026-06-19
+
 ### Added
 
 - **`/brainstorm` command (optional RPI pre-step).** Socratic, one-question-at-a-time
@@ -25,6 +27,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
   Commands/skills namespace as `/cc-rpi:research`, `/cc-rpi:brainstorm`, etc.
   Passes `claude plugin validate`. The blueprint/copy model is unchanged and
   continues to work alongside the plugin.
+
+### Changed
+
+- **Documentation consistency sweep for the additions above.** `/bootstrap` and
+  `setup-checklist.md` now install `systematic-debugging/` and list `/brainstorm`,
+  so new projects pick up both; GUIDE skill count corrected 9 -> 10 (two places)
+  with `systematic-debugging` enumerated; `four-phases.md` topology diagram shows
+  `/brainstorm` as an optional pre-step; bootstrap example command count fixed.
 
 ### Fixed
 
