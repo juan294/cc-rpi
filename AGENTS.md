@@ -68,3 +68,10 @@ When the user invokes a slash-style command:
   committed history; `docs/agents/` is operational output whose commit
   policy depends on repo visibility (Rule #70) -- gitignored on public
   repos, tracked on private repos as a historical audit trail
+- **Contract layer.** The `PostToolUse` hook `verify-edit.sh` (emoji +
+  markdownlint on `.md` edits) is Claude-Code-specific -- Codex will not run
+  it, so apply Rule #77 (no emojis in docs) by hand. The validator
+  `.claude/scripts/validate-findings.py` IS portable: run it on any
+  pre-launch report before parsing in a `/remediate`-style flow, and STOP if
+  it exits non-zero. When a guard blocks, phrase the reason as
+  `BLOCKED / WHY / FIX` with a runnable fix.

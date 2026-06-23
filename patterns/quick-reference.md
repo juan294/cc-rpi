@@ -2,7 +2,7 @@
 
 Scope: `[universal]` `[frequent]` `[situational]` `[rare]`
 Stack: `[node]` `[python]` `[macos]` `[github]` (omitted = all stacks)
-Enforcement: `[hook-enforced]` = blocked by PreToolUse hook.
+Enforcement: `[hook-enforced]` = blocked/flagged by a PreToolUse or PostToolUse hook.
 Skills: `[skill:name]` points to `.claude/skills/name/` for full examples.
 
 ## Shell & Tools
@@ -166,6 +166,8 @@ Skills: `[skill:name]` points to `.claude/skills/name/` for full examples.
 59. **Use `.claude/rules/` with `paths` frontmatter for conditional rules** `[frequent]` -- domain rules load only when Claude works with matching files (e.g., deployment rules on `.github/**`, test rules on `**/*.test.*`). Replaces `<important if>` blocks with infrastructure-level conditional loading.
 
 68. **Every fallback path must be observable** `[universal]` -- add ERROR-level logging when fallbacks activate, health endpoint coverage for degraded state, and alerting hooks. A silent fallback is a silent production bug.
+
+77. **No emojis in documentation** `[universal]` `[hook-enforced]` -- use text equivalents (PASS, `[x]`, `->`), not emoji/pictographs. Enforced post-edit by `verify-edit.sh` on `.md` files (arrows/dashes/box-drawing are allowed). Per-file opt-out: a line containing `<!-- contract:allow-emoji -->`.
 
 ## Agent Reports
 
