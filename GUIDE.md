@@ -311,7 +311,7 @@ This sounds restrictive, but it's the single most impactful rule for research qu
 
 ### Error Prevention
 
-The blueprint includes 76 operational rules learned from real sessions. These aren't theoretical — they're patterns that caused actual failures and wasted time. Rather than loading all rules into every session, the blueprint uses **progressive disclosure** across three layers: a slim CLAUDE.md (~70 lines) for universal instructions, `.claude/rules/` for conditional rules that load only when working with matching files, and `.claude/skills/` for detailed domain knowledge that loads on demand. This keeps the agent's context window clean and focused.
+The blueprint includes 77 operational rules learned from real sessions. These aren't theoretical — they're patterns that caused actual failures and wasted time. Rather than loading all rules into every session, the blueprint uses **progressive disclosure** across three layers: a slim CLAUDE.md (~70 lines) for universal instructions, `.claude/rules/` for conditional rules that load only when working with matching files, and `.claude/skills/` for detailed domain knowledge that loads on demand. This keeps the agent's context window clean and focused.
 
 The 10 blueprint-provided skills cover: git workflow, CI verification, deployment safety, multi-agent coordination, GitHub CLI, Python, macOS, Supabase, error patterns, and systematic debugging. The 5 rule templates cover: RPI details, push accountability, deployment safety, Supabase, and testing.
 
@@ -368,6 +368,8 @@ your-project/
 ├── CLAUDE.md                    # Project configuration (Claude reads this every session)
 ├── .claude/
 │   ├── settings.json            # Tool permissions, Agent Teams, hooks
+│   ├── hooks/                   # guard-bash.sh (PreToolUse), verify-edit.sh (PostToolUse)
+│   ├── scripts/                 # validate-findings.py (pre-launch/remediate contract)
 │   ├── commands/                # Slash commands (user-invoked workflows)
 │   │   ├── research.md          # /research
 │   │   ├── plan.md              # /plan
@@ -456,7 +458,7 @@ The blueprint repository contains detailed documentation on every topic mentione
 | CI ownership | `methodology/push-accountability.md` | Background CI monitoring, fix-and-repush |
 | Model economics | `methodology/cost-monitoring.md` | Cost pools, model-tier binding, access tiers, cost-per-outcome |
 | Error patterns | `patterns/agent-errors.md` | 63 documented errors with symptoms and solutions |
-| Operational rules | `patterns/quick-reference.md` | 76 rules with scope/stack tags, organized by domain |
+| Operational rules | `patterns/quick-reference.md` | 77 rules with scope/stack tags, organized by domain |
 | Domain skills | `templates/skills/` | 10 blueprint-provided skills for progressive disclosure |
 | Rule templates | `templates/rules/` | 5 conditional/modular rules for `.claude/rules/` |
 | Deployment safety | `patterns/deployment-safety.md` | Resource efficiency and production deployment rules |

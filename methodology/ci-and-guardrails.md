@@ -77,18 +77,89 @@ Only promote a rule to hook enforcement when:
 The current guard script enforces:
 - **Error #33**: `git pull --rebase` with uncommitted changes (checks `git status --porcelain`)
 - **Error #44**: `git push --tags` instead of specific tag names (pattern match)
+- **Error #48**: direct push to `main`/`master` (template default; commented out in cc-rpi's own copy, where `main` is the long-lived branch)
+
+### Block messages are corrective hints
+
+Criterion 3 above ("has a clear fix") is not advice — it is a required output
+format. Every block a hook emits follows the same shape so a block is a guided
+correction, not just a stop:
+
+```
+BLOCKED by <hook> — <Rule/Error #N>: <one-line reason>
+
+WHY: <one sentence on the consequence if allowed>
+
+FIX:
+  <copy-pasteable command or concrete instruction>
+```
+
+Hooks build this with a shared `emit_block <hook> <reason> <why> <fix>` helper
+(see `templates/hooks/guard-bash.sh`). The `FIX` block must be runnable as-is.
+This mirrors the deterministic "retry hint" idea from contract-driven agent
+designs — when enforcement moves out of the prompt and into code, the code still
+has to tell the agent exactly how to comply. (Idea source:
+`cristhianrivera/contract-driven-llm-agent` — convention only, no machinery ported.)
 
 ### Three-Tier Error Prevention Model
 
 | Tier | Mechanism | Reliability | When to Use |
 |------|-----------|-------------|-------------|
-| **Enforce** | PreToolUse hooks, pre-commit hooks, CI | High — mechanically prevented | Top repeat offenders. Rules that keep getting violated despite documentation. |
+| **Enforce** | PreToolUse hooks, PostToolUse verification, pre-commit hooks, CI | High — mechanically prevented | Top repeat offenders. Rules that keep getting violated despite documentation. |
 | **Prompt** | Command recipes in CLAUDE.md | Medium — agent copies the pattern | Frequent operations. Give compound commands to copy instead of compose. |
 | **Document** | agent-errors.md, quick-reference.md | Low — advisory only | Long tail. Reference for when things go wrong. |
 
 Rules graduate upward: a pattern documented in tier 3 that keeps recurring gets promoted to tier 2 (recipe in CLAUDE.md) or tier 1 (hook). The error processing routine should track repeat offenders across batches and promote accordingly.
 
 Skills can extend this model with **on-demand hooks** — guardrails that activate only when a specific skill is invoked and last for the session. Use these for rules too restrictive to run permanently but essential in certain contexts (e.g., blocking destructive commands when touching production). See [agent-design.md](agent-design.md) "On-Demand Hooks" for examples.
+
+## Agent Tool Hooks (Level 1: post-edit verification)
+
+Level 0 hooks prevent bad commands *before* they run. The harness realizes
+**Level 1 (editor-time)** with a `PostToolUse` hook on `Write`/`Edit`:
+`templates/hooks/verify-edit.sh`. After an edit lands, it checks the file and
+surfaces violations as a corrective hint so the agent fixes them immediately —
+instead of discovering them at CI.
+
+This is post-action verification: a deterministic check that runs *after*
+generation, the most transferable idea from contract-driven agent designs. Two
+properties matter:
+
+- **It cannot un-write the file.** The edit already happened; `exit 2` feeds the
+  hint back to the agent as "fix this now". Prevention still belongs to CI and
+  pre-commit — this layer closes the feedback loop fast.
+- **It fails open.** Missing `jq`/`perl`/`markdownlint` → allow through, exactly
+  like `guard-bash.sh`.
+
+The shipped checks on edited `.md` files:
+
+1. **No emojis in documentation** (always on). Flags emoji/pictographs while
+   deliberately allowing arrows (`->` and U+2192), em-dash, and box-drawing that
+   docs use legitimately. Per-file opt-out: a line containing
+   `<!-- contract:allow-emoji -->`.
+2. **markdownlint** — runs only when the project ships a markdownlint config
+   (`.markdownlint.json` and friends). Without a config, default rules would flood
+   false positives, so the check stays dormant rather than noisy.
+
+Wire it in `.claude/settings.json` alongside the Level 0 hook:
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          { "type": "command", "command": "bash .claude/hooks/verify-edit.sh" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Add project-specific post-edit checks at the bottom of `verify-edit.sh`, following
+the emoji check's structure.
 
 ## Pre-Commit Hooks
 

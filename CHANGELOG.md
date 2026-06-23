@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Added
+
+- **Contract layer (post-action verification).** A targeted set of deterministic
+  guardrails that move the mechanically-detectable subset of rules from advisory
+  prose to hard enforcement:
+  - `templates/hooks/verify-edit.sh` — a `PostToolUse` hook on `Write`/`Edit`
+    that checks edited `.md` files for emoji (always on; per-file opt-out via
+    `<!-- contract:allow-emoji -->`) and runs markdownlint when the project ships
+    a markdownlint config. cc-rpi's first post-action verification layer; realizes
+    "Level 1: Editor-time" from `methodology/ci-and-guardrails.md`.
+  - Standardized `BLOCKED / WHY / FIX` corrective-hint format across hooks (shared
+    `emit_block` helper in `guard-bash.sh` and `verify-edit.sh`) so every block is
+    a guided correction.
+  - `templates/scripts/validate-findings.py` — enforces the pre-launch/remediate
+    Finding-ID contract (grammar, required fields, `file:line` rule); `/remediate`
+    runs it as a Step-1 gate before parsing, rejecting malformed reports.
+  - New Rule #77 ("No emojis in documentation", `[hook-enforced]`). Rule count
+    76 -> 77.
+  - Inspired by `cristhianrivera/contract-driven-llm-agent` (idea source only —
+    no SQL/ontology/reconciler machinery ported).
+
 ## [1.21.0] - 2026-06-19
 
 ### Added

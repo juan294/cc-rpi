@@ -4,7 +4,7 @@
 
 Blueprint repository for Claude Code projects, with Codex compatibility
 via `AGENTS.md` plus Codex-only helper skills in `.codex/skills/`.
-Contains the RPI methodology, 63 known agent error patterns, 76
+Contains the RPI methodology, 63 known agent error patterns, 77
 operational rules, and templates for CLAUDE.md, AGENTS.md, slash
 commands, skills, rules, and project setup.
 
@@ -88,7 +88,7 @@ Go directly to these paths -- never search the codebase for them.
 | Topic | Path | Notes |
 |-------|------|-------|
 | Error catalog | `patterns/agent-errors.md` | 63 errors, source of truth |
-| Operational rules | `patterns/quick-reference.md` | 76 rules with scope/stack tags |
+| Operational rules | `patterns/quick-reference.md` | 77 rules with scope/stack tags |
 | Deployment safety | `patterns/deployment-safety.md` | Resource efficiency rules |
 | Skill templates | `templates/skills/` | 10 domain skills |
 | Codex-only skills | `.codex/skills/` | Personal Codex helpers such as `codex-simplify` |
@@ -97,7 +97,8 @@ Go directly to these paths -- never search the codebase for them.
 | Methodology | `methodology/` | 12 files, order in README.md |
 | Commands | `templates/commands/` | Canonical command definitions |
 | Active commands | `.claude/commands/` | This repo's own commands |
-| Hooks | `templates/hooks/guard-bash.sh` | Template; `.claude/hooks/` active |
+| Hooks | `templates/hooks/guard-bash.sh` (PreToolUse), `templates/hooks/verify-edit.sh` (PostToolUse) | Templates; `.claude/hooks/` active |
+| Contract validator | `templates/scripts/validate-findings.py` | Enforces pre-launch/remediate Finding-ID contract; `.claude/scripts/` active |
 | Research | `docs/research/YYYY-MM-DD-*.md` | RPI research about cc-rpi |
 | Plans | `docs/plans/YYYY-MM-DD-*.md` | RPI plans for cc-rpi |
 
