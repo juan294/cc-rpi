@@ -11,10 +11,10 @@ Level 0: Agent-time (PreToolUse hooks)
 ├── Agent sees the block reason and self-corrects
 └── Most reliable layer — prevents errors, not just consequences
 
-Level 1: Editor-time (hooks on file edit)
-├── Formatter runs on save (Prettier, Black, rustfmt)
-├── Linter runs on save (ESLint, Ruff, clippy)
-└── Agent sees errors immediately and fixes them
+Level 1: Editor-time (PostToolUse hooks on file edit)
+├── Claude Code: verify-edit.sh post-Write/Edit (emoji + markdownlint on .md)
+├── Editors: formatter/linter on save (Prettier, Black, rustfmt, ESLint, Ruff)
+└── Agent sees violations immediately and fixes them
 
 Level 2: Commit-time (pre-commit hooks)
 ├── Typecheck across the project

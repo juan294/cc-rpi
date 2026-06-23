@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.22.0] - 2026-06-23
+
 ### Added
 
 - **Contract layer (post-action verification).** A targeted set of deterministic
@@ -26,6 +28,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
     76 -> 77.
   - Inspired by `cristhianrivera/contract-driven-llm-agent` (idea source only —
     no SQL/ontology/reconciler machinery ported).
+- **`/triage` covers GitHub Security & Quality Alerts.** Every triage run now
+  queries three GitHub-native alert surfaces in addition to local agent reports
+  and the Dependabot PR queue: code scanning / CodeQL (including quality
+  warnings), Dependabot security alerts, and secret scanning. All open alerts are
+  treated as findings (no severity filtering), classified GREEN/YELLOW/RED, and
+  surfaced in discovery, the action plan, and the report — so GitHub-native
+  warnings cannot be hidden by a GREEN local report. A failed/disabled alert
+  query is itself a triage finding.
+- **`/triage` handles `leanness-report.md` as an actionable source.** Each
+  `shrink`/`delete`/`yagni`/dead-code/efficiency item is extracted and listed
+  individually (never bulk-applied), with safety guardrails: keep edits scoped to
+  the named files, preserve public APIs unless a dead export is identified, verify
+  importers before deleting, and rely on or add tests per risk. Leanness items are
+  100% actionable under Rule #58 after approval.
 
 ## [1.21.0] - 2026-06-19
 
