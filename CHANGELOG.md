@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.22.0] - 2026-06-23
+
 ### Added
 
 - **Contract layer (post-action verification).** A targeted set of deterministic
