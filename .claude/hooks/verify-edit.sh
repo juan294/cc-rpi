@@ -27,11 +27,28 @@ emit_block() {
   printf 'BLOCKED by verify-edit.sh — %s\n\nWHY: %s\n\nFIX:\n%s\n' "$1" "$2" "$3"
 }
 
+# log_event <decision> <rule> <file> — append-only contract-metrics telemetry.
+# One JSONL row per evaluated edit so the contract layer's impact can be measured
+# over time (see templates/scripts/contract-metrics.py). Fail-open: any error here
+# is swallowed — telemetry must never break a hook. Never logs file contents.
+log_event() {
+  {
+    local dir="${CLAUDE_PROJECT_DIR:-$PWD}/.claude/metrics"
+    mkdir -p "$dir" 2>/dev/null || return 0
+    local ts; ts=$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null) || return 0
+    jq -cn --arg ts "$ts" --arg sid "${SESSION_ID:-}" --arg hook "verify-edit" \
+      --arg dec "$1" --arg rule "$2" --arg file "${3:-}" \
+      '{ts:$ts,session_id:$sid,hook:$hook,decision:$dec,rule:$rule,file:$file}' \
+      >> "$dir/contract-events.jsonl" 2>/dev/null
+  } || true
+}
+
 command -v jq &>/dev/null || exit 0
 
 read -r -d '' INPUT || true
 TOOL=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
 FILE=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty' 2>/dev/null)
+SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty' 2>/dev/null)
 
 # Only Write/Edit on markdown files.
 [[ "$TOOL" == "Write" || "$TOOL" == "Edit" ]] || exit 0
@@ -55,6 +72,7 @@ if ! grep -q 'contract:allow-emoji' "$FILE" 2>/dev/null && command -v perl &>/de
 $HITS
   (Only if a glyph is a required literal example, add a line containing
   <!-- contract:allow-emoji --> to this file to skip this check.)"
+    log_event block emoji "$FILE"
     exit 2
   fi
 fi
@@ -74,9 +92,11 @@ if [[ -n "$MDL_CONFIG" ]] && command -v npx &>/dev/null \
     emit_block "markdownlint violations" \
       "Lint errors fail CI; fix them at edit time, not at push." \
       "    ${LINT//$NL/$NL    }"
+    log_event block markdownlint "$FILE"
     exit 2
   fi
 fi
 
 
+log_event allow none "$FILE"
 exit 0

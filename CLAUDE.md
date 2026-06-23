@@ -99,6 +99,7 @@ Go directly to these paths -- never search the codebase for them.
 | Active commands | `.claude/commands/` | This repo's own commands |
 | Hooks | `templates/hooks/guard-bash.sh` (PreToolUse), `templates/hooks/verify-edit.sh` (PostToolUse) | Templates; `.claude/hooks/` active |
 | Contract validator | `templates/scripts/validate-findings.py` | Enforces pre-launch/remediate Finding-ID contract; `.claude/scripts/` active |
+| Contract metrics | `templates/scripts/contract-metrics.py` | Aggregates hook telemetry (`.claude/metrics/contract-events.jsonl`) into block/self-correction rates; weekly snapshot via `scripts/agents/contract-metrics-agent.sh` |
 | Research | `docs/research/YYYY-MM-DD-*.md` | RPI research about cc-rpi |
 | Plans | `docs/plans/YYYY-MM-DD-*.md` | RPI plans for cc-rpi |
 

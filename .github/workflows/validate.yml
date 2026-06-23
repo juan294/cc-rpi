@@ -55,6 +55,7 @@ jobs:
         run: |
           shellcheck --severity=warning \
             templates/scripts/cc-rpi-update-agent.sh \
+            templates/scripts/agents/contract-metrics-agent.sh \
             templates/hooks/guard-bash.sh \
             templates/hooks/verify-edit.sh
 
@@ -63,6 +64,12 @@ jobs:
         run: |
           python3 -m py_compile templates/scripts/validate-findings.py
           python3 templates/scripts/validate-findings.py --self-test
+
+      # --- Contract-metrics aggregator self-test ---
+      - name: Validate contract-metrics aggregator
+        run: |
+          python3 -m py_compile templates/scripts/contract-metrics.py
+          python3 templates/scripts/contract-metrics.py --self-test
 
       # --- JSON syntax validation ---
       - name: Validate JSON files

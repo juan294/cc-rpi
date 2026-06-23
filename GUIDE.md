@@ -369,7 +369,8 @@ your-project/
 ├── .claude/
 │   ├── settings.json            # Tool permissions, Agent Teams, hooks
 │   ├── hooks/                   # guard-bash.sh (PreToolUse), verify-edit.sh (PostToolUse)
-│   ├── scripts/                 # validate-findings.py (pre-launch/remediate contract)
+│   ├── scripts/                 # validate-findings.py (contract), contract-metrics.py (hook telemetry)
+│   ├── metrics/                 # contract-events.jsonl (gitignored hook audit log)
 │   ├── commands/                # Slash commands (user-invoked workflows)
 │   │   ├── research.md          # /research
 │   │   ├── plan.md              # /plan

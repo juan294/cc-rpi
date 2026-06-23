@@ -196,6 +196,7 @@ launchd provides a minimal execution environment that breaks Claude CLI in four 
 | **Performance check** | Weekly | Bundle sizes, build times, regression detection |
 | **Documentation sync** | Weekly | Stale docs, undocumented public APIs, broken links |
 | **Cost report** | Weekly | AI spend per workflow and per outcome, tier-adherence drift (see [cost-monitoring.md](cost-monitoring.md)) |
+| **Contract metrics** | Weekly | Block rates and verify-edit self-correction rate from the contract-layer hook log; deterministic (no Claude CLI). See [ci-and-guardrails.md](ci-and-guardrails.md) |
 
 ## Concrete Agent Prompts
 

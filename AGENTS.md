@@ -75,3 +75,9 @@ When the user invokes a slash-style command:
   pre-launch report before parsing in a `/remediate`-style flow, and STOP if
   it exits non-zero. When a guard blocks, phrase the reason as
   `BLOCKED / WHY / FIX` with a runnable fix.
+- **Contract metrics.** The hook telemetry log is written by the Claude-Code
+  hooks, so Codex sessions won't populate it. But `contract-metrics.py` is
+  portable stdlib: if a Codex harness writes the same JSONL shape
+  (`{ts, session_id, hook, decision, rule, file}`) to
+  `.claude/metrics/contract-events.jsonl`, the aggregator and the weekly
+  `contract-metrics-agent.sh` snapshot work unchanged.
