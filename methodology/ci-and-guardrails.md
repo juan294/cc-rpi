@@ -161,6 +161,31 @@ Wire it in `.claude/settings.json` alongside the Level 0 hook:
 Add project-specific post-edit checks at the bottom of `verify-edit.sh`, following
 the emoji check's structure.
 
+### Measuring whether enforcement works
+
+Enforcement you can't measure is enforcement you trust blindly. Both hooks append
+one **fail-open** JSONL row per evaluated command/edit to
+`.claude/metrics/contract-events.jsonl` — `{ts, session_id, hook, decision, rule,
+file}`. They never log command text or file contents (guard-bash sees commands
+that may carry tokens), and any logging error is swallowed so telemetry can never
+break a hook.
+
+`templates/scripts/contract-metrics.py` aggregates that log into:
+
+- **block rate** per hook and per rule (how much the layer is catching),
+- **self-correction rate** — a verify-edit block followed by a clean re-edit of the
+  same file in the same session, i.e. the corrective-hint loop actually closing,
+- a **week-over-week trend** (blocks per 100 events): a declining rate at stable
+  volume is the signal that agents are internalizing the rules, not just being
+  caught by them.
+
+The raw log is gitignored; a weekly deterministic agent
+(`contract-metrics-agent.sh`, no Claude CLI) snapshots the report to
+`docs/agents/contract-metrics-report.md` for review over time. Because the feature
+is new, the day it ships is a clean `t=0` — no pre-feature baseline to reconstruct.
+Read the self-correction rate as the cleanest signal: it is within-session, so it
+sidesteps confounds (model updates, changing project mix) that muddy the raw trend.
+
 ## Pre-Commit Hooks
 
 Pre-commit hooks run automatically before every commit and reject the commit if any check fails.

@@ -26,6 +26,22 @@ emit_block() {
   printf 'BLOCKED by %s — %s\n\nWHY: %s\n\nFIX:\n%s\n' "$1" "$2" "$3" "$4"
 }
 
+# log_event <decision> <rule> — append-only contract-metrics telemetry. One JSONL
+# row per evaluated git command so guard adherence can be measured over time (see
+# templates/scripts/contract-metrics.py). Fail-open; NEVER logs the command text
+# (it may contain tokens) — only the matched rule and decision.
+log_event() {
+  {
+    local dir="${CLAUDE_PROJECT_DIR:-$PWD}/.claude/metrics"
+    mkdir -p "$dir" 2>/dev/null || return 0
+    local ts; ts=$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null) || return 0
+    jq -cn --arg ts "$ts" --arg sid "${SESSION_ID:-}" --arg hook "guard-bash" \
+      --arg dec "$1" --arg rule "$2" --arg file "" \
+      '{ts:$ts,session_id:$sid,hook:$hook,decision:$dec,rule:$rule,file:$file}' \
+      >> "$dir/contract-events.jsonl" 2>/dev/null
+  } || true
+}
+
 # Require jq for JSON parsing — allow through if unavailable
 if ! command -v jq &>/dev/null; then
   exit 0
@@ -33,6 +49,7 @@ fi
 
 read -r -d '' INPUT || true
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
+SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty' 2>/dev/null)
 [[ -z "$COMMAND" ]] && exit 0
 
 # Fast path: skip all guards for non-git commands (~90% of invocations)
@@ -48,6 +65,7 @@ if [[ "$COMMAND" == *"git pull"* ]] && [[ "$COMMAND" == *"--rebase"* ]]; then
       "git pull --rebase fails with a dirty working tree." \
       "  git add <files> && git commit -m \"msg\"
   git pull --rebase && git push"
+    log_event block error-33
     exit 2
   fi
 fi
@@ -64,6 +82,7 @@ if [[ "$COMMAND" == *"git push"* ]]; then
       "--tags pushes every tag, not just new ones; old tags cause failures." \
       "  git push origin main && git push origin v1.0.0
   git push origin main --follow-tags"
+    log_event block error-44
     exit 2
   fi
 
@@ -97,4 +116,6 @@ fi
 # fi
 
 
+# Reached only by git commands that passed every guard (non-git exits earlier).
+log_event allow none
 exit 0

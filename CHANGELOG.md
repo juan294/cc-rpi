@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Added
+
+- **Contract-layer metrics (impact measurement).** The `guard-bash.sh` and
+  `verify-edit.sh` hooks now append one fail-open JSONL row per evaluated
+  command/edit to `.claude/metrics/contract-events.jsonl` (decision, rule, file,
+  session — never command text or file contents). `templates/scripts/contract-metrics.py`
+  aggregates the log into block rates per hook/rule, a verify-edit **self-correction
+  rate** (block followed by a clean re-edit of the same file in the same session),
+  and a week-over-week trend. A deterministic `contract-metrics-agent.sh`
+  (weekly, no Claude CLI / no cost) snapshots the report to
+  `docs/agents/contract-metrics-report.md`. Lets you evaluate months from now
+  whether the contract layer actually changed agent behavior, instead of trusting
+  blindly. Raw log gitignored (`.claude/metrics/`); report follows Rule #70.
+
 ## [1.22.0] - 2026-06-23
 
 ### Added

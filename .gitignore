@@ -5,6 +5,9 @@
 .claude/tasks/
 .claude/debug/
 
+# Contract-layer telemetry (local audit log; the report snapshot lives in docs/agents/)
+.claude/metrics/
+
 # Internal working docs (research, plans)
 docs/research/
 docs/plans/
