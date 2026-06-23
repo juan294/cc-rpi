@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.23.0] - 2026-06-23
+
 ### Added
 
 - **Contract-layer metrics (impact measurement).** The `guard-bash.sh` and
