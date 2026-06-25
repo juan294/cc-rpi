@@ -292,6 +292,28 @@ Beyond automated checks, guardrails include process rules that prevent common mi
 - **Regular audits** — `pnpm audit` / `npm audit` in CI catches known vulnerabilities.
 - **License compliance** — No copyleft dependencies in proprietary projects.
 
+### Code Scanning Requires GHAS
+
+A CodeQL / code-scanning workflow only runs if GitHub Advanced Security
+(GHAS) is enabled for the repo. Adding the workflow without GHAS makes it
+**fail CI on every push** — a self-inflicted red that has cost more than one
+triage cycle to discover and remove.
+
+- **Never add a CodeQL/code-scanning workflow speculatively.** Confirm GHAS
+  first:
+
+  ```bash
+  # Non-403 means code scanning is available; 403 means GHAS is off.
+  gh api repos/{owner}/{repo}/code-scanning/alerts >/dev/null 2>&1 && echo "GHAS on" || echo "GHAS off"
+  ```
+
+- GHAS is free on public repos but a **paid add-on on private repos**. On a
+  private repo, treat "enable GHAS" as a human decision (it has a cost), not
+  an autonomous fix.
+- `/triage` still *queries* existing code-scanning alerts (that query failing
+  is itself a YELLOW finding) — but querying alerts and *creating the
+  scanner* are different acts. Only the first is always safe.
+
 ## Guardrails and Agent Autonomy
 
 Guardrails are what make agent autonomy safe. When pre-commit hooks

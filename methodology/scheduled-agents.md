@@ -351,6 +351,32 @@ if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
 fi
 ```
 
+### Checkpoint and Resume
+
+Multi-step headless runs (nightly triage, blueprint sync, release agents) die
+mid-flight on transient `Not logged in`, API 500, or 529 overload errors. Without
+a checkpoint, the next attempt restarts from scratch — re-doing committed work and
+sometimes never finishing. Write a step marker after each major phase so a retry
+resumes where it left off:
+
+```bash
+CKPT="${TMPDIR:-/tmp}/${AGENT_NAME}.checkpoint"
+done_step() { grep -qxF "$1" "$CKPT" 2>/dev/null; }
+mark_step() { echo "$1" >> "$CKPT"; }
+
+# Each phase is guarded by its checkpoint, so a resumed run skips finished work.
+done_step "discover" || { run_discovery && mark_step "discover"; }
+done_step "fix"      || { run_fixes     && mark_step "fix"; }
+done_step "merge"    || { run_merges    && mark_step "merge"; }
+
+# Clear the checkpoint only on a fully successful run.
+rm -f "$CKPT"
+```
+
+Pair this with the retry loop above: the retry handles a flaky single call;
+the checkpoint handles a session that dies between phases. Commands that already
+support phase resume (for example `/remediate wave=N`) follow this same shape.
+
 ### WIP Limits
 
 For agents that produce work items requiring human review (like research or planning agents), enforce a WIP limit to prevent accumulating more unreviewed work than humans can handle:
