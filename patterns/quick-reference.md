@@ -183,6 +183,20 @@ Skills: `[skill:name]` points to `.claude/skills/name/` for full examples.
 
 75. **Measure cost per outcome before betting beyond the floor** `[frequent]` -- track cost per merged PR and per workflow run, not per token. Stand up the weekly cost-report agent before investing in custom agents or large fan-outs, so you can confirm net-positive ROI instead of assuming it.
 
+## Multi-Agent Safety `[skill:multi-agent]`
+
+78. **Spawn agents with a terminal condition, watchdog the rest** `[situational]` -- every spawned agent gets a single-sentence task and an explicit stop condition ("stop the moment X is true"); never open-ended "look into"/"investigate". Set a ~15-20 min wall-clock budget and kill agents that overrun rather than assuming progress. Prevents the runaway agent that works hours past completion. See [agent-design.md](../methodology/agent-design.md).
+
+79. **Dedup against repo state before doing or continuing work** `[situational]` -- before an agent starts or resumes, check `git log`/`git status`/`grep` for the artifact. If a sibling already landed it, stop and report -- don't produce a duplicate (e.g. a second copy of a test block already on the branch). The orchestrator owns this check; worktree agents can't see each other.
+
+## Code & Edit Discipline
+
+80. **Verify an API supports a call before chaining on it** `[frequent]` -- confirm a method/type actually exists (docs, types, or a tiny probe) before building on it, and run the targeted test BEFORE committing the first attempt, not after. About a quarter of sessions started with a fix that didn't typecheck and needed a full revert (e.g. chaining `.abortSignal()` after a Supabase `.single()` that doesn't return it).
+
+81. **Format markdown tables programmatically, never by hand** `[universal]` `[hook-enforced]` -- run `markdownlint --fix`/`prettier --write` to align tables; never byte-tweak column padding to satisfy the linter. Hand-alignment is slow, regresses on the next edit, and is exactly what the `verify-edit.sh` markdownlint gate automates.
+
+82. **No CodeQL workflow without GHAS** `[github]` -- a code-scanning workflow fails CI on every push unless GitHub Advanced Security is enabled. Confirm first (`gh api repos/{owner}/{repo}/code-scanning/alerts` returns non-403) before adding the workflow. GHAS is free on public repos but a paid add-on on private repos -- on private, enabling it is a human cost decision, not an autonomous fix. Querying existing alerts (what `/triage` does) is always safe; creating the scanner is not. See [ci-and-guardrails.md](../methodology/ci-and-guardrails.md).
+
 ---
 
 For detailed symptoms, root causes, and examples, see [agent-errors.md](agent-errors.md).

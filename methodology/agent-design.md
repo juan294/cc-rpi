@@ -305,6 +305,24 @@ When N agents each push independently, every push triggers M workflow runs (CI m
 - No merge conflicts — main agent can detect shared-file edits before pushing
 - Cheaper GitHub Actions minutes — especially on macOS runners (10x cost multiplier)
 
+### Scope Discipline and the Watchdog
+
+The most expensive multi-agent failure is not a wrong fix — it is a **runaway
+agent** that keeps working after its job is done, or a **duplicate agent** that
+redoes work a sibling already committed. Both burn hours and tokens silently.
+
+Three orchestrator obligations prevent it:
+
+| Obligation | Rule |
+|------------|------|
+| **Scoped spawn** | Every agent gets a single-sentence task and an explicit terminal condition ("stop the moment X is true"). Never spawn with open-ended verbs like "look into" or "investigate" — they have no natural stopping point. |
+| **Watchdog budget** | Assign a wall-clock budget (~15–20 min for a focused fix). If an agent is still running past it, kill it and inspect rather than assuming progress. Require periodic status checkpoints on long fan-outs so a stuck agent is visible. |
+| **Dedup gate** | Before an agent does or continues work, it checks real repo state (`git log`, `git status`, `grep` for the artifact). If the work already landed on the branch, it stops and reports instead of producing a duplicate. |
+
+This pairs with the central-commit pattern: the main agent owns the watchdog
+because it owns the merge. A worktree agent cannot see its siblings — so the
+orchestrator, not the agent, is responsible for noticing redundant work.
+
 ---
 
 ## Claude Code Extension Points
