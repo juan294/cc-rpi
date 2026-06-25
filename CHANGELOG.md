@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.24.0] - 2026-06-25
+
+### Added
+
+- **5 new operational rules (#78–#82):** multi-agent scope discipline (#78 terminal
+  conditions + watchdog budget), dedup gate (#79 check repo state before continuing),
+  API-existence verification before chaining (#80), programmatic markdown table
+  formatting (#81), and CodeQL/GHAS prerequisite gate (#82). Rule count: 77 → 82.
+- **Methodology: "Scope Discipline and the Watchdog"** (`methodology/agent-design.md`) —
+  orchestrator obligations table (scoped spawn, watchdog budget, dedup gate) drawn
+  from a real 2h+ runaway fork-agent incident.
+- **Methodology: "Code Scanning Requires GHAS"** (`methodology/ci-and-guardrails.md`) —
+  `gh api` probe command, public-free vs private-paid distinction, and the rule that
+  querying alerts is always safe but creating the scanner requires GHAS confirmation.
+- **Methodology: "Checkpoint and Resume"** (`methodology/scheduled-agents.md`) — bash
+  step-marker pattern (`done_step`/`mark_step`) so headless nightly agents survive
+  mid-flight auth failures, API 500s, and 529 overloads without restarting from scratch.
+- **Skill: "Cleanup After Merge"** (`templates/skills/git-workflow/SKILL.md`) — complete
+  post-merge recipe: worktree remove → local branch delete → `git fetch --prune` →
+  verify nothing dangling.
+- **Skill: "Scope & Watchdog" and "Dedup Before Continuing"**
+  (`templates/skills/multi-agent/SKILL.md`) — wrong/right examples for both patterns.
+
 ## [1.23.0] - 2026-06-23
 
 ### Added
