@@ -6,6 +6,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.25.0] - 2026-06-26
+
+### Added
+
+- **Error #64 + Rule #83 — "a finding's recommendation is a hypothesis":**
+  new error pattern (`patterns/agent-errors.md`) and paired rule
+  (`patterns/quick-reference.md`) for the failure where a remediation agent
+  implements an audit finding's proposed fix literally and breaks a
+  correctness/UX invariant the fix never verified. Real case: a Performance
+  finding traded server-side locale resolution for ISR on the highest-traffic
+  route, breaking i18n for every cookie-based (returning) user — the symptom
+  test ("ISR restored") passed; no test guarded "English user sees an English
+  body". Error count: 63 → 64. Rule count: 82 → 83.
+- **Required `Regression risk` field on every pre-launch finding** — the
+  Output Contract (`pre-launch.md`) now mandates an
+  invariants/assumptions/trade-offs field, enforced before parsing by
+  `validate-findings.py` (added to required fields; bundled fixtures +
+  self-test updated).
+
+### Changed
+
+- **Pre-launch "Second-order rule"** (`pre-launch.md`) — a finding is a
+  hypothesis, not a work order. Specialists reason one step past each fix
+  and, when a non-functional goal (perf/ISR/bundle) conflicts with a
+  correctness/security/UX invariant, default to the invariant and flag the
+  trade rather than presupposing the win.
+- **Remediation verify-the-recommendation gate** (`remediate.md`) — worktree
+  agents independently confirm a finding's assumptions in real code and write
+  the guard test against the invariant (not the symptom) before implementing.
+  A recommendation that fails verification or trades away an invariant
+  **halts** and escalates to a human instead of being implemented literally.
+  Adds a "Halted" report line and a `/remediate` rule.
+
 ## [1.24.0] - 2026-06-25
 
 ### Added

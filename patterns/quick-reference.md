@@ -169,6 +169,8 @@ Skills: `[skill:name]` points to `.claude/skills/name/` for full examples.
 
 77. **No emojis in documentation** `[universal]` `[hook-enforced]` -- use text equivalents (PASS, `[x]`, `->`), not emoji/pictographs. Enforced post-edit by `verify-edit.sh` on `.md` files (arrows/dashes/box-drawing are allowed). Per-file opt-out: a line containing `<!-- contract:allow-emoji -->`.
 
+83. **A finding's recommendation is a hypothesis, not a work order** `[frequent]` -- a finding (pre-launch/audit/code-review) diagnoses well but prescribes narrowly. Before implementing, verify its assumptions in real code (if the fix swaps mechanism X for Y, confirm Y covers every input X handled, not just the one named) and write the guard test against the **invariant the fix could break**, not the symptom it names ("English cookie user still sees an English body", not just "ISR restored"). A fix that trades a correctness/security/UX invariant for a metric (perf, ISR, bundle size) **halts** -- escalate to a human, never implement it literally. Every pre-launch finding carries a required **Regression risk** field, enforced by `validate-findings.py` before `/remediate` parses. See [Error #64](agent-errors.md).
+
 ## Agent Reports
 
 70. **Agent report commit policy depends on repo visibility** `[universal]` -- check `gh repo view --json visibility` at setup time. **Public repos:** gitignore `docs/agents/`, `logs/`, `scripts/agents/` so operational details don't leak. Reports stay local; only code fixes are committed. **Private repos:** track all three directories. Triage commits reports alongside code fixes as historical artifacts.
