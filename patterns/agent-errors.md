@@ -1,6 +1,6 @@
 # Known Agent Errors -- Universal Catalog
 
-63 documented error patterns from real recurring issues across projects.
+64 documented error patterns from real recurring issues across projects.
 Each entry: symptom, root cause, correct approach, anti-pattern.
 
 **Note:** This file is the source of truth for error patterns. The condensed
@@ -2332,3 +2332,26 @@ pytest -x --numprocesses=2
 ```
 
 **Key detail:** This compounds with Error #1 — if any agent's test run fails, sibling tool calls are killed, but the underlying test processes (spawned via Bash) continue running. The agent loses the ability to manage or cancel them. Prevention is the only fix: scope tests narrowly and limit concurrency.
+
+## Error #64: Agent implements a finding's recommendation literally, breaking an invariant the fix never checked
+
+**Symptom:** A code-review or pre-launch finding correctly diagnoses a real problem and proposes a fix. A remediation agent implements that fix exactly as written, the targeted symptom disappears, tests for the symptom pass — and a different, often higher-value behavior silently regresses. The diagnosis was right; the recommendation was incomplete; nobody verified the assumption the recommendation rested on before shipping it.
+
+**Root cause:** The agent treats a finding's `Recommendation` field as a work order rather than a hypothesis. A finding is written by a specialist with a partial mental model of one domain; its proposed fix usually carries an unstated assumption ("mechanism Y can replace mechanism X") that holds for the case the specialist looked at but not for every case in production. The remediation agent's TDD test guards the *symptom the finding named*, not the *invariant the fix could break*, so the regression sails through green tests. The deeper trap is a value swap: trading a correctness, security, or UX invariant for a non-functional metric (perf, ISR, bundle size) without anyone deciding that trade was worth it.
+
+Real example: A Performance Engineer finding (`FE-M1`) correctly identified that the highest-traffic route had lost ISR (Incremental Static Regeneration) because it called a server-side `getServerLocale()` on every request. The recommendation: move locale handling to a client component (`LocaleSync`) so the route could be statically generated again. The remediation agent implemented exactly that. But `LocaleSync` only read the `?lang=` URL param — it never read the locale **cookie**. `getServerLocale()` resolved locale from the cookie for returning users. So after the "fix," every returning English user (the cookie path) got a page body in the wrong language. The symptom test ("ISR is restored") passed; no test asserted "an English cookie user sees an English body." You cannot have both ISR and server-rendered per-user locale unless the whole page body moves to client components — a real architectural trade the finding never surfaced and nobody chose. The ISR win was not worth breaking i18n for all English users.
+
+**Correct approach — always do this:**
+
+- **Treat the recommendation as a hypothesis.** Before implementing, independently confirm its assumptions in the real code. If the fix swaps mechanism X for mechanism Y, verify Y covers *every* input X handled — every locale source, every auth path, every caller — not just the one the finding named.
+- **Author findings with a `Regression risk` field.** State the invariants that must still hold, the assumptions the fix depends on, and any property the fix trades away. A blanket "none" on a behavior-changing finding is a contract failure.
+- **Guard the invariant, not the symptom.** The TDD failing-test must assert the behavior the fix could break ("English cookie user still sees an English body"), not merely that the diagnosed symptom is gone ("ISR is restored").
+- **Halt on an unsafe trade.** If verification shows the recommendation is incomplete, wrong, or trades a correctness/security/UX invariant for a metric, STOP and escalate to a human with the unresolved trade. Halting one finding beats shipping a regression.
+
+**Never do this:**
+
+- Don't implement a finding's `Recommendation` verbatim because it came from an audit — audits diagnose well and prescribe narrowly.
+- Don't let "the symptom test is green" stand in for "nothing else broke." Symptom coverage is not invariant coverage.
+- Don't silently trade correctness for performance. If a fix forces that choice, it is a human decision, not an autonomous one.
+
+**Key detail:** The chain of failure has three independent links, and breaking any one stops it: (1) the finding states a `Regression risk` so the assumption is visible; (2) the implementer verifies that assumption against real code before writing the fix; (3) a test asserts the invariant, not the symptom. The contract enforces link 1 (`validate-findings.py` requires the field); the remediation gate enforces links 2 and 3. Maps to Rule #83.

@@ -322,6 +322,26 @@ Implement (atomic change)
 
 **Reviewer powers:** The reviewer subagent can add tests to the verification checks, strengthening quality.
 
+**A recommendation is a hypothesis, not a work order.** When the work to
+implement comes from an upstream diagnosis — a pre-launch finding, a code
+review, an audit — the diagnosis is usually right but the proposed fix is
+narrow: it carries an unstated assumption that held for the one case the
+reviewer looked at. Before implementing it:
+
+- **Verify the assumption in real code.** If the fix swaps mechanism X for
+  mechanism Y, confirm Y covers every input X handled — every locale source,
+  auth path, caller — not just the one named.
+- **Guard the invariant, not the symptom.** The failing test asserts the
+  behavior the fix could break ("the English cookie user still sees an English
+  body"), not merely that the diagnosed symptom is gone ("ISR is restored").
+- **Halt on an unsafe trade.** If the fix trades a correctness, security, or UX
+  invariant for a non-functional metric (perf, ISR, bundle size), STOP and
+  escalate — that trade is a human decision, not an autonomous one.
+
+This is the implement-phase guard against Error #64 (Rule #83). `/remediate`
+encodes it as a per-finding gate; the same discipline applies any time you
+implement someone else's prescription.
+
 ### Phase Completion Criteria
 
 An implementation phase is **done** when:
