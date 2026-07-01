@@ -1,6 +1,6 @@
 # Bootstrap New Project from cc-rpi Blueprint
 
-Model tier: **sonnet** — Sonnet 4.6 (1M context) session.
+Model tier: **sonnet** — Sonnet 5 (1M context) session.
 
 You are setting up a new project using the cc-rpi blueprint repository. The blueprint lives at `<path-to-your-cc-rpi-clone>/`.
 

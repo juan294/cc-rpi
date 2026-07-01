@@ -1,6 +1,6 @@
 # Adopt cc-rpi Best Practices into Existing Project
 
-Model tier: **sonnet** — Sonnet 4.6 (1M context) session.
+Model tier: **sonnet** — Sonnet 5 (1M context) session.
 
 You are auditing and migrating an existing project to follow the cc-rpi blueprint. The blueprint lives at `<path-to-your-cc-rpi-clone>/`.
 
