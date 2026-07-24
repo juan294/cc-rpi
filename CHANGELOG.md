@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.26.0] - 2026-07-24
+
 ### Added
 
 - **E2E Pro release-verification playbook template**
@@ -32,6 +34,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
   list), `templates/commands/bootstrap.md` and `adopt.md` (install steps +
   migration-order entry), and `GUIDE.md` (new subsection + "Where to Go Deeper"
   row).
+- Swept command/template inventories for the new command: `/explore-release`
+  added to GUIDE.md's "Supporting Commands" and opus model-tier tables, the
+  README command bullet, and `templates/commands/detach.md` (Tier-1 removal, so
+  detach no longer orphans it) and `update.md` (Phase 3 sample). Added a
+  "Release verification" row to `CLAUDE.md`'s Project File Locations and an E2E
+  Pro playbook bullet to the README Templates section.
+- Corrected stale count in the plugin manifests
+  (`.claude-plugin/plugin.json`, `marketplace.json`): "63-pattern" ->
+  "64-pattern" agent-error knowledge base.
+- Updated the per-command Model tier doc line from Sonnet 4.6 to Sonnet 5 across
+  the command set.
 
 ## [1.25.0] - 2026-06-26
 
