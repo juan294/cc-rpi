@@ -101,7 +101,8 @@ Propose a phased order for the migration. Always start with the highest-leverage
 4. Slash commands (affects daily workflow)
 5. docs/ directory structure (affects research/plan storage)
 6. Pre-commit hooks and CI (affects quality enforcement)
-7. Logging, scheduled agents (polish)
+7. Release verification (E2E Pro) — Wave A truthful-gate first, structural waves by risk
+8. Logging, scheduled agents (polish)
 
 ## Phase 4: Get Approval and Execute
 
@@ -127,6 +128,13 @@ After presenting the report:
    - Create a `.claude/rules/` file with `paths` frontmatter
    - Remove the block from CLAUDE.md
    - Verify path globs match the project's actual files
+8. **Install release verification (E2E Pro)** — copy
+   `cc-rpi/templates/e2e-pro-playbook-template.md` into the project (e.g.
+   `docs/release/e2e-pro-playbook.md`) and complete its Project Adaptation Profile
+   with verified values. Adopt **Wave A always** (the truthful release gate that
+   `/release` can then enforce); adopt Waves C–H by project risk, deleting
+   inapplicable sections and recording why. Install `/explore-release` (Wave B) once
+   a deployed candidate exists to test.
 
 ## Phase 5: Save to Memory
 

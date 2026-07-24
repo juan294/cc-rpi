@@ -116,6 +116,7 @@ Copy and adapt from `templates/commands/`:
 - [ ] `/describe-pr` — PR description generation
 - [ ] `/remediate` — Fix all pre-launch findings with parallel TDD agents
 - [ ] `/triage` — Morning agent report processing and action
+- [ ] `/explore-release` — Fresh-context exploratory release charters (E2E Pro Wave B)
 
 Adjust file paths in each command to match your project's docs directory.
 
@@ -232,6 +233,27 @@ the matching slash-style command.
   - Background agent polls, investigates failures, fixes, and re-pushes
   - Main terminal stays unblocked
 - [ ] Test the workflow: push a deliberate failure, verify the background agent catches it
+
+## Release Verification (E2E Pro)
+
+E2E Pro turns release verification into auditable evidence: it proves that every
+*required* check actually ran and passed against the exact artifact being tagged.
+It sits alongside `/release` (the tagging authority), `/pre-launch` + `/remediate`
+(static code audit), and `methodology/testing.md` (test hierarchy) — it does not
+replace them.
+
+- [ ] Copy `cc-rpi/templates/e2e-pro-playbook-template.md` into the project (suggested:
+  `docs/release/e2e-pro-playbook.md`)
+- [ ] Complete the Project Adaptation Profile and environment truth table with
+  *verified* repository values (do not infer an environment's fidelity from its name)
+- [ ] **Adopt Wave A always** — the truthful release gate: zero-pass fails, a
+  required skip/fail blocks (quarantine does not excuse it), candidate identity is
+  fixed and verified, and the tag is the last action. It is cheap and mechanical.
+- [ ] Adopt **Waves C–H by project risk**, not by default — the capability registry,
+  combination engine, plan compiler, staging fidelity, model-based tests, and TTL
+  automation are structural. Delete inapplicable sections and record why.
+- [ ] Install `/explore-release` (Wave B) once there is a deployed candidate to test
+- [ ] Have `/release` gate on the E2E Pro evidence set before tagging
 
 ## Blueprint Sync (Recommended)
 

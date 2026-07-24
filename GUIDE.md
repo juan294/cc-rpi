@@ -188,6 +188,7 @@ install when you want the same cleanup pass in Codex.
 | `/pre-launch` | Spawns 8 parallel specialist agents (Principal Architect, Staff FE, Staff BE, Performance Engineer, DevOps/SRE Lead, Security Reviewer, QA/Reliability Lead, Product Designer/UX Lead) for a deep launch-readiness audit. Produces a 16-section report with 5-tier severity findings, finding IDs, and Before/After/Later time horizons. | Before any production release. Run `/remediate` after to fix findings in 3 waves. |
 | `/remediate` | Parses the 16-section pre-launch report, groups findings by wave (Before / After / Later launch), creates GitHub issues for every finding (Rule #58), spawns parallel TDD agents per wave in worktrees, merges sequentially, verifies CI, runs `/simplify` twice per wave. Wave 3 strategic items are filed as issues but not auto-fixed. | After `/pre-launch` when findings exist. Automates the full fix cycle in 3 waves. |
 | `/triage` | Discovers overnight agent reports via timestamp-based scanning, checks for agent failures in logs, queries GitHub Security & Quality Alerts (code scanning/CodeQL, Dependabot security, secret scanning) every run, scans open Dependabot PRs (Rule #72), and extracts `leanness-report.md` items individually. Synthesizes findings, proposes action plan, implements fixes, then auto-merges safe Dependabot PRs (patch/minor with green CI) and defers majors. Public repos: reports stay local. Private repos: reports are committed alongside fixes. | Every morning. First command of the day for each project. |
+| `/explore-release` | Wave B of E2E Pro: diff-driven, fresh-context exploratory release charters run as parallel agents, each completing the mandatory eight-maneuver table under a synthetic-fixture safety contract. Blocks on any failure or skipped high-risk area. Feeds evidence to `/release`; never tags. | Once there's a deployed release candidate to test, before `/release`. |
 | `/status` | Quick 5-line project orientation: branch, last commit, working tree, CI status, open items. | Start of session. Quick check without starting a full task. |
 | `/update-docs` | Spawns 4 parallel discovery agents, then updates all documentation, Mermaid diagrams, version references, and inline code docs based on changes since last release. | After features/fixes are done, before releasing. Refreshes everything in one pass. |
 | `/release` | Detects project type and branching strategy, bumps versions everywhere, generates CHANGELOG entry, creates release commit and tag, publishes GitHub release, advises on registry publish. | When ready to cut a new version. Run `/update-docs` first. |
@@ -199,7 +200,7 @@ Each command runs on a model tier — frontier where reasoning matters, the chea
 
 | Tier | Commands | Why |
 |------|----------|-----|
-| **opus** (frontier) | `/brainstorm`, `/research`, `/plan`, `/pre-launch` | Deep reasoning — a bad output amplifies downstream. |
+| **opus** (frontier) | `/brainstorm`, `/research`, `/plan`, `/pre-launch`, `/explore-release` | Deep reasoning — a bad output amplifies downstream. |
 | **sonnet** (mid) | `/implement`, `/validate`, `/remediate`, `/fix-ci`, `/triage`, `/bootstrap`, `/adopt`, `/detach`, `/release`, `/update-docs`, `/update` | Executes against a reviewed plan. |
 | **haiku** (floor) | `/status`, `/describe-pr` | Mechanical read-and-summarize. |
 
@@ -359,6 +360,21 @@ fix agents — that work requires human judgment. Rule #58's 100% coverage
 is preserved: every finding gets an issue, even if only Waves 1-2 get
 auto-fixed.
 
+### Release Verification (E2E Pro)
+
+Where `/pre-launch` audits the code as written, **E2E Pro** verifies the
+*deployed candidate's behavior* and proves that every required check
+actually ran and passed against the exact artifact being tagged. The
+template at `templates/e2e-pro-playbook-template.md` is copied into each
+project and adapted. Its mandatory floor is **Wave A** — a release gate
+that cannot lie: zero-pass fails, a required skip or failure blocks (even
+quarantined), candidate identity is fixed and verified, and the tag is the
+last action (delegated to `/release`). The structural waves (capability
+registry, combination engine, plan compiler, staging fidelity, model-based
+tests, cadence/TTL) are adopted by project risk. Wave B —
+fresh-context exploratory charters — runs via the `/explore-release`
+command.
+
 ## Project Structure After Setup
 
 After bootstrapping, your project will have:
@@ -463,6 +479,7 @@ The blueprint repository contains detailed documentation on every topic mentione
 | Domain skills | `templates/skills/` | 10 blueprint-provided skills for progressive disclosure |
 | Rule templates | `templates/rules/` | 5 conditional/modular rules for `.claude/rules/` |
 | Deployment safety | `patterns/deployment-safety.md` | Resource efficiency and production deployment rules |
+| Release verification | `templates/e2e-pro-playbook-template.md` | E2E Pro: auditable release-evidence system (Wave A gate + structural waves) |
 | Worked examples | `examples/README.md` | Sample research docs, plans, logs, pseudocode |
 
 ## Credits

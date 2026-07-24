@@ -2,8 +2,8 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "cc-rpi",
   "displayName": "cc-rpi -- RPI Methodology",
-  "description": "Research-Plan-Implement methodology for Claude Code: phased workflow commands, domain skills, and a 63-pattern agent-error knowledge base.",
-  "version": "1.23.0",
+  "description": "Research-Plan-Implement methodology for Claude Code: phased workflow commands, domain skills, and a 64-pattern agent-error knowledge base.",
+  "version": "1.26.0",
   "author": {
     "name": "Juan Gonzalez"
   },
