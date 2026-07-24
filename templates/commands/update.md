@@ -43,7 +43,7 @@ On incremental syncs (lastSyncCommit exists), prioritize reading files that appe
 
 7. Compare each file in cc-rpi `templates/commands/` against this project's `.claude/commands/`:
    - **Skip** `bootstrap.md`, `adopt.md`, and `update.md` — these are user-level commands, not project-level.
-   - For each remaining command (research, plan, implement, validate, describe-pr, pre-launch):
+   - For each remaining command (research, plan, implement, validate, describe-pr, pre-launch, explore-release):
      - If it exists in both locations and the cc-rpi version is different → replace the project version.
      - If it exists in cc-rpi but not in this project → add it.
      - If it exists only in this project → leave it (project-specific command).

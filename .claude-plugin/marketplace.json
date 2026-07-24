@@ -10,7 +10,7 @@
     {
       "name": "cc-rpi",
       "source": "./",
-      "description": "Research-Plan-Implement methodology, domain skills, and a 63-pattern agent-error knowledge base for Claude Code.",
+      "description": "Research-Plan-Implement methodology, domain skills, and a 64-pattern agent-error knowledge base for Claude Code.",
       "version": "1.23.0"
     }
   ]

@@ -96,6 +96,7 @@ Go directly to these paths -- never search the codebase for them.
 | Active rules | `.claude/rules/` | cc-rpi's own rules |
 | Methodology | `methodology/` | 12 files, order in README.md |
 | Commands | `templates/commands/` | Canonical command definitions |
+| Release verification | `templates/e2e-pro-playbook-template.md` | E2E Pro playbook; Wave A gate + structural waves, `/explore-release` runs Wave B |
 | Active commands | `.claude/commands/` | This repo's own commands |
 | Hooks | `templates/hooks/guard-bash.sh` (PreToolUse), `templates/hooks/verify-edit.sh` (PostToolUse) | Templates; `.claude/hooks/` active |
 | Contract validator | `templates/scripts/validate-findings.py` | Enforces pre-launch/remediate Finding-ID contract; `.claude/scripts/` active |
