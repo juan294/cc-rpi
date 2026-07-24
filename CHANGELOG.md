@@ -6,6 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Added
+
+- **E2E Pro release-verification playbook template**
+  (`templates/e2e-pro-playbook-template.md`) — a cross-project template that turns
+  release verification into auditable evidence: it proves that every *required*
+  check actually ran and passed against the exact artifact being tagged. Ships as a
+  copy-and-adapt blueprint with a 20-decision ledger, an 8-wave implementation plan,
+  a capability-registry schema, a constrained-combination engine, a per-release plan
+  compiler, a multi-layer evidence model, and a project epic. Its mandatory floor is
+  **Wave A** (a release gate that cannot lie: zero-pass fails, required skip/fail
+  blocks even when quarantined, candidate identity is fixed and verified, tag is
+  last); Waves C–H are adopted by project risk. Framed to sit alongside `/release`
+  (tagging authority), `/pre-launch` + `/remediate` (static audit), and
+  `methodology/testing.md` — not replace them.
+- **`/explore-release` command** (`templates/commands/explore-release.md`) — Wave B
+  of E2E Pro: diff-driven, fresh-context exploratory release charters with the
+  mandatory eight-maneuver table, a synthetic-fixture safety contract, and a
+  block-on-failure gate. Feeds evidence to `/release`; never tags.
+
+### Changed
+
+- Wired E2E Pro into the propagation path: `templates/setup-checklist.md` (new
+  "Release Verification (E2E Pro)" section + `/explore-release` in the command
+  list), `templates/commands/bootstrap.md` and `adopt.md` (install steps +
+  migration-order entry), and `GUIDE.md` (new subsection + "Where to Go Deeper"
+  row).
+
 ## [1.25.0] - 2026-06-26
 
 ### Added

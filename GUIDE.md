@@ -359,6 +359,21 @@ fix agents — that work requires human judgment. Rule #58's 100% coverage
 is preserved: every finding gets an issue, even if only Waves 1-2 get
 auto-fixed.
 
+### Release Verification (E2E Pro)
+
+Where `/pre-launch` audits the code as written, **E2E Pro** verifies the
+*deployed candidate's behavior* and proves that every required check
+actually ran and passed against the exact artifact being tagged. The
+template at `templates/e2e-pro-playbook-template.md` is copied into each
+project and adapted. Its mandatory floor is **Wave A** — a release gate
+that cannot lie: zero-pass fails, a required skip or failure blocks (even
+quarantined), candidate identity is fixed and verified, and the tag is the
+last action (delegated to `/release`). The structural waves (capability
+registry, combination engine, plan compiler, staging fidelity, model-based
+tests, cadence/TTL) are adopted by project risk. Wave B —
+fresh-context exploratory charters — runs via the `/explore-release`
+command.
+
 ## Project Structure After Setup
 
 After bootstrapping, your project will have:
@@ -463,6 +478,7 @@ The blueprint repository contains detailed documentation on every topic mentione
 | Domain skills | `templates/skills/` | 10 blueprint-provided skills for progressive disclosure |
 | Rule templates | `templates/rules/` | 5 conditional/modular rules for `.claude/rules/` |
 | Deployment safety | `patterns/deployment-safety.md` | Resource efficiency and production deployment rules |
+| Release verification | `templates/e2e-pro-playbook-template.md` | E2E Pro: auditable release-evidence system (Wave A gate + structural waves) |
 | Worked examples | `examples/README.md` | Sample research docs, plans, logs, pseudocode |
 
 ## Credits

@@ -48,11 +48,12 @@ Now execute the setup checklist against THIS project. Work through it section by
    - If test framework detected: copy `testing.md`
    - Adapt `paths` in frontmatter to match the project's actual file structure.
 9. Create the directory structure (`docs/research/`, `docs/plans/`, `docs/decisions/`).
-10. Set up the README with the standard header.
-11. Add `.claude/settings.local.json` to `.gitignore`. If scheduled agents will be used, also check repo visibility with `gh repo view --json visibility --jq '.visibility'`: on `PUBLIC` (or no remote), add `docs/agents/`, `logs/`, and `scripts/agents/` to `.gitignore` (Rule #70); on `PRIVATE`/`INTERNAL`, leave them tracked.
-12. Walk through the remaining checklist items (pre-commit hooks, CI, git setup) — ask me for decisions where needed.
-13. Unless the user explicitly opts out, always make the project Codex compatible by creating `AGENTS.md`.
-14. If the user says "make this Codex compatible", treat that as an explicit instruction to create or update `AGENTS.md` and verify the Codex compatibility layer is complete.
+10. Install release verification (E2E Pro) — copy `cc-rpi/templates/e2e-pro-playbook-template.md` into the project (e.g. `docs/release/e2e-pro-playbook.md`) and complete its Project Adaptation Profile with verified values. Adopt **Wave A always** (the truthful release gate); adopt Waves C–H by project risk. See the setup checklist's "Release Verification (E2E Pro)" section.
+11. Set up the README with the standard header.
+12. Add `.claude/settings.local.json` to `.gitignore`. If scheduled agents will be used, also check repo visibility with `gh repo view --json visibility --jq '.visibility'`: on `PUBLIC` (or no remote), add `docs/agents/`, `logs/`, and `scripts/agents/` to `.gitignore` (Rule #70); on `PRIVATE`/`INTERNAL`, leave them tracked.
+13. Walk through the remaining checklist items (pre-commit hooks, CI, git setup) — ask me for decisions where needed.
+14. Unless the user explicitly opts out, always make the project Codex compatible by creating `AGENTS.md`.
+15. If the user says "make this Codex compatible", treat that as an explicit instruction to create or update `AGENTS.md` and verify the Codex compatibility layer is complete.
 
 ## Phase 4: Save to Memory
 
