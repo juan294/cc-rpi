@@ -26,9 +26,28 @@ Gather release context before making any changes.
    git log <last-tag>..HEAD --oneline
    ```
 
-4. **Identify all version-bearing files** -- scan for the current version string across the project:
-   manifests, README badges, install instructions, constants files, docker tags,
-   CI configs, documentation site configs.
+4. **Identify all version-bearing files** -- do NOT rely on memory or a static
+   list. Grep the CURRENT version string across the whole repo so nothing is
+   missed:
+
+   ```bash
+   git grep -n -F "1.2.3"; git grep -n -F "v1.2.3"   # both bare and v-prefixed
+   ```
+
+   Hand-maintained version strings drift silently when there is no canonical
+   manifest. Explicitly confirm these commonly-missed locations, even if a scoped
+   scan would skip them:
+   - **README/docs shield.io badges** -- the version can appear 3x on ONE line
+     (badge label text, the `img.shields.io` URL, and the `releases/tag/` link href).
+   - **Plugin/marketplace manifests** (`.claude-plugin/plugin.json`,
+     `.claude-plugin/marketplace.json`) -- each carries its own `"version"`.
+   - manifests, install instructions, constants files, docker tags, CI configs,
+     documentation site configs, compatibility tables.
+
+   cc-rpi is docs/generic with NO manifest: git tag + CHANGELOG are the source of
+   truth and every other version string is hand-maintained -- the grep is
+   mandatory. This repo has repeatedly shipped with the README badge and
+   `.claude-plugin/*.json` left 1-2 releases stale; do not let that recur.
 
 5. **Detect branching strategy:**
    - Check if current branch is main/master
@@ -82,7 +101,11 @@ After the user provides a version number, prepare all files for release. Do not 
    Present the draft entry to the user for review. Apply their edits before writing.
 
 3. **Update version references** in all files identified in Step 1:
-   README badges, install instructions, constants, docker tags, etc.
+   README badges (all occurrences on the line), plugin/marketplace manifests,
+   install instructions, constants, docker tags, etc. Then re-run the grep from
+   Step 1 for the OLD version and confirm nothing remains outside CHANGELOG
+   history -- a non-empty result (other than dated CHANGELOG entries) means a
+   file was missed.
 
 4. **Run verification commands** sequentially (chain with `&&` or `;`, never parallel Bash calls):
 
