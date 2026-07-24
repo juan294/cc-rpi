@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Changed
+
+- **Hardened `/release`'s version scan** (`templates/commands/release.md` +
+  active `.claude/commands/release.md`): Step 1 now mandates a `git grep` of the
+  current version string instead of relying on memory, and explicitly names the
+  commonly-missed locations (shield.io badges where the version repeats 3x on one
+  line, and `.claude-plugin/*.json` manifests). Step 2 adds a post-bump re-grep
+  of the OLD version to confirm nothing was missed. Motivated by the README badge
+  and plugin manifests repeatedly shipping 1-2 releases stale.
+
 ## [1.26.0] - 2026-07-24
 
 ### Added
