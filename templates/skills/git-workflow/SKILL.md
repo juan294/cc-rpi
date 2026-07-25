@@ -1,5 +1,5 @@
 ---
-name: "Git Workflow"
+name: git-workflow
 description: "Git recipes, worktree management, push sequences, branch verification, and conflict resolution patterns."
 ---
 

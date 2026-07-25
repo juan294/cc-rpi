@@ -1,5 +1,5 @@
 ---
-name: "Deployment Safety"
+name: deployment-safety
 description: "Production deployment rules, rollback-first recovery, dependency batching, CI cost awareness, framework upgrade verification, fallback observability, and GitHub repo settings standardization."
 ---
 

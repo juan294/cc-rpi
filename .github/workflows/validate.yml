@@ -56,8 +56,23 @@ jobs:
           shellcheck --severity=warning \
             templates/scripts/cc-rpi-update-agent.sh \
             templates/scripts/agents/contract-metrics-agent.sh \
+            templates/scripts/verify-counts.sh \
+            templates/scripts/verify-skills.sh \
+            templates/scripts/check-tree-drift.sh \
             templates/hooks/guard-bash.sh \
             templates/hooks/verify-edit.sh
+
+      # --- Catalog counts agree everywhere they are stated ---
+      - name: Verify error/rule/skill counts
+        run: bash templates/scripts/verify-counts.sh
+
+      # --- Agent Skills authoring contract ---
+      - name: Verify skill frontmatter and size
+        run: bash templates/scripts/verify-skills.sh
+
+      # --- templates/ vs .claude/ drift ---
+      - name: Check tree drift
+        run: bash templates/scripts/check-tree-drift.sh
 
       # --- Findings-contract validator self-test ---
       - name: Validate findings-contract validator

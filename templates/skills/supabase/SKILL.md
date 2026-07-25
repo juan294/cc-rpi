@@ -1,5 +1,5 @@
 ---
-name: "Supabase"
+name: supabase
 description: "Supabase migration safety, local testing workflow, grant requirements, fallback observability, and health endpoint patterns."
 ---
 

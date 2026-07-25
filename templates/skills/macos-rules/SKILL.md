@@ -1,5 +1,5 @@
 ---
-name: "macOS Development"
+name: macos-rules
 description: "macOS-specific patterns: launchd agent configuration, brew vs pip, zsh regex quirks, file descriptor limits."
 ---
 

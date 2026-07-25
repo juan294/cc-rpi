@@ -1,5 +1,5 @@
 ---
-name: "Error Patterns"
+name: error-patterns
 description: "Known agent error patterns -- debugging reference for tool failures, git errors, CI issues, and common mistakes. Consult when encountering unexpected behavior, tool errors, or CI failures."
 user-invocable: false
 ---
@@ -76,12 +76,16 @@ Always `supabase db reset` locally before `db push`.
 - **CI & Deployment:** #12, #50, #51, #56, #57, #58, #59, #60
 - **Python/macOS:** #21, #26, #29, #37, #38, #40, #41, #42
 - **Supabase:** #61, #62
-- **Multi-Agent:** #19, #49
-- **Process:** #5, #7, #13, #14, #27, #28, #34, #43, #46, #47
+- **Multi-Agent:** #19, #49, #63
+- **Process:** #5, #7, #13, #14, #27, #28, #34, #43, #46,
+  #47, #64
 
-## Full Catalog
+## References
 
-The complete 64-error catalog with detailed symptoms,
-root causes, and solutions is at `patterns/agent-errors.md`
-in the cc-rpi blueprint repository.
-Read it when this reference doesn't resolve your issue.
+- `references/error-catalog.md` -- one-line-per-error index of all 64 errors,
+  grouped by the same domains above. Read it when the Top 20 above did not
+  resolve the issue -- it points you at the right error number before you go
+  looking for the full write-up.
+- For the full symptom/root-cause/solution detail behind any error number,
+  read `patterns/agent-errors.md` in the cc-rpi blueprint repository (not
+  part of this project's local files).

@@ -1,5 +1,5 @@
 ---
-name: "GitHub CLI"
+name: github-cli
 description: "gh CLI patterns, JSON field discovery, PR check interpretation, label management, merge settings verification, CodeQL/GHAS gating."
 ---
 

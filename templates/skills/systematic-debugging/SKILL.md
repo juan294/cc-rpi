@@ -1,5 +1,5 @@
 ---
-name: "Systematic Debugging"
+name: systematic-debugging
 description: "A disciplined procedure for finding root causes -- reproduce, isolate, hypothesize, bisect, fix, verify. Consult when a bug is non-obvious, a fix didn't hold, or you've tried the same thing twice without progress."
 user-invocable: false
 ---

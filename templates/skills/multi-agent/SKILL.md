@@ -1,5 +1,5 @@
 ---
-name: "Multi-Agent Coordination"
+name: multi-agent
 description: "Rules for sub-agents, Agent Teams, worktree agents, central commit pattern, and parallel work coordination."
 ---
 

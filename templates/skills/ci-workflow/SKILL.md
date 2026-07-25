@@ -1,5 +1,5 @@
 ---
-name: "CI Workflow"
+name: ci-workflow
 description: "Push accountability, CI monitoring after push, background agent CI verification, verification command sequencing."
 ---
 

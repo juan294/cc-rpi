@@ -14,10 +14,13 @@ If you've encountered a recurring Claude Code agent error that isn't in the cata
 
 Or submit a PR directly:
 1. Add the detailed entry to `patterns/agent-errors.md` following the existing format.
-2. Add a one-liner to `patterns/quick-reference.md`.
+2. Add a one-line pointer to `patterns/quick-reference.md`. That file is an
+   **index**, not a catalog: the rule body itself goes in the skill, rule file,
+   or command that needs it, and the index line names where it went.
 3. Update any hard-coded counts or references in onboarding docs and
-   skills (for example `README.md`, `GUIDE.md`, bootstrap docs, and the
-   error-patterns skill).
+   skills. Run `templates/scripts/verify-counts.sh` rather than grepping by
+   hand — it computes the counts from the catalogs and reports every location
+   that disagrees.
 
 ### Proposing a Methodology Improvement
 
@@ -64,6 +67,21 @@ If the CLAUDE.md template, setup checklist, or slash commands could be better:
 
 1. Submit a PR with your changes to files under `templates/`.
 2. Explain what problem the change addresses.
+
+### `templates/` vs `.claude/`, and symlinks
+
+`templates/` is the product shipped downstream; `.claude/` is cc-rpi's own
+application of it. Where the two are identical, `.claude/` holds a **symlink**
+into `templates/` — so edit the template and the self-application follows. Four
+files deliberately differ, because a blueprint written for any repo cannot state
+a fact true only of this one. `.claude/DIVERGENCE.md` records which is which and
+why, and `templates/scripts/check-tree-drift.sh` (run in CI) fails when reality
+and that manifest disagree.
+
+**On Windows:** symlinks need developer mode or an elevated shell. Without it, a
+checkout materializes them as regular copies. The drift check reports that as a
+failure with a fix rather than passing silently, so you get a clear error instead
+of an invisible fork. Enable developer mode, or clone in WSL.
 
 ## Pull Request Guidelines
 

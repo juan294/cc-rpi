@@ -1,5 +1,5 @@
 ---
-name: "Python Development"
+name: python-rules
 description: "Python-specific patterns: uv/poetry virtual environments, python -m imports, version pinning, pip restrictions on macOS."
 ---
 

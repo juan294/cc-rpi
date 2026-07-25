@@ -85,7 +85,8 @@ check_count "$ERRORS_FILE" '^[0-9]+ documented error patterns' "$ERROR_COUNT" "E
 check_count ".claude-plugin/plugin.json" '[0-9]+-pattern' "$ERROR_COUNT" "Error count (plugin manifest)"
 check_count ".claude-plugin/marketplace.json" '[0-9]+-pattern' "$ERROR_COUNT" "Error count (marketplace manifest)"
 
-check_count "templates/skills/error-patterns/SKILL.md" '[0-9]+-error catalog' "$ERROR_COUNT" "Error count (error-patterns skill)"
+check_count "templates/skills/error-patterns/SKILL.md" 'all [0-9]+ errors' "$ERROR_COUNT" "Error count (error-patterns skill)"
+check_count "templates/skills/error-patterns/references/error-catalog.md" 'All [0-9]+ documented error patterns' "$ERROR_COUNT" "Error count (error-patterns level-3 catalog)"
 
 # Skill count -- adding a skill directory without updating the prose is the
 # same drift class as the rule and error counts.
