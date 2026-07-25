@@ -6,8 +6,53 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.27.0] - 2026-07-25
+
+### Added
+
+- **Retirement path for the rule corpus** (`.claude/rules/contributing.md`):
+  four admissible grounds (superseded / hook-enforced / model-native / merged),
+  a procedure that blocks while inbound references remain, and a Retirement
+  Ledger. `/release` now asks what came OUT each cycle, not just what went in.
+  The corpus had an intake path and no exit path across 38 releases.
+- **`shell-tools` skill** -- 16 cross-cutting shell and tool-call environment
+  facts (quoting inside single-quoted zsh/jq/Python strings, absolute paths and
+  cwd resets, linter invocation, curl/JSON handling). Skills 10 -> 11.
+- **Four repo-invariant scripts, all CI-enforced**, each emitting BLOCKED/WHY/FIX
+  with a runnable fix: `verify-counts.sh` (stated counts match the catalogs),
+  `verify-skills.sh` (skill frontmatter contract, 500-line body ceiling,
+  sibling-file wiring), `verify-version.sh` (version strings match CHANGELOG,
+  including the README badge that carries it 3x on one line), and
+  `check-tree-drift.sh` (`templates/` vs `.claude/`).
+- **`templates/skills/error-patterns/references/error-catalog.md`** -- the repo's
+  first multi-file skill. All 64 errors as one-liners, so the skill's level-3
+  detail is reachable downstream, where `patterns/agent-errors.md` does not exist.
+- **`.claude/DIVERGENCE.md`** -- manifest recording which shared files are
+  symlinked and which deliberately differ, with the reason for each.
+- Interface design over worked examples (`methodology/agent-design.md`), rich
+  references (`methodology/context-engineering.md` + `/plan`), `/doctor`
+  awareness, a deviation log written by `/implement` and read by `/validate`,
+  and an optional comprehension gate in `/validate`.
+
 ### Changed
 
+- **`patterns/quick-reference.md` is now an INDEX, not a catalog** (20,360 ->
+  6,923 bytes). Every rule body moved into the skill, rule file, command, or
+  methodology doc that needs it, so each rule loads at its point of use. Each
+  line is `N. title -> destination`, and CI asserts the destination resolves.
+  **Downstream impact:** if you run `/update`, expect this file to shrink to
+  pointers. Confirm your update also pulls the skills and rules the index now
+  names, or rule text you previously had inline will be missing.
+- **All 11 skill `name:` fields normalized** from display case to
+  lowercase-hyphen matching the directory (`"Git Workflow"` -> `git-workflow`).
+  The previous values did not satisfy the Agent Skills identifier contract.
+- **`.claude/` de-duplicated into symlinks** -- 15 byte-identical files now link
+  into `templates/`; 5 that diverge on purpose stay real and are documented.
+- `.claude/rules/rpi-workflow.md` renamed to `rpi-details.md` so it pairs with
+  its template and the drift check can see it.
+- Rule #72 (Triage processes Dependabot PRs) renumbered to **#84**; the Supabase
+  rule keeps #72 by seniority.
+- Pinned model tiers refreshed to Claude Opus 5 / Sonnet 5 / Haiku 4.5.
 - **Hardened `/release`'s version scan** (`templates/commands/release.md` +
   active `.claude/commands/release.md`): Step 1 now mandates a `git grep` of the
   current version string instead of relying on memory, and explicitly names the
@@ -15,6 +60,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
   line, and `.claude-plugin/*.json` manifests). Step 2 adds a post-bump re-grep
   of the OLD version to confirm nothing was missed. Motivated by the README badge
   and plugin manifests repeatedly shipping 1-2 releases stale.
+
+### Removed
+
+- **Rule #67** ("Justify every external action") -- retired, merged into #64.
+- **Rule #80** ("Verify an API supports a call before chaining") -- retired,
+  merged into #13 plus the verification gate.
+  Rules 83 -> 81. These are the first retirements in the project's history;
+  both are recorded in the ledger with their ground.
+
+### Fixed
+
+- `shell-tools` was missing from the always-install lists in `bootstrap.md`,
+  `setup-checklist.md`, and `update.md`, so downstream projects would never have
+  received it. `update.md` was also missing `systematic-debugging` since v1.21.0.
+- Four onboarding surfaces told the agent to "internalize every operational
+  rule" from a file that is now an index of pointers.
+- `CLAUDE.md` claimed CI runs markdownlint. It never has, and the repo ships no
+  markdownlint config, so its 80-column defaults fight the repo's own style.
+- Missing `---` separators before errors #63 and #64; duplicate rule number 72;
+  a stale "63-error catalog" count; committed `__pycache__` bytecode.
 
 ## [1.26.0] - 2026-07-24
 
