@@ -107,6 +107,31 @@ if [[ -n "$DUPES" ]]; then
   FAILED=1
 fi
 
+# --- Retired numbers agree between the index legend and the ledger -----------
+# The legend answers "why is there a gap at 67?" inline, which is worth a
+# reader's time; the ledger in contributing.md is the authority on WHY. Two
+# statements of the same set is a drift risk, so they are cross-checked rather
+# than one being deleted.
+LEDGER=".claude/rules/contributing.md"
+if [[ -f "$LEDGER" ]]; then
+  # Legend line: "Retired so far: 67, 69, and 80 -- ..."
+  LEGEND_RETIRED=$(
+    grep -oE '^Retired so far:[^-]*' "$RULES_FILE" \
+      | grep -oE '[0-9]+' | sort -n | tr '\n' ' '
+  )
+  # Ledger rows: "| 67   | v1.27.0 | Merged | ... |"
+  LEDGER_RETIRED=$(
+    awk '/^### Retirement Ledger/{f=1;next} f && /^## /{f=0} f && /^\| *[0-9]+ *\|/' "$LEDGER" \
+      | awk -F'|' '{gsub(/ /,"",$2); print $2}' | sort -n | tr '\n' ' '
+  )
+  if [[ "$LEGEND_RETIRED" != "$LEDGER_RETIRED" ]]; then
+    emit_block "Retired rule numbers disagree: $RULES_FILE legend says [${LEGEND_RETIRED% }], $LEDGER ledger says [${LEDGER_RETIRED% }]" \
+      "A number retired in the ledger but still implied live by the index (or the reverse) makes a gap in the numbering unexplainable, which is exactly what the permanent-numbering convention exists to prevent." \
+      "  Update the 'Retired so far:' line in $RULES_FILE to match the Retirement Ledger table in $LEDGER, or add the missing ledger row with its ground."
+    FAILED=1
+  fi
+fi
+
 # --- Every index destination resolves ---------------------------------------
 # patterns/quick-reference.md is an index: each rule line ends in
 # "-> <destination>". If a destination stops existing, the rule has silently

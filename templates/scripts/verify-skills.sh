@@ -25,6 +25,12 @@ MAX_DESC_CHARS=1024
 
 # emit_block <what> <why> <fix> -- corrective-hint convention.
 # See methodology/ci-and-guardrails.md "Block messages are corrective hints".
+#
+# Deliberately duplicated in each script and hook rather than sourced from a
+# shared lib: these files are copied into downstream projects individually, and
+# .claude/ reaches them through symlinks, so `dirname "$BASH_SOURCE"` does not
+# point anywhere a lib/ would live. Self-contained is the repo's convention --
+# guard-bash.sh and verify-edit.sh carry their own copies for the same reason.
 emit_block() {
   printf 'BLOCKED: %s\n\nWHY: %s\n\nFIX:\n%s\n\n' "$1" "$2" "$3"
 }

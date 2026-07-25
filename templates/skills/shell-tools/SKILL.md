@@ -1,6 +1,6 @@
 ---
 name: shell-tools
-description: "Shell and tool-call environment facts: quoting and escaping in zsh/jq/Python single-quoted strings, absolute vs relative paths across Bash calls, choosing the right tool over a shell one-liner, linter invocation, curl and JSON output handling, and sequencing fallible calls. Consult when a quoted regex misbehaves, a path or cwd resolves wrong, a linter reports implausible errors, an unfamiliar CLI flag is about to be guessed, or curl/jq output fails to parse."
+description: "Shell and tool-call environment facts: escaping inside single-quoted zsh/jq/Python strings, complex regex in zsh, absolute paths and cwd resets between Bash calls, linter invocation, curl and JSON output handling, and choosing a built-in tool over a shell one-liner."
 ---
 
 # Shell & Tools

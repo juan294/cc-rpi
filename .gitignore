@@ -30,3 +30,7 @@ Thumbs.db
 *.swp
 *.swo
 *~
+
+# Python bytecode (py_compile in CI/local verification)
+__pycache__/
+*.py[cod]
