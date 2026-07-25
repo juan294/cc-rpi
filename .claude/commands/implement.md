@@ -28,6 +28,10 @@ Process:
       `docs/plans/<plan-name>-notes.md` under `## Deviations`, as:
       plan said / found / chose / why. Deviations only -- never narration,
       and no file at all if the phase had none. `/validate` reads it.
+      **Commit it with the phase.** You are in a worktree: an uncommitted
+      notes file is destroyed at teardown, before `/validate` ever sees it.
+      `.gitignore` excludes `docs/plans/*` but re-includes `*-notes.md`
+      precisely so these survive -- do not re-ignore them.
 7. STOP. Report results and wait for human confirmation.
 8. Do NOT proceed to the next phase without confirmation.
 

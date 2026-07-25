@@ -10,7 +10,12 @@
 
 # Internal working docs (research, plans)
 docs/research/
-docs/plans/
+# Plans stay local, but deviation logs are tracked: /implement writes them and
+# /validate reads them, so a log that dies with the worktree is a log that never
+# gets read. Note the `/*` -- git cannot re-include a path whose parent
+# DIRECTORY is excluded, so the contents must be excluded instead.
+docs/plans/*
+!docs/plans/*-notes.md
 docs/decisions/
 docs/reports/
 
