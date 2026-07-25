@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.28.2] - 2026-07-25
+
+### Fixed
+
+- **Removed private project names from shipped content.** `Archy-compatible`
+  in `morning-triage.sh`, "the Chapa failures" in the multi-agent skill,
+  `owner/XILLVER` in Error #23, and the `GenAI_Projects` folder name in
+  Error #45 all identified the maintainer's own setup. Genericized, keeping
+  each example's instructive shape -- Error #23 still demonstrates a fabricated
+  repo name, Error #45 still contrasts a real parent directory against a
+  plausible invented one. This shipped un-released in v1.28.1; tagging it so
+  the plugin marketplace serves the cleaned content.
+
+### Changed
+
+- `CLAUDE.md` gained file-location rows for `scripts/install.sh` and the four
+  repo-invariant scripts, and `AGENTS.md` now tells a Codex session to re-run
+  the installer after pulling cc-rpi. Both shipped in v1.28.0 without being
+  recorded in the places an agent actually looks.
+
 ## [1.28.1] - 2026-07-25
 
 ### Fixed

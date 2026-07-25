@@ -50,6 +50,8 @@ When the user invokes a slash-style command:
 - Read `.claude/rules/git-recipes.md` for git-heavy tasks
 - Read `.claude/rules/contributing.md` when changing docs, templates, or
   patterns
+- Run `scripts/install.sh` after pulling cc-rpi to refresh the user-level
+  commands, or `scripts/install.sh --check` to see whether they have drifted
 - Load `.claude/skills/drawio/SKILL.md` when diagram work is requested
 - Load `.codex/skills/codex-simplify/SKILL.md` when a Codex session
   needs a `/simplify`-style cleanup pass
