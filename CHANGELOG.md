@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.28.0] - 2026-07-25
+
+### Added
+
+- **`scripts/install.sh`** -- installs the four user-level commands
+  (`/bootstrap`, `/adopt`, `/update`, `/detach`) into `~/.claude/commands/`,
+  substituting the path to your cc-rpi clone and verifying no placeholder
+  survives. `--check` reports drift without changing anything.
+
+  This closes a real adoption gap. Those commands ship with a
+  `<path-to-your-cc-rpi-clone>` placeholder -- 12 occurrences across 4 files --
+  and GUIDE previously told adopters to edit them by hand, with nothing
+  verifying the result. Worse, the installed copies are snapshots: they go
+  stale on every cc-rpi release and nothing detected it, so `/update` -- the
+  command whose entire job is keeping projects current -- could silently sync
+  projects using months-old instructions. Run the installer after every
+  `git pull`, or `--check` to find out where you stand.
+
+### Changed
+
+- `README.md`, `GUIDE.md`, and `templates/setup-checklist.md` now point at
+  `scripts/install.sh` instead of a manual copy-and-edit checklist, and say
+  plainly that installed copies must be refreshed after each pull. The README
+  Quick Start now names `/bootstrap` and `/adopt` rather than only offering a
+  prose prompt.
+
 ## [1.27.1] - 2026-07-25
 
 ### Fixed
