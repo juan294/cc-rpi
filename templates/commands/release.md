@@ -118,6 +118,19 @@ After the user provides a version number, prepare all files for release. Do not 
    $TYPECHECK_CMD; $LINT_CMD; $TEST_CMD; $BUILD_CMD
    ```
 
+   Also run every repo-invariant script the project ships, not just the build.
+   In cc-rpi that is:
+
+   ```bash
+   bash templates/scripts/verify-counts.sh
+   bash templates/scripts/verify-skills.sh
+   bash templates/scripts/check-tree-drift.sh
+   ```
+
+   These catch the drift a build cannot: a stated count that no longer matches
+   its catalog, a skill that outgrew its ceiling, a `.claude/` file that forked
+   from its template. Each prints a runnable FIX on failure.
+
    If any fail, fix before proceeding.
 
 5. **Present the full diff** to the user.

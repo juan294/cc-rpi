@@ -48,6 +48,7 @@ either lie to downstream projects or misdescribe this one.
 | `commands/implement.md` | Same reason: the template says "the integration branch", the local copy says `main`, which is cc-rpi's long-lived canonical branch. |
 | `commands/release.md` | The template describes version-scanning generically. cc-rpi has repeatedly shipped with the README badge and `.claude-plugin/*.json` left one to two releases stale, so the local copy carries a specific warning about that history, and points the retirement review at this repo's own ledger. |
 | `hooks/guard-bash.sh` | The template blocks direct pushes to `main`/`master` (Error #48). cc-rpi's long-lived branch IS `main`, and validated changes may be pushed there after explicit approval, so the local copy comments that guard out and explains why. The policy here is "high-stakes and exceptional", not "never". |
+| `rules/rpi-details.md` | Same topology reason as `commands/implement.md`: the template says "the integration branch" because it cannot know a project's topology, while cc-rpi's copy names `main` and adds that `main` is the canonical branch, not the default edit target. The heading and `description` also name cc-rpi specifically. Roughly 94 percent of the file is shared, so this pair is the one most likely to drift by someone editing only one side -- which is exactly why it is tracked here rather than left as two unrelated filenames. |
 
 ## Adding a shared file
 

@@ -22,10 +22,17 @@ cd "$REPO_ROOT"
 ERRORS_FILE="patterns/agent-errors.md"
 RULES_FILE="patterns/quick-reference.md"
 
-# emit_block <what> <why> <fix> — corrective-hint convention.
+# emit_block <what> <why> <fix> -- corrective-hint convention.
 # See methodology/ci-and-guardrails.md "Block messages are corrective hints".
+#
+# Deliberately duplicated in each script and hook rather than sourced from a
+# shared lib: these files are copied into downstream projects individually, and
+# .claude/ reaches them through symlinks, so `dirname "$BASH_SOURCE"` resolves
+# to .claude/scripts/ where no lib/ exists. Self-contained is the repo's
+# convention -- guard-bash.sh and verify-edit.sh carry their own copies too.
+# Keep the three verify scripts' copies byte-identical.
 emit_block() {
-  printf 'BLOCKED: %s\n\nWHY: %s\n\nFIX:\n%s\n' "$1" "$2" "$3"
+  printf 'BLOCKED: %s\n\nWHY: %s\n\nFIX:\n%s\n\n' "$1" "$2" "$3"
 }
 
 FAILED=0
@@ -35,10 +42,15 @@ ERROR_COUNT=$(grep -c '^## Error #' "$ERRORS_FILE")
 RULE_COUNT=$(grep -cE '^[0-9]+\.' "$RULES_FILE")
 SKILL_COUNT=$(find templates/skills -maxdepth 2 -name SKILL.md | wc -l | tr -d ' ')
 
-# --- check_count <file> <pattern> <label> ---------------------------------
+# --- check_count <file> <pattern> <expected> <label> -----------------------
 # Extracts the first number matched by <pattern> in <file> and compares it
-# against the expected count captured in the pattern's own match (the
-# caller passes the expected value separately for the message).
+# against <expected>, which the caller computed from the catalogs
+# (ERROR_COUNT / RULE_COUNT / SKILL_COUNT). <label> only names the location
+# in the failure message.
+#
+# A pattern that matches nothing is a FAILURE, not a skip: it means the prose
+# was reworded past what this script looks for, and drift there would go
+# undetected from then on.
 check_count() {
   local file="$1" pattern="$2" expected="$3" label="$4"
 
@@ -143,7 +155,7 @@ while IFS= read -r dest; do
     hook:*) target="templates/hooks/${dest#hook: }" ;;
     skills/*) target="templates/${dest}/SKILL.md" ;;
     rules/*|commands/*) target="templates/${dest}" ;;
-    methodology/*) target="$dest" ;;
+    # methodology/ paths are already repo-root-relative, as is anything else.
     *) target="$dest" ;;
   esac
   [[ -e "$target" ]] || UNRESOLVED="$UNRESOLVED

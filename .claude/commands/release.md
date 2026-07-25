@@ -114,8 +114,18 @@ After the user provides a version number, prepare all files for release. Do not 
 4. **Run verification commands** sequentially (chain with `&&` or `;`, never parallel Bash calls):
 
    ```bash
-   $TYPECHECK_CMD; $LINT_CMD; $TEST_CMD; $BUILD_CMD
+   bash templates/scripts/verify-counts.sh
+   bash templates/scripts/verify-skills.sh
+   bash templates/scripts/check-tree-drift.sh
    ```
+
+   These are cc-rpi's real gates -- there is no typecheck/test/build here.
+   They catch a stated count that no longer matches its catalog, a skill that
+   outgrew its ceiling, and a `.claude/` file that forked from its template.
+   Each prints a runnable FIX on failure.
+
+   Do NOT run `npx markdownlint`: this repo ships no markdownlint config, so it
+   applies 80-column defaults that every file here violates by design.
 
    If any fail, fix before proceeding.
 

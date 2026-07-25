@@ -46,7 +46,7 @@ When the user invokes a slash-style command:
 ## Rules and Skills
 
 - Always follow `CLAUDE.md`
-- Always read `.claude/rules/rpi-workflow.md`
+- Always read `.claude/rules/rpi-details.md`
 - Read `.claude/rules/git-recipes.md` for git-heavy tasks
 - Read `.claude/rules/contributing.md` when changing docs, templates, or
   patterns
