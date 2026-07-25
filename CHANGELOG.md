@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.27.1] - 2026-07-25
+
+### Fixed
+
+- **Deviation logs were destroyed before `/validate` could read them.** v1.27.0
+  added a deviation log at `docs/plans/<plan>-notes.md`, written by
+  `/implement` and read by `/validate` -- but that path was gitignored while
+  `/implement` mandates a worktree, so the log was deleted at teardown before
+  `/validate` ever saw it. `.gitignore` now excludes `docs/plans/*` and
+  re-includes `!docs/plans/*-notes.md`. The `/*` matters: git cannot re-include
+  a path whose parent **directory** is excluded, so the obvious
+  `docs/plans/` + negation silently does nothing. `/implement` now says to
+  commit the log with the phase, and to reference the plan by name rather than
+  as a markdown link -- the plan stays untracked, so a link to it dangles in a
+  clean checkout.
+- **`verify-version.sh` blocked legitimate releases on historical references.**
+  Its "previous version must appear nowhere" sweep flagged the Retirement
+  Ledger's `Retired in` column and an illustrative comment, both of which name
+  an old release correctly. The sweep now excludes `.claude/rules/contributing.md`
+  (check 3 already validates ledger versions against real CHANGELOG releases)
+  alongside `CHANGELOG.md` and `docs/`. Verified that a genuinely stale
+  reference elsewhere still blocks.
+
 ## [1.27.0] - 2026-07-25
 
 ### Added

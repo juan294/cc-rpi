@@ -118,9 +118,19 @@ check_version ".claude-plugin/marketplace.json" '"version": *"[0-9]+\.[0-9]+\.[0
 # This is the check that catches a partial bump. After releasing X, any file
 # still naming X-1 outside CHANGELOG history was missed. Illustrative versions
 # in command examples (v1.0.0, v1.2.3) never collide with a real prior release.
+#
+# Excluded, because these record version HISTORY rather than declaring the
+# current version -- naming an old release in them is correct, not stale:
+#   CHANGELOG.md                  -- the history itself
+#   .claude/rules/contributing.md -- the Retirement Ledger's "Retired in"
+#                                    column; check 3 validates those separately
+#                                    against real CHANGELOG releases
+#   docs/                         -- plans and deviation logs describe the
+#                                    release they shipped in
 if [[ -n "$PREV_VERSION" ]]; then
   STALE="$(git grep -n -F "$PREV_VERSION" -- \
-             ':!CHANGELOG.md' ':!docs/' ':!*.lock' 2>/dev/null || true)"
+             ':!CHANGELOG.md' ':!.claude/rules/contributing.md' \
+             ':!docs/' ':!*.lock' 2>/dev/null || true)"
   if [[ -n "$STALE" ]]; then
     emit_block "Previous version $PREV_VERSION still appears outside $CHANGELOG:
 $(printf '%s' "$STALE" | sed 's/^/  /')" \

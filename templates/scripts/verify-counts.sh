@@ -135,7 +135,8 @@ if [[ -f "$LEDGER" ]]; then
     grep -oE '^Retired so far:[^-]*' "$RULES_FILE" \
       | grep -oE '[0-9]+' | sort -n | tr '\n' ' '
   )
-  # Ledger rows: "| 67   | v1.27.0 | Merged | ... |"
+  # Ledger rows: "| 67   | vX.Y.Z | Merged | ... |"  (placeholder on purpose --
+  # a real version here would look stale to verify-version.sh's sweep)
   LEDGER_RETIRED=$(
     awk '/^### Retirement Ledger/{f=1;next} f && /^## /{f=0} f && /^\| *[0-9]+ *\|/' "$LEDGER" \
       | awk -F'|' '{gsub(/ /,"",$2); print $2}' | sort -n | tr '\n' ' '
