@@ -1,6 +1,7 @@
 # Implementation Notes: Context Surface for the Claude 5 Generation
 
-Plan: [2026-07-25-context-surface-claude-5.md](2026-07-25-context-surface-claude-5.md)
+Plan: `docs/plans/2026-07-25-context-surface-claude-5.md` (untracked -- plans
+stay local, only these notes are committed, so this is a name not a link)
 Shipped: v1.27.0, 2026-07-25, tag `v1.27.0`, main `5618bec`.
 
 > Recreated after the original was lost -- it was written inside the worktree,

@@ -33,7 +33,9 @@ Process:
       sees it. If the project gitignores its plans directory, un-ignore the
       `*-notes.md` files (exclude `docs/plans/*` and re-include
       `!docs/plans/*-notes.md`; git cannot re-include a path whose parent
-      directory is excluded).
+      directory is excluded). Reference the plan by NAME in backticks, not as
+      a markdown link -- if the plan stays untracked, a link to it dangles in
+      a clean checkout and fails any CI link check.
 7. STOP. Report results and wait for human confirmation.
 8. Do NOT proceed to the next phase without confirmation.
 

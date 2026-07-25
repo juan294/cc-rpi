@@ -31,7 +31,10 @@ Process:
       **Commit it with the phase.** You are in a worktree: an uncommitted
       notes file is destroyed at teardown, before `/validate` ever sees it.
       `.gitignore` excludes `docs/plans/*` but re-includes `*-notes.md`
-      precisely so these survive -- do not re-ignore them.
+      precisely so these survive -- do not re-ignore them. Reference the plan
+      by NAME in backticks, never as a markdown link: the plan itself stays
+      untracked, so a link to it dangles in a clean checkout and fails CI's
+      link check.
 7. STOP. Report results and wait for human confirmation.
 8. Do NOT proceed to the next phase without confirmation.
 
