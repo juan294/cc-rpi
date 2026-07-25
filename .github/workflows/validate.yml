@@ -54,6 +54,7 @@ jobs:
       - name: Lint shell scripts
         run: |
           shellcheck --severity=warning \
+            scripts/install.sh \
             templates/scripts/cc-rpi-update-agent.sh \
             templates/scripts/agents/contract-metrics-agent.sh \
             templates/scripts/verify-counts.sh \

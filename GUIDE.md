@@ -59,14 +59,21 @@ These go in your home directory, so they're available in every project
 even ones that haven't been set up yet:
 
 ```bash
-mkdir -p ~/.claude/commands
-cp cc-rpi/templates/commands/bootstrap.md ~/.claude/commands/bootstrap.md
-cp cc-rpi/templates/commands/adopt.md ~/.claude/commands/adopt.md
-cp cc-rpi/templates/commands/update.md ~/.claude/commands/update.md
-cp cc-rpi/templates/commands/detach.md ~/.claude/commands/detach.md
+cd cc-rpi && ./scripts/install.sh
 ```
 
-Edit all four files to set the correct path to where you cloned cc-rpi on your machine.
+That copies `/bootstrap`, `/adopt`, `/update`, and `/detach` into
+`~/.claude/commands/`, fills in the path to your clone (each command
+references it, 12 places in total), and verifies nothing was missed.
+
+**Re-run it after every `git pull` of cc-rpi.** The installed copies are
+snapshots — they do not update themselves, and a stale `/update` will sync your
+projects using obsolete instructions without saying so. To find out where you
+stand:
+
+```bash
+./scripts/install.sh --check
+```
 
 If you also use Codex, install the bundled Codex-only simplify skill
 into your personal Codex skill directory:
@@ -435,7 +442,7 @@ your-project/
 
 ### User-Level Commands: `/bootstrap`, `/adopt`, `/update`, and `/detach`
 
-These four commands live in `~/.claude/commands/` so they're available in every project. Install them as described in "Getting Started" above. All four reference the cc-rpi repository path — update that path in each file to match where you cloned the repo on your machine.
+These four commands live in `~/.claude/commands/` so they're available in every project. Install them with `./scripts/install.sh` from your cc-rpi clone, as described in "Getting Started" above — it fills in the repository path for you and verifies the result. Run `./scripts/install.sh --check` after pulling cc-rpi to confirm your installed copies still match the blueprint.
 
 - **`/bootstrap`** reads the blueprint and creates everything from scratch. It asks you about your project type and stack before generating anything.
 - **`/adopt`** reads the blueprint, then runs a full audit of the existing project (configuration, infrastructure, workflow) before proposing any changes. It presents a prioritized report and only migrates what you approve.

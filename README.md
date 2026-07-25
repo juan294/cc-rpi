@@ -19,13 +19,20 @@ A blueprint repository for setting up and running projects with [Claude Code](ht
 
 ## Quick Start
 
-Clone the repository:
+Clone the repository and install the user-level commands:
 
 ```bash
 git clone https://github.com/juan294/cc-rpi.git
+cd cc-rpi && ./scripts/install.sh
 ```
 
-Then tell Claude Code in your target project:
+That puts `/bootstrap`, `/adopt`, `/update`, and `/detach` in
+`~/.claude/commands/` so they work in every project, with the path to your
+clone filled in and verified. Re-run it after each `git pull`; check with
+`./scripts/install.sh --check`.
+
+Then, in your target project, run `/bootstrap` for a new project or `/adopt`
+for an existing one. Or just tell Claude Code:
 
 > Go read the cc-rpi repository and set up this project following all the best practices. Read the quick reference and methodology first, use the error-patterns skill or full error catalog only if needed, then configure CLAUDE.md, AGENTS.md, and slash commands for this project.
 
@@ -117,6 +124,7 @@ Ready-to-use starting points for new projects:
 - **E2E Pro release-verification playbook** — Copy-and-adapt template that turns release verification into auditable evidence (Wave A truthful-gate floor + structural waves by risk)
 - **Scheduled agent scripts** — Nightly blueprint sync and multi-project morning triage with launchd/cron templates
 - **Repo-invariant scripts** — `verify-counts.sh` (stated counts match the catalogs), `verify-version.sh` (version strings match CHANGELOG, including the badge that repeats it 3x), `verify-skills.sh` (skill frontmatter and the 500-line ceiling), `check-tree-drift.sh` (`templates/` vs `.claude/`) — each reports a runnable fix and runs in CI
+- **Installer** — `scripts/install.sh` puts the four user-level commands in place with the blueprint path filled in; `--check` reports when your installed copies have drifted from the clone
 
 ## Adding New Patterns
 

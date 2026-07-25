@@ -259,7 +259,11 @@ replace them.
 
 Set up nightly syncing with the cc-rpi blueprint so this project automatically stays current with new rules, error patterns, and command improvements.
 
-- [ ] Install the `/update` command as a user-level command (`~/.claude/commands/update.md`)
+- [ ] Install the user-level commands with `cc-rpi/scripts/install.sh` (installs
+      `/bootstrap`, `/adopt`, `/update`, `/detach` into `~/.claude/commands/`
+      with the blueprint path filled in and verified)
+- [ ] Confirm with `cc-rpi/scripts/install.sh --check` -- re-run the installer
+      after every `git pull` of cc-rpi, or the installed copies silently go stale
 - [ ] Run `/update` once manually to verify it works and create the initial `.claude/cc-rpi-sync.json`
 - [ ] Copy the scheduled agent script from `cc-rpi/templates/scripts/cc-rpi-update-agent.sh` to `scripts/agents/cc-rpi-update.sh`
 - [ ] Set `CC_RPI_PATH` in the script to your cc-rpi clone location
