@@ -58,6 +58,7 @@ jobs:
             templates/scripts/agents/contract-metrics-agent.sh \
             templates/scripts/verify-counts.sh \
             templates/scripts/verify-skills.sh \
+            templates/scripts/verify-version.sh \
             templates/scripts/check-tree-drift.sh \
             templates/hooks/guard-bash.sh \
             templates/hooks/verify-edit.sh
@@ -65,6 +66,10 @@ jobs:
       # --- Catalog counts agree everywhere they are stated ---
       - name: Verify error/rule/skill counts
         run: bash templates/scripts/verify-counts.sh
+
+      # --- Version strings agree with CHANGELOG ---
+      - name: Verify version strings
+        run: bash templates/scripts/verify-version.sh
 
       # --- Agent Skills authoring contract ---
       - name: Verify skill frontmatter and size

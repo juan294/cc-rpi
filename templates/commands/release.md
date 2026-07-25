@@ -124,12 +124,18 @@ After the user provides a version number, prepare all files for release. Do not 
    ```bash
    bash templates/scripts/verify-counts.sh
    bash templates/scripts/verify-skills.sh
+   bash templates/scripts/verify-version.sh
    bash templates/scripts/check-tree-drift.sh
    ```
 
    These catch the drift a build cannot: a stated count that no longer matches
-   its catalog, a skill that outgrew its ceiling, a `.claude/` file that forked
-   from its template. Each prints a runnable FIX on failure.
+   its catalog, a version string the bump missed, a skill that outgrew its
+   ceiling, a `.claude/` file that forked from its template. Each prints a
+   runnable FIX on failure.
+
+   Run `verify-version.sh` AFTER the bump -- it is the mechanical backstop for
+   the Step 1 grep, and catches the partial-bump case a human scan misses
+   (a shields.io badge carries the version three times on one line).
 
    If any fail, fix before proceeding.
 

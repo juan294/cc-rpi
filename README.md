@@ -116,7 +116,7 @@ Ready-to-use starting points for new projects:
 - **Slash commands** — `/bootstrap`, `/adopt`, `/update`, `/brainstorm`, `/research`, `/plan`, `/implement`, `/validate`, `/describe-pr`, `/pre-launch`, `/remediate`, `/triage`, `/status`, `/fix-ci`, `/explore-release` — plus Anthropic-native `/simplify` and `/batch`
 - **E2E Pro release-verification playbook** — Copy-and-adapt template that turns release verification into auditable evidence (Wave A truthful-gate floor + structural waves by risk)
 - **Scheduled agent scripts** — Nightly blueprint sync and multi-project morning triage with launchd/cron templates
-- **Repo-invariant scripts** — `verify-counts.sh` (stated counts match the catalogs), `verify-skills.sh` (skill frontmatter and the 500-line ceiling), `check-tree-drift.sh` (`templates/` vs `.claude/`) — each reports a runnable fix and runs in CI
+- **Repo-invariant scripts** — `verify-counts.sh` (stated counts match the catalogs), `verify-version.sh` (version strings match CHANGELOG, including the badge that repeats it 3x), `verify-skills.sh` (skill frontmatter and the 500-line ceiling), `check-tree-drift.sh` (`templates/` vs `.claude/`) — each reports a runnable fix and runs in CI
 
 ## Adding New Patterns
 

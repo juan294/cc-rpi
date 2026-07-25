@@ -36,6 +36,7 @@ Symlinks from `.claude/<path>` to `../../templates/<path>`. Edit the template.
 | `scripts/validate-findings.py` |
 | `scripts/verify-counts.sh` |
 | `scripts/verify-skills.sh` |
+| `scripts/verify-version.sh` |
 
 ## Divergent
 

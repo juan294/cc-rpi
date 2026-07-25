@@ -63,8 +63,9 @@ Check these layers together:
 5. `README.md` and `GUIDE.md`
 6. `CHANGELOG.md`
 
-Then run `templates/scripts/verify-counts.sh`, `verify-skills.sh`, and
-`check-tree-drift.sh` — they catch the drift a manual sweep misses.
+Then run `templates/scripts/verify-counts.sh`, `verify-version.sh`,
+`verify-skills.sh`, and `check-tree-drift.sh` — they catch the drift a manual
+sweep misses.
 
 ### Improving Templates
 

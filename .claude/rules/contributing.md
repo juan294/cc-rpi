@@ -95,4 +95,5 @@ skills, hooks, or onboarding docs, sweep all documentation layers:
 6. `CHANGELOG.md`
 
 Then run the invariant scripts rather than re-reading by eye:
-`templates/scripts/verify-counts.sh`, `verify-skills.sh`, `check-tree-drift.sh`.
+`templates/scripts/verify-counts.sh`, `verify-version.sh`, `verify-skills.sh`,
+`check-tree-drift.sh`.

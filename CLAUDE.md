@@ -51,6 +51,7 @@ Use /clear between tasks, /compact when context is heavy.
 # What CI actually runs (.github/workflows/validate.yml)
 bash templates/scripts/verify-counts.sh      # error/rule/skill counts agree
 bash templates/scripts/verify-skills.sh      # skill frontmatter + 500-line ceiling
+bash templates/scripts/verify-version.sh     # version strings match CHANGELOG
 bash templates/scripts/check-tree-drift.sh   # templates/ vs .claude/ symlinks
 shellcheck --severity=warning templates/hooks/*.sh templates/scripts/*.sh
 python3 templates/scripts/validate-findings.py --self-test

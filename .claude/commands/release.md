@@ -116,8 +116,15 @@ After the user provides a version number, prepare all files for release. Do not 
    ```bash
    bash templates/scripts/verify-counts.sh
    bash templates/scripts/verify-skills.sh
+   bash templates/scripts/verify-version.sh
    bash templates/scripts/check-tree-drift.sh
    ```
+
+   `verify-version.sh` is the mechanical backstop for the Step 1 grep: it
+   fails if the README badge (which carries the version 3x on one line) or
+   either `.claude-plugin/*.json` disagrees with CHANGELOG, and if the
+   previous version survives anywhere outside CHANGELOG. Run it AFTER the
+   bump -- before the bump it will correctly report the pre-release state.
 
    These are cc-rpi's real gates -- there is no typecheck/test/build here.
    They catch a stated count that no longer matches its catalog, a skill that

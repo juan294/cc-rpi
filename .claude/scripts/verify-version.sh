@@ -1,0 +1,1 @@
+../../templates/scripts/verify-version.sh
