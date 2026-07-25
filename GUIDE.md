@@ -187,7 +187,7 @@ install when you want the same cleanup pass in Codex.
 | `/describe-pr` | Generates a PR description from the current branch's diff and commit history. | Before opening or updating a PR. |
 | `/pre-launch` | Spawns 8 parallel specialist agents (Principal Architect, Staff FE, Staff BE, Performance Engineer, DevOps/SRE Lead, Security Reviewer, QA/Reliability Lead, Product Designer/UX Lead) for a deep launch-readiness audit. Produces a 16-section report with 5-tier severity findings, finding IDs, and Before/After/Later time horizons. | Before any production release. Run `/remediate` after to fix findings in 3 waves. |
 | `/remediate` | Parses the 16-section pre-launch report, groups findings by wave (Before / After / Later launch), creates GitHub issues for every finding (Rule #58), spawns parallel TDD agents per wave in worktrees, merges sequentially, verifies CI, runs `/simplify` twice per wave. Wave 3 strategic items are filed as issues but not auto-fixed. | After `/pre-launch` when findings exist. Automates the full fix cycle in 3 waves. |
-| `/triage` | Discovers overnight agent reports via timestamp-based scanning, checks for agent failures in logs, queries GitHub Security & Quality Alerts (code scanning/CodeQL, Dependabot security, secret scanning) every run, scans open Dependabot PRs (Rule #72), and extracts `leanness-report.md` items individually. Synthesizes findings, proposes action plan, implements fixes, then auto-merges safe Dependabot PRs (patch/minor with green CI) and defers majors. Public repos: reports stay local. Private repos: reports are committed alongside fixes. | Every morning. First command of the day for each project. |
+| `/triage` | Discovers overnight agent reports via timestamp-based scanning, checks for agent failures in logs, queries GitHub Security & Quality Alerts (code scanning/CodeQL, Dependabot security, secret scanning) every run, scans open Dependabot PRs (Rule #84), and extracts `leanness-report.md` items individually. Synthesizes findings, proposes action plan, implements fixes, then auto-merges safe Dependabot PRs (patch/minor with green CI) and defers majors. Public repos: reports stay local. Private repos: reports are committed alongside fixes. | Every morning. First command of the day for each project. |
 | `/explore-release` | Wave B of E2E Pro: diff-driven, fresh-context exploratory release charters run as parallel agents, each completing the mandatory eight-maneuver table under a synthetic-fixture safety contract. Blocks on any failure or skipped high-risk area. Feeds evidence to `/release`; never tags. | Once there's a deployed release candidate to test, before `/release`. |
 | `/status` | Quick 5-line project orientation: branch, last commit, working tree, CI status, open items. | Start of session. Quick check without starting a full task. |
 | `/update-docs` | Spawns 4 parallel discovery agents, then updates all documentation, Mermaid diagrams, version references, and inline code docs based on changes since last release. | After features/fixes are done, before releasing. Refreshes everything in one pass. |
@@ -312,9 +312,11 @@ This sounds restrictive, but it's the single most impactful rule for research qu
 
 ### Error Prevention
 
-The blueprint includes 83 operational rules learned from real sessions. These aren't theoretical — they're patterns that caused actual failures and wasted time. Rather than loading all rules into every session, the blueprint uses **progressive disclosure** across three layers: a slim CLAUDE.md (~70 lines) for universal instructions, `.claude/rules/` for conditional rules that load only when working with matching files, and `.claude/skills/` for detailed domain knowledge that loads on demand. This keeps the agent's context window clean and focused.
+The blueprint includes 81 operational rules learned from real sessions. These aren't theoretical — they're patterns that caused actual failures and wasted time. Rather than loading all rules into every session, the blueprint uses **progressive disclosure** across three layers: a slim CLAUDE.md (~70 lines) for universal instructions, `.claude/rules/` for conditional rules that load only when working with matching files, and `.claude/skills/` for detailed domain knowledge that loads on demand. This keeps the agent's context window clean and focused.
 
-The 10 blueprint-provided skills cover: git workflow, CI verification, deployment safety, multi-agent coordination, GitHub CLI, Python, macOS, Supabase, error patterns, and systematic debugging. The 5 rule templates cover: RPI details, push accountability, deployment safety, Supabase, and testing.
+`patterns/quick-reference.md` is the **index** to those rules, not a catalog of them: each rule body lives in the skill, rule file, command, or methodology doc that needs it, and the index is one line per rule naming where it went. Rule numbers are permanent — a gap means the number was retired, and the ledger in `.claude/rules/contributing.md` records the ground.
+
+The 11 blueprint-provided skills cover: shell and tools, git workflow, CI verification, deployment safety, multi-agent coordination, GitHub CLI, Python, macOS, Supabase, error patterns, and systematic debugging. The 5 rule templates cover: RPI details, push accountability, deployment safety, Supabase, and testing.
 
 ### Agent Teams
 
@@ -475,8 +477,8 @@ The blueprint repository contains detailed documentation on every topic mentione
 | CI ownership | `methodology/push-accountability.md` | Background CI monitoring, fix-and-repush |
 | Model economics | `methodology/cost-monitoring.md` | Cost pools, model-tier binding, access tiers, cost-per-outcome |
 | Error patterns | `patterns/agent-errors.md` | 64 documented errors with symptoms and solutions |
-| Operational rules | `patterns/quick-reference.md` | 83 rules with scope/stack tags, organized by domain |
-| Domain skills | `templates/skills/` | 10 blueprint-provided skills for progressive disclosure |
+| Operational rules | `patterns/quick-reference.md` | Index of 81 rules, each pointing to the surface that holds it |
+| Domain skills | `templates/skills/` | 11 blueprint-provided skills for progressive disclosure |
 | Rule templates | `templates/rules/` | 5 conditional/modular rules for `.claude/rules/` |
 | Deployment safety | `patterns/deployment-safety.md` | Resource efficiency and production deployment rules |
 | Release verification | `templates/e2e-pro-playbook-template.md` | E2E Pro: auditable release-evidence system (Wave A gate + structural waves) |

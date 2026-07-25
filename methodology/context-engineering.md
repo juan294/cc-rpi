@@ -172,8 +172,17 @@ Not all context is needed at all times. CLAUDE.md is loaded every session, so it
 |-------|-------------|----------------|
 | **CLAUDE.md** | Every session | Build/test commands, git workflow, operational rules, stack overview |
 | **Skills** (`.claude/skills/`) | On demand, when relevant | Domain knowledge, reusable workflows, API conventions |
+| **`.claude/rules/`** | Conditionally, when working with matching files | Domain rules scoped to a file pattern (deployment rules, test rules) |
 | **Supplementary docs** (`docs/`, `agent_docs/`) | When agent decides to read | Architecture details, database schemas, service patterns |
 | **Research artifacts** (`docs/research/`) | When starting a related task | Previous investigation results, codebase maps |
+
+`.claude/rules/` files carry a `paths:` frontmatter list of globs (for example
+deployment rules on `.github/**`, test rules on `**/*.test.*`); the rule body
+loads only when Claude is working with a file matching one of those globs.
+This is infrastructure-level conditional loading, and it replaces the older
+`<important if>` block convention — the condition is enforced by the harness
+reading the frontmatter, not by an instruction the model has to notice and
+apply itself.
 
 **Why this matters:** Claude Code's system prompt injects a reminder that CLAUDE.md content "may or may not be relevant." The more non-universal content in the file, the higher the chance Claude deprioritizes your actual instructions. Keep CLAUDE.md lean; put specialized knowledge in skills and docs.
 

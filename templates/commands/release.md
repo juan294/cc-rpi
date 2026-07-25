@@ -66,7 +66,13 @@ Gather release context before making any changes.
    - Detected branching strategy
    - Suggest major/minor/patch bump based on commit types (feat = minor, fix = patch, breaking = major)
 
-7. **Consider related commands:**
+7. **Retirement review.** Ask what rules, errors, or instructions came OUT of
+   the project's guidance corpus this cycle, not just what went in. If the
+   project keeps a retirement ledger, confirm it records them. Answer the
+   question every release, even when the answer is "none" -- a corpus with an
+   intake path and no exit path only grows.
+
+8. **Consider related commands:**
    - If there are unreleased changes, remind the user to consider running `/update-docs` first
      to refresh all documentation before tagging.
    - If this is the first release, recommend running `/pre-launch` for a full audit.

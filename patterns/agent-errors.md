@@ -2291,6 +2291,8 @@ supabase db push  # ← compounds the problem
 
 **Key detail:** The local Supabase instance is a full Postgres with RLS, extensions, and auth — it's not a mock. If a migration works locally with `supabase db reset`, it will work on the remote. If `supabase start` fails, Docker Desktop needs to be running. The container name follows the pattern `supabase_db_<project>` where `<project>` comes from `supabase/config.toml`.
 
+---
+
 ## Error #63: Parallel agents each run full test suite, exhausting local resources
 
 **Symptom:** The machine becomes unresponsive — CPU pegged, memory exhausted, swap thrashing. Activity Monitor or `htop` shows hundreds of Node/Python/test-runner processes. The agent launched N parallel worktree agents (e.g., 10), and each independently runs the project's full test suite. With a 7,000-test suite, that's ~70,000 tests executing simultaneously, each test runner spawning its own worker processes. The result is N x workers-per-suite processes competing for CPU and memory. The machine may need a hard reboot.
@@ -2332,6 +2334,8 @@ pytest -x --numprocesses=2
 ```
 
 **Key detail:** This compounds with Error #1 — if any agent's test run fails, sibling tool calls are killed, but the underlying test processes (spawned via Bash) continue running. The agent loses the ability to manage or cancel them. Prevention is the only fix: scope tests narrowly and limit concurrency.
+
+---
 
 ## Error #64: Agent implements a finding's recommendation literally, breaking an invariant the fix never checked
 

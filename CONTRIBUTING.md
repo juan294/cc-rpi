@@ -30,6 +30,19 @@ Or submit a PR:
 1. Add or modify the appropriate file under `methodology/`.
 2. If it's a new topic, create a new file and update `methodology/README.md`.
 
+### Retiring a Rule or Error
+
+Rules and errors can also come out, not just go in. A rule or error is a
+retirement candidate on exactly one of four grounds:
+
+- **Superseded** -- another rule covers it completely.
+- **Hook-enforced** -- a Tier 1 guard now blocks it mechanically.
+- **Model-native** -- current frontier models handle it by judgment.
+- **Merged** -- folded into a broader rule.
+
+See the full procedure, non-candidate criteria, and the Retirement Ledger
+in `.claude/rules/contributing.md`.
+
 ### Consistency Sweep for Workflow Changes
 
 If your change affects workflow, topology guidance, commands, rules,

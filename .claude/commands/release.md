@@ -67,7 +67,11 @@ Gather release context before making any changes.
    - Detected branching strategy
    - Suggest major/minor/patch bump based on commit types (feat = minor, fix = patch, breaking = major)
 
-7. **Consider related commands:**
+7. **Retirement review.** Ask what rules or errors were retired this cycle,
+   and confirm the ledger in `.claude/rules/contributing.md`
+   (`### Retirement Ledger`) records them -- even if the answer is "none."
+
+8. **Consider related commands:**
    - If there are unreleased changes, remind the user to consider running `/update-docs` first
      to refresh all documentation before tagging.
    - If this is the first release, recommend running `/pre-launch` for a full audit.

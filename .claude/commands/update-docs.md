@@ -88,7 +88,10 @@ For each document in the approved plan:
 1. Read the full document.
 2. Apply content updates: document new features, changed behavior, removed items.
 3. Update Mermaid diagrams to match the current code structure.
-4. Update version references and counts.
+4. Update version references and counts. If the project ships a count-
+   verification script (cc-rpi's is `scripts/verify-counts.sh`), run it and
+   fix every location it reports rather than grepping by hand -- hardcoded
+   counts drift in places a manual sweep misses.
 5. Preserve existing document structure, voice, and formatting.
 6. For inline docs (JSDoc, docstrings, doc comments):
    - Update `@param`, `@returns`, `@example` to match current signatures.

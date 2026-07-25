@@ -23,10 +23,12 @@ The single most important rule: **the everyday floor is cheap by default, and fr
 
 Pinning the right model tier to each workflow is where most of the savings live — see [context-engineering.md](context-engineering.md#model-selection--tier-each-workflow) for the full tier system and the tier-to-model binding. The short version:
 
+- Each command declares a **Model tier** (opus / sonnet / haiku) on the line directly under its title — the pin travels with the workflow, not the session.
 - `/research`, `/plan`, `/pre-launch` → **frontier (opus)**. A bad plan amplifies into thousands of bad lines; spend here.
 - Everything that executes a reviewed plan → **mid (sonnet)**.
 - Mechanical read-and-summarize (`/status`, `/describe-pr`) → **floor (haiku)**.
 - Subagents inherit their workflow's tier — a frontier parent spawning 8 frontier children multiplies the bill by 8.
+- Override upward when a task proves harder than its tier; never silently downward — that trades a small bill for a large downstream error.
 
 ## Access Tiers — Who Spends Where
 

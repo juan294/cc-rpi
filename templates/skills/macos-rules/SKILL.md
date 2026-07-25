@@ -67,6 +67,13 @@ Right -- bash wrapper + resource limits + environment vars:
 </dict>
 ```
 
+launchd runs with no TTY, so an interactive OAuth login hangs forever.
+Generate a non-interactive token first and have the agent script use it:
+
+```bash
+claude setup-token
+```
+
 ## launchd Testing
 
 Wrong -- test from terminal (masks launchd-specific failures):
@@ -79,5 +86,8 @@ Right -- test with launchctl:
 
 ```bash
 launchctl start com.yourorg.agent
-launchctl list | grep yourorg  # check actual exit status
+launchctl list | grep yourorg  # exit code shows 0 even on crash -- check logs, not just this
 ```
+
+The exit code is 0 even when the agent crashed with "Unexpected" -- launchd
+testing must inspect log output, not just `launchctl list`'s status column.

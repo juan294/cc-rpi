@@ -137,3 +137,28 @@ grep -rn "applyRateLimit" test/   # does the artifact already exist?
 ```
 
 If the work is already done, stop and report -- do not redo it.
+
+## Scoped Testing Under Parallelism
+
+Wrong -- every parallel agent runs the full test suite, exhausting CPU/memory:
+
+```bash
+# Agent 1 (worktree A): pnpm test          -> spawns full worker pool
+# Agent 2 (worktree B): pnpm test          -> spawns full worker pool
+# Agent 3 (worktree C): pnpm test          -> spawns full worker pool
+# N agents x full-suite workers = CPU/memory exhaustion on one machine
+```
+
+Right -- agents test only their changed files; run the full suite once, at
+integration:
+
+```bash
+# Each worktree agent: scoped run against its own changed files
+pnpm test src/rate-limit.test.ts
+
+# Main agent, after merging all branches: one full-suite run
+pnpm test
+```
+
+Limit concurrent agents to 3-4. The full suite runs once, after merging --
+not once per agent.

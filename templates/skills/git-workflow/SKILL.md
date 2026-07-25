@@ -19,6 +19,24 @@ Right -- commit before pulling (clean tree required):
 git add <files> && git commit -m "msg" && git pull --rebase && git push
 ```
 
+Pull before push even on a branch you just committed to -- the remote may
+have advanced from other sessions or parallel agents since you last fetched.
+
+## Empty Repositories
+
+Wrong -- `git log` and `git diff HEAD` fail on a repo with no commits yet:
+
+```bash
+git log -1
+git diff HEAD
+```
+
+Right -- check for a HEAD first:
+
+```bash
+git rev-parse HEAD 2>&1 || echo "no commits yet -- skip log/diff HEAD"
+```
+
 ## First Push / PR Creation
 
 Wrong -- no upstream, push and gh pr create both fail:
@@ -117,7 +135,7 @@ Wrong -- plain checkout fails on unmerged files:
 git checkout -- conflicted-file.ts
 ```
 
-Right -- pick a side, abort, or remove conflicting untracked files:
+Right -- check `git status` first, then pick a side, abort, or remove conflicting untracked files:
 
 ```bash
 git checkout --ours file.ts    # keep yours
