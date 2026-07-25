@@ -8,7 +8,7 @@ You are setting up a new project using the cc-rpi blueprint repository. The blue
 
 Read these files from cc-rpi IN ORDER. Do not skip any.
 
-1. `patterns/quick-reference.md` — Internalize every operational rule. These apply to ALL your work from now on.
+1. `patterns/quick-reference.md` — The INDEX of operational rules, one line each, naming the skill, rule file, or command that holds the rule body. Read it to learn what rules exist and where they live; you do not need to memorize them, because each body loads at its point of use once the skills and rules are installed.
 2. `methodology/README.md` — Read the one-paragraph summary and the reading order. You do NOT need to read every methodology file right now — you'll reference them as needed during actual work.
 
 The error-patterns skill provides condensed error reference on demand
@@ -36,7 +36,7 @@ Now execute the setup checklist against THIS project. Work through it section by
 5. Create `.claude/settings.json` — adapt from the template.
 6. Create `.claude/commands/` — copy slash commands from `cc-rpi/templates/commands/` and adjust file paths.
 7. Install skills from `cc-rpi/templates/skills/` to `.claude/skills/`:
-   - Always install: `git-workflow/`, `multi-agent/`, `deployment-safety/`, `ci-workflow/`, `github-cli/`, `error-patterns/`, `systematic-debugging/`
+   - Always install: `shell-tools/`, `git-workflow/`, `multi-agent/`, `deployment-safety/`, `ci-workflow/`, `github-cli/`, `error-patterns/`, `systematic-debugging/`
    - If Python project: also install `python-rules/`
    - If macOS development: also install `macos-rules/`
    - If using Supabase: also install `supabase/`

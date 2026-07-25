@@ -49,9 +49,11 @@ The agent then creates everything:
 ```
 Claude: Setting up your project. Here's what I'm creating:
 
-- CLAUDE.md — project configuration with all operational rules
+- CLAUDE.md — slim project configuration; universal instructions only
 - .claude/settings.json — permissions, Agent Teams, hooks
-- .claude/commands/ — all 7 slash commands (brainstorm, research, plan, implement, validate, describe-pr, pre-launch)
+- .claude/commands/ — the RPI slash commands (research, plan, implement, validate) plus the supporting ones (brainstorm, describe-pr, pre-launch, remediate, triage, status, fix-ci)
+- .claude/skills/ — domain skills loaded on demand
+- .claude/rules/ — rules that load only when you touch matching files
 - package.json with TypeScript, Jest, ESLint, Prettier
 - tsconfig.json
 - .github/workflows/ci.yml
@@ -74,7 +76,7 @@ Claude: Done. Your project is set up:
 
 - All checks pass (typecheck, lint, tests)
 - Initial commit created
-- 7 slash commands ready to use
+- Slash commands, skills, and conditional rules ready to use
 
 You can start with /research to explore any existing patterns,
 or /plan to design your first feature. For a brand-new idea with no

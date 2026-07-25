@@ -41,6 +41,7 @@ FAILED=0
 ERROR_COUNT=$(grep -c '^## Error #' "$ERRORS_FILE")
 RULE_COUNT=$(grep -cE '^[0-9]+\.' "$RULES_FILE")
 SKILL_COUNT=$(find templates/skills -maxdepth 2 -name SKILL.md | wc -l | tr -d ' ')
+RULE_TEMPLATE_COUNT=$(find templates/rules -maxdepth 1 -name '*.md' | wc -l | tr -d ' ')
 
 # --- check_count <file> <pattern> <expected> <label> -----------------------
 # Extracts the first number matched by <pattern> in <file> and compares it
@@ -105,6 +106,9 @@ check_count "templates/skills/error-patterns/references/error-catalog.md" 'All [
 check_count "GUIDE.md" 'The [0-9]+ blueprint-provided skills' "$SKILL_COUNT" "Skill count (progressive disclosure section)"
 check_count "GUIDE.md" '[0-9]+ blueprint-provided skills for progressive disclosure' "$SKILL_COUNT" "Skill count (Where to Go Deeper)"
 check_count "CLAUDE.md" '[0-9]+ domain skills' "$SKILL_COUNT" "Skill count (file locations table)"
+
+# Rule-template count -- the one count location that was unguarded until now.
+check_count "GUIDE.md" 'The [0-9]+ rule templates' "$RULE_TEMPLATE_COUNT" "Rule-template count (progressive disclosure section)"
 
 # Bonus location found by a whole-repo sweep, not in the original nine —
 # kept here so it can't silently drift again.
@@ -179,6 +183,6 @@ if [[ "$FAILED" -ne 0 ]]; then
   exit 1
 fi
 
-echo "PASS: $ERROR_COUNT errors, $RULE_COUNT rules, $SKILL_COUNT skills, no duplicates,"
+echo "PASS: $ERROR_COUNT errors, $RULE_COUNT rules, $SKILL_COUNT skills, $RULE_TEMPLATE_COUNT rule templates,"
 echo "      all hardcoded locations agree, all index destinations resolve."
 exit 0

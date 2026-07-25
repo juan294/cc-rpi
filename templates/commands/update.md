@@ -29,7 +29,7 @@ Before starting, verify this project was bootstrapped or adopted from cc-rpi:
 
 Read these files from cc-rpi to internalize the latest rules and patterns:
 
-4. `patterns/quick-reference.md` — All operational rules.
+4. `patterns/quick-reference.md` — The INDEX of operational rules; each line names the surface holding that rule's body. Rule numbers are permanent, so a gap means a retired number, not a missing rule.
 5. `methodology/README.md` — Methodology overview.
 
 The error-patterns skill provides condensed error reference on demand.
@@ -55,7 +55,9 @@ On incremental syncs (lastSyncCommit exists), prioritize reading files that appe
      - If it exists in both locations and the cc-rpi SKILL.md is different -> replace the project's SKILL.md.
      - If it exists in cc-rpi but not in this project -> create the directory and copy SKILL.md (new skill from blueprint).
      - If it exists only in this project -> leave it (project-specific skill).
-   - Blueprint skills: `git-workflow/`, `multi-agent/`, `deployment-safety/`, `ci-workflow/`, `github-cli/`, `error-patterns/`, `python-rules/`, `macos-rules/`, `supabase/`
+   - Blueprint skills: `shell-tools/`, `git-workflow/`, `multi-agent/`, `deployment-safety/`, `ci-workflow/`, `github-cli/`, `error-patterns/`, `systematic-debugging/`, `python-rules/`, `macos-rules/`, `supabase/`
+   - A skill may be a directory with more than just `SKILL.md` -- copy the whole
+     directory, including any `references/` subdirectory.
    - Skip stack-irrelevant skills: if this is not a Python project, skip `python-rules/`. If not using Supabase, skip `supabase/`. If not on macOS, skip `macos-rules/`.
 
 ## Phase 4b: Update Rules

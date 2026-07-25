@@ -19,7 +19,8 @@ When starting a new project, the agent is told: "Go check my cc-rpi repository a
 
 The agent should:
 
-1. Read `patterns/quick-reference.md` -- internalize all operational rules
+1. Read `patterns/quick-reference.md` -- the index of operational rules and
+   where each one lives (rule bodies load from their own surface)
 2. Read `methodology/README.md` -- understand the RPI approach (follow reading order for depth)
 3. Use `templates/setup-checklist.md` to set up the new project
 4. Adapt `templates/CLAUDE.md.template` for the new project's CLAUDE.md

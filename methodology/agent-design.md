@@ -386,6 +386,18 @@ See `references/` for the full endpoint catalog and error codes.
 See `examples/` for the canonical pagination pattern.
 ```
 
+#### Skill Authoring Constraints
+
+Three constraints are mechanical, not stylistic — cc-rpi enforces them in CI via `templates/scripts/verify-skills.sh`, and a violation fails the build with a runnable fix:
+
+| Constraint | Why |
+|---|---|
+| `name` must match `^[a-z0-9-]{1,64}$` **and equal its directory name** | The name is the identifier the harness dispatches on, and the directory is how the skill is referenced from docs. A display-cased `"Git Workflow"` is not an identifier. |
+| `description` under 1024 characters | Descriptions are the only part of a skill loaded in *every* session, for every skill. Over the cap they truncate, so trailing triggers silently stop matching. |
+| `SKILL.md` body under 500 lines | The body loads whole on every match. Long-tail detail belongs in a `references/` sibling that loads only when the model reaches for it. |
+
+A `references/` file that no `SKILL.md` names is also a failure: level-3 files load only when the model is told they exist and when to read them, so an unnamed sibling is dead weight.
+
 #### Writing Effective Skills
 
 **The description field is for triggering, not summarizing.** Claude scans skill descriptions to decide relevance. Write it as a condition: "When writing or modifying REST API endpoints" — not "REST API design conventions for our services."

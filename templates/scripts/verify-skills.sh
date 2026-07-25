@@ -61,10 +61,18 @@ frontmatter_value() {
   ' "$1"
 }
 
+BLUEPRINT=0   # skills under templates/ -- the product, counted in the docs
+LOCAL=0       # skills under .claude/ -- this repo's own, plus any personal ones
+
 while IFS= read -r skill; do
   CHECKED=$((CHECKED + 1))
   dir="$(dirname "$skill")"
   slug="$(basename "$dir")"
+
+  case "$skill" in
+    templates/*) BLUEPRINT=$((BLUEPRINT + 1)) ;;
+    *) LOCAL=$((LOCAL + 1)) ;;
+  esac
 
   name="$(frontmatter_value "$skill" name)"
   desc="$(frontmatter_value "$skill" description)"
@@ -139,7 +147,12 @@ if [[ "$FAILED" -ne 0 ]]; then
   exit 1
 fi
 
-echo "PASS: $CHECKED skills -- names valid and matching their directories,"
-echo "      descriptions present and under $MAX_DESC_CHARS chars,"
-echo "      bodies under $MAX_BODY_LINES lines, all sibling files referenced."
+# Report the two trees separately. The docs' skill count refers to the
+# BLUEPRINT skills under templates/; .claude/skills/ may also hold personal
+# skills that are not part of the product, so a combined total would look like
+# it contradicts every "N blueprint-provided skills" line in the docs.
+echo "PASS: $BLUEPRINT blueprint skills (templates/), $LOCAL local (.claude/) -- $CHECKED checked."
+echo "      Names valid and matching their directories, descriptions present"
+echo "      and under $MAX_DESC_CHARS chars, bodies under $MAX_BODY_LINES lines,"
+echo "      all sibling files referenced."
 exit 0

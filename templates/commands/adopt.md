@@ -10,7 +10,7 @@ This project already exists and may already follow some, all, or none of these p
 
 Read these files from cc-rpi IN ORDER. Do not skip any.
 
-1. `patterns/quick-reference.md` — Internalize every operational rule.
+1. `patterns/quick-reference.md` — The INDEX of operational rules: one line per rule naming the skill, rule file, or command that holds its body. Read it to learn what exists and where it lives, not to memorize rule text.
 2. `methodology/README.md` — Read the one-paragraph summary and reading order.
 
 The error-patterns skill provides condensed error reference on demand.

@@ -130,7 +130,7 @@ the matching slash-style command.
 
 - [ ] Create `.claude/skills/` directory
 - [ ] Copy blueprint skills from `cc-rpi/templates/skills/` to `.claude/skills/`:
-  - Always: `git-workflow/`, `multi-agent/`, `deployment-safety/`, `ci-workflow/`, `github-cli/`, `error-patterns/`, `systematic-debugging/`
+  - Always: `shell-tools/`, `git-workflow/`, `multi-agent/`, `deployment-safety/`, `ci-workflow/`, `github-cli/`, `error-patterns/`, `systematic-debugging/`
   - Python projects: also `python-rules/`
   - macOS development: also `macos-rules/`
   - Supabase projects: also `supabase/`

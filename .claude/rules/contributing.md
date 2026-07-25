@@ -20,7 +20,11 @@ paths:
 When new error patterns are discovered during work on ANY project:
 
 1. Add to `patterns/agent-errors.md` following the existing format
-2. Add a one-liner to `patterns/quick-reference.md`
+2. Put the rule body in the surface that needs it (a skill, a `.claude/rules/`
+   file, or a command), then add a one-line pointer to
+   `patterns/quick-reference.md` in the form `N. title -> destination`.
+   That file is an index; no rule bodies live there. CI checks the
+   destination resolves.
 3. Update any hard-coded counts or references in onboarding docs and
    skills (`README.md`, `GUIDE.md`, bootstrap docs, `error-patterns/`)
 4. Update `CHANGELOG.md`
@@ -82,7 +86,13 @@ skills, hooks, or onboarding docs, sweep all documentation layers:
 
 1. `methodology/`
 2. `templates/`
-3. Repo-local `.claude/` self-application
+3. Repo-local `.claude/` self-application -- most of it now **symlinks** into
+   `templates/` and follows automatically. Only the files listed as divergent
+   in `.claude/DIVERGENCE.md` need a second edit; `check-tree-drift.sh` fails
+   the build if you miss one or add an untracked pair.
 4. `CLAUDE.md` and `AGENTS.md`
 5. `README.md` and `GUIDE.md`
 6. `CHANGELOG.md`
+
+Then run the invariant scripts rather than re-reading by eye:
+`templates/scripts/verify-counts.sh`, `verify-skills.sh`, `check-tree-drift.sh`.

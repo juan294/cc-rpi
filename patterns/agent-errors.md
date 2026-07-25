@@ -6,7 +6,8 @@ Each entry: symptom, root cause, correct approach, anti-pattern.
 **Note:** This file is the source of truth for error patterns. The condensed
 top-20 reference is distributed to projects via the error-patterns skill.
 
-For the one-liner rule set, see [quick-reference.md](quick-reference.md).
+For the rule index -- one line per rule, naming the surface that holds it --
+see [quick-reference.md](quick-reference.md).
 
 ---
 

@@ -56,10 +56,15 @@ Check these layers together:
 
 1. `methodology/`
 2. `templates/`
-3. Repo-local `.claude/` self-application
+3. Repo-local `.claude/` self-application — mostly symlinks into `templates/`,
+   so it follows automatically; only the files listed as divergent in
+   `.claude/DIVERGENCE.md` need a second edit
 4. `CLAUDE.md` and `AGENTS.md`
 5. `README.md` and `GUIDE.md`
 6. `CHANGELOG.md`
+
+Then run `templates/scripts/verify-counts.sh`, `verify-skills.sh`, and
+`check-tree-drift.sh` — they catch the drift a manual sweep misses.
 
 ### Improving Templates
 

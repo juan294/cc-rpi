@@ -116,14 +116,16 @@ Ready-to-use starting points for new projects:
 - **Slash commands** — `/bootstrap`, `/adopt`, `/update`, `/brainstorm`, `/research`, `/plan`, `/implement`, `/validate`, `/describe-pr`, `/pre-launch`, `/remediate`, `/triage`, `/status`, `/fix-ci`, `/explore-release` — plus Anthropic-native `/simplify` and `/batch`
 - **E2E Pro release-verification playbook** — Copy-and-adapt template that turns release verification into auditable evidence (Wave A truthful-gate floor + structural waves by risk)
 - **Scheduled agent scripts** — Nightly blueprint sync and multi-project morning triage with launchd/cron templates
+- **Repo-invariant scripts** — `verify-counts.sh` (stated counts match the catalogs), `verify-skills.sh` (skill frontmatter and the 500-line ceiling), `check-tree-drift.sh` (`templates/` vs `.claude/`) — each reports a runnable fix and runs in CI
 
 ## Adding New Patterns
 
 When you discover a new recurring error or best practice:
 
 1. Add it to `patterns/agent-errors.md` (detailed entry with symptom/root cause/solution)
-2. Add a one-liner to `patterns/quick-reference.md`
+2. Put the rule body in the surface that needs it — a skill, a `.claude/rules/` file, or a command — then add a one-line pointer to `patterns/quick-reference.md`, which is an index rather than a catalog
 3. Keep entries generic — no project-specific references
+4. Ask what came *out* this cycle, not only what went in — see the retirement ledger in `.claude/rules/contributing.md`
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for full guidelines.
 
