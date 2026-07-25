@@ -24,6 +24,10 @@ Process:
       (reuse, quality, efficiency). It spawns 3 specialized agents and applies fixes.
    f. Run ALL automated verification commands (tests, typecheck, lint, build).
    g. Update checkboxes in the plan file.
+   h. If you departed from the plan, append the decision to
+      `docs/plans/<plan-name>-notes.md` under `## Deviations`, as:
+      plan said / found / chose / why. Deviations only -- never narration,
+      and no file at all if the phase had none. `/validate` reads it.
 7. STOP. Report results and wait for human confirmation.
 8. Do NOT proceed to the next phase without confirmation.
 

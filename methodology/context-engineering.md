@@ -188,6 +188,18 @@ apply itself.
 
 **In supplementary files:** Use `file:line` references instead of code snippets. Snippets go stale; references can be verified at read time.
 
+### A Spec Doesn't Have to Be Prose
+
+Specs are the source of truth (see [GUIDE.md](../GUIDE.md) and [philosophy.md](philosophy.md)), and `file:line` references beat pasted snippets. Both point at the same underlying preference: point at something that can be executed or diffed, rather than describing it in words that can't be checked. Prose is the fallback, not the default — reach for it only when nothing sharper exists.
+
+Concrete alternatives to look for before writing prose:
+- **A failing test suite** — the test IS the spec; making it pass is the definition of done, with no separate description of "correct behavior" to keep in sync.
+- **An existing module with the semantics to port** — point at the module and say "match this," instead of re-deriving its behavior in prose that can drift from the thing it describes.
+- **An HTML mockup or a schema** — a mockup pins down layout and interaction more precisely than a paragraph of UI description; a schema pins down shape more precisely than a paragraph of field descriptions.
+- **A grading rubric** — for open-ended output (a report, a review), a rubric is checkable where "write a good report" is not.
+
+Prose still has a place — as the fallback for behavior with no executable or diffable stand-in — but check for one of these first.
+
 ## CLAUDE.md as Context Surface
 
 CLAUDE.md is your highest-leverage context engineering tool — it's the only file guaranteed to be in every conversation. Treat it accordingly:
@@ -223,6 +235,7 @@ Context doesn't have to be managed only through RPI phases. Claude Code provides
 - **`/rewind` or `Esc+Esc`** — Restore conversation, code, or both to any previous checkpoint. Every Claude action creates a checkpoint.
 - **`--continue`** — Resume the most recent conversation across terminal sessions.
 - **`--resume`** — Select from recent conversations. Use `/rename` to give sessions descriptive names.
+- **`claude doctor` vs `/doctor`** — two tools with overlapping names and different scope. `claude doctor` is a CLI subcommand, run outside a session, that checks the installation itself. `/doctor` is an in-session slash command that runs a full project checkup and can fix what it finds, including rightsizing an oversized CLAUDE.md or skill. Verified on Claude Code 2.1.220; `/doctor` is interactive and must not be scripted or run headlessly.
 
 **When to clear vs compact:**
 - Switching to an unrelated task → `/clear`

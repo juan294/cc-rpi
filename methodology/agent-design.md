@@ -398,6 +398,14 @@ See `examples/` for the canonical pagination pattern.
 
 **Include scripts and reference code.** Giving Claude composable helper functions lets it spend turns on composition rather than reconstructing boilerplate. A data analysis skill with a library of query helpers is far more powerful than one with just prose instructions.
 
+#### Interface Design Over Worked Examples
+
+The strongest lever for correct tool use is the interface itself, not a demonstration of it. Design parameters, enums, and file layouts so the correct path is implied by the shape of the interface — a parameter named `mode: "read" | "write" | "append"` teaches the three valid states and rules out a fourth, at a fraction of the context cost of three worked examples showing each mode in use. Reach for a worked example only when the interface genuinely cannot carry the meaning — an escaping quirk, an exact error string, an ordering constraint no type signature expresses.
+
+The reason isn't just cost. A worked example is a demonstration, and a capable model tends to follow the demonstrated path literally — extrapolating from one shown shape constrains it to that shape instead of the full space the interface actually allows. A well-named enum with three valid values teaches more than three worked examples and leaves the model free to combine them in ways no single example showed.
+
+This does not contradict the wrong/right example pairs used throughout this repo's skills, or `CHANGELOG.md:483`'s "examples beat rule lists" guidance, which was correct for the model generation it was written against. Those pairs mostly encode an **environment fact** — this exact flag, this exact escaping behavior, this exact error string a real tool actually produces — and a fact isn't something interface design can imply; it has to be stated. Keep those. The distinction to apply going forward: if an example merely demonstrates a shape a well-designed interface could have implied instead (which enum value to pass, which file goes where), replace it with better interface design; if it records a fact the model has no other way to learn, keep the example.
+
 #### Skill Categories
 
 Use this taxonomy to identify which skills your project needs:

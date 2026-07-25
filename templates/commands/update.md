@@ -141,6 +141,9 @@ On incremental syncs (lastSyncCommit exists), prioritize reading files that appe
     - settings.json changes (list them)
     - Notable new content: new error patterns, new rules, methodology changes
     - "Already up to date" if nothing changed
+    - Suggest the user run `/doctor` in an interactive session after this update, to
+      catch an oversized CLAUDE.md or skill. `/doctor` is interactive and cannot be
+      scripted, so this is a suggestion for the human, not a step this command runs.
 
 ## Rules
 
