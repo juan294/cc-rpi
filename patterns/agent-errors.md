@@ -1535,17 +1535,17 @@ git push origin main --tags --force
 
 ## Error #45: Agent fabricates filesystem paths — "No such file or directory"
 
-**Symptom:** `git -C /Users/juan/Documents/GenAI_Projects/cc-rpi pull --rebase` fails with `fatal: cannot change to '/Users/juan/Documents/GenAI_Projects/cc-rpi': No such file or directory`. The actual path was `/Users/juan/Documents/code/cc-rpi`.
+**Symptom:** `git -C /Users/you/Documents/GenAI_Projects/some-repo pull --rebase` fails with `fatal: cannot change to '/Users/you/Documents/GenAI_Projects/some-repo': No such file or directory`. The actual path was `/Users/you/code/some-repo`.
 
 **Root cause:** The agent guesses or hallucinates a plausible filesystem path instead of using the known working directory or discovering the path. Common fabrications include inventing parent directory names (`Projects`, `GenAI_Projects`, `repos`, `workspace`), getting the nesting level wrong, or mixing up similar project names. This is the filesystem equivalent of Error #23 (fabricating GitHub identifiers).
 
 **Correct approach — always do this:**
 ```bash
 # Use the project's working directory (provided by the environment):
-git -C /Users/juan/Documents/code/cc-rpi pull --rebase
+git -C /Users/you/code/some-repo pull --rebase
 
 # If you need to find another project, discover it:
-ls /Users/juan/Documents/code/
+ls /Users/you/code/
 # Then use the actual name from the listing
 
 # Or ask the user for the path if it's not discoverable
@@ -1554,11 +1554,11 @@ ls /Users/juan/Documents/code/
 **Never do this:**
 ```bash
 # Don't guess directory names:
-git -C /Users/juan/Documents/GenAI_Projects/cc-rpi pull --rebase
-# ← "GenAI_Projects" is fabricated — the real dir is "code"
+git -C /Users/you/Documents/GenAI_Projects/some-repo pull --rebase
+# ← "Documents/GenAI_Projects" is fabricated — the real parent is "code"
 
 # Don't assume paths from previous sessions are still valid:
-cd /Users/juan/projects/old-name/src
+cd /Users/you/projects/old-name/src
 # ← directories may have been renamed, moved, or deleted
 ```
 
