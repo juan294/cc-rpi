@@ -3,7 +3,8 @@
 #
 # Multi-project morning triage orchestrator.
 # Runs /triage in each configured project directory sequentially.
-# Designed for launchd/cron or manual invocation. Archy-compatible.
+# Designed for launchd/cron or manual invocation. Its cross-project summary is
+# consumable by a higher-level orchestrator agent if you run one.
 #
 # ── Setup ──
 #

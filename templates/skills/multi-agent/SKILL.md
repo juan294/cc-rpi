@@ -99,7 +99,7 @@ Wrong -- open-ended task, no stop condition: the agent keeps investigating
 long after its real work is done (a fork agent ran 2+ hours past completion).
 
 ```text
-"Look into the Chapa failures and fix what you find."
+"Look into the CI failures and fix what you find."
 ```
 
 Right -- one-sentence scope with an explicit terminal condition:

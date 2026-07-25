@@ -670,7 +670,7 @@ rm file-from-tuesday.png file-from-wednesday.png  # ← already deleted last ses
 
 ## Error #23: `gh` command fails — agent fabricates repo/resource names
 
-**Symptom:** `gh repo view owner/XILLVER --json name,owner` fails with "GraphQL: Could not resolve to a Repository with the name 'owner/XILLVER'." The agent used a repo name that doesn't exist — it was guessed, misspelled, or hallucinated.
+**Symptom:** `gh repo view owner/MyProject --json name,owner` fails with "GraphQL: Could not resolve to a Repository with the name 'owner/MyProject'." The agent used a repo name that doesn't exist — it was guessed, misspelled, or hallucinated.
 
 **Root cause:** The agent infers or fabricates GitHub identifiers (repository names, branch names, issue numbers) instead of discovering them through queries. GitHub identifiers are case-sensitive and must match exactly. Guessing leads to API failures.
 
@@ -1535,9 +1535,9 @@ git push origin main --tags --force
 
 ## Error #45: Agent fabricates filesystem paths — "No such file or directory"
 
-**Symptom:** `git -C /Users/you/Documents/GenAI_Projects/some-repo pull --rebase` fails with `fatal: cannot change to '/Users/you/Documents/GenAI_Projects/some-repo': No such file or directory`. The actual path was `/Users/you/code/some-repo`.
+**Symptom:** `git -C /Users/you/Documents/Projects/some-repo pull --rebase` fails with `fatal: cannot change to '/Users/you/Documents/Projects/some-repo': No such file or directory`. The actual path was `/Users/you/code/some-repo`.
 
-**Root cause:** The agent guesses or hallucinates a plausible filesystem path instead of using the known working directory or discovering the path. Common fabrications include inventing parent directory names (`Projects`, `GenAI_Projects`, `repos`, `workspace`), getting the nesting level wrong, or mixing up similar project names. This is the filesystem equivalent of Error #23 (fabricating GitHub identifiers).
+**Root cause:** The agent guesses or hallucinates a plausible filesystem path instead of using the known working directory or discovering the path. Common fabrications include inventing parent directory names (`Projects`, `Development`, `repos`, `workspace`), getting the nesting level wrong, or mixing up similar project names. This is the filesystem equivalent of Error #23 (fabricating GitHub identifiers).
 
 **Correct approach — always do this:**
 ```bash
@@ -1554,8 +1554,8 @@ ls /Users/you/code/
 **Never do this:**
 ```bash
 # Don't guess directory names:
-git -C /Users/you/Documents/GenAI_Projects/some-repo pull --rebase
-# ← "Documents/GenAI_Projects" is fabricated — the real parent is "code"
+git -C /Users/you/Documents/Projects/some-repo pull --rebase
+# ← "Documents/Projects" is fabricated — the real parent is "code"
 
 # Don't assume paths from previous sessions are still valid:
 cd /Users/you/projects/old-name/src
