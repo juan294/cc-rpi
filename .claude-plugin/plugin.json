@@ -3,7 +3,7 @@
   "name": "cc-rpi",
   "displayName": "cc-rpi -- RPI Methodology",
   "description": "Research-Plan-Implement methodology for Claude Code: phased workflow commands, domain skills, and a 64-pattern agent-error knowledge base.",
-  "version": "1.28.0",
+  "version": "1.28.1",
   "author": {
     "name": "Juan Gonzalez"
   },

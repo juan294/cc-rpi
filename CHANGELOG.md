@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.28.1] - 2026-07-25
+
+### Fixed
+
+- Error #45 ("agent fabricates filesystem paths") illustrated itself with the
+  maintainer's real home directory layout, which a public repository should not
+  expose. Genericized to `/Users/you/...`. The lesson is preserved: the example
+  still contrasts a real parent directory against a fabricated but plausible one
+  (`Documents/GenAI_Projects` vs `code`), because inventing a believable parent
+  is the specific failure the entry documents. A repo-wide sweep confirms no
+  personal filesystem paths remain in shipped content.
+
 ## [1.28.0] - 2026-07-25
 
 ### Added
