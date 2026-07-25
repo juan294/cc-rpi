@@ -348,9 +348,9 @@ This blueprint is Claude-bound, so each tier maps to a concrete model already:
 
 | Tier | Concrete model |
 |------|----------------|
-| opus | Claude Opus 4.x |
-| sonnet | Claude Sonnet 4.x (1M context) |
-| haiku | Claude Haiku 4.x |
+| opus | Claude Opus 5 |
+| sonnet | Claude Sonnet 5 (1M context) |
+| haiku | Claude Haiku 4.5 |
 
 Bind the tier per workflow, not per session: run each command in a session on its declared model, and in custom agent definitions (`.claude/agents/`) set the `model` field to the tier the agent serves. The tier travels with the workflow so the choice re-applies every time anyone runs it, rather than defaulting to whatever model happens to be selected.
 
