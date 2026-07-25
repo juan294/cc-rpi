@@ -10,7 +10,8 @@ commands, skills, rules, and project setup.
 
 ## Stack
 
-Markdown documentation, shell scripts (bash). CI: GitHub Actions with markdownlint.
+Markdown documentation, shell scripts (bash). CI: GitHub Actions -- internal
+link validation, shellcheck, count/skill/drift checks, JSON and YAML syntax.
 
 ## How This Repo Is Used
 
@@ -46,11 +47,22 @@ Use /clear between tasks, /compact when context is heavy.
 ## Key Commands
 
 ```bash
-# Verification (CI runs markdownlint)
-npx markdownlint '**/*.md' --ignore node_modules --ignore .claude 2>&1
+# What CI actually runs (.github/workflows/validate.yml)
+bash templates/scripts/verify-counts.sh      # error/rule/skill counts agree
+bash templates/scripts/verify-skills.sh      # skill frontmatter + 500-line ceiling
+bash templates/scripts/check-tree-drift.sh   # templates/ vs .claude/ symlinks
+shellcheck --severity=warning templates/hooks/*.sh templates/scripts/*.sh
+python3 templates/scripts/validate-findings.py --self-test
+python3 templates/scripts/contract-metrics.py --self-test
 ```
 
 Run verification sequentially with `&&` or `;`, NEVER as parallel Bash calls.
+
+This repo ships **no markdownlint config**, so `npx markdownlint` applies its
+80-column defaults, which every file here violates by design. The
+`verify-edit.sh` hook gates its markdownlint check on a config existing, and CI
+does not run it at all. Don't reflow prose to satisfy it. The real markdown
+gates are the no-emoji hook and CI's internal-link validation.
 
 ## Git Workflow
 
@@ -59,7 +71,7 @@ Run verification sequentially with `&&` or `;`, NEVER as parallel Bash calls.
 1. Research and planning happen against `main`
 2. Implementation happens in temporary branches or isolated worktrees
 3. Direct pushes to `main` are exceptional/high-stakes, not the default path
-4. Always run markdownlint before committing
+4. Always run the verification commands above before committing
 5. Always commit before pulling (hook enforced)
 6. Verify current branch before any commit
 
