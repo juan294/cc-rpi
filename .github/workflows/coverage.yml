@@ -1,0 +1,70 @@
+name: Coverage
+
+# Portfolio's repository health check compares this repository's reported
+# coverage commit against its verified default-branch head
+# (`src/lib/health.ts`). A coverage report that names an older commit is graded
+# `mismatched`, which becomes an ERROR after 180 minutes — not a warning. So
+# coverage has to be re-reported on every default-branch push; a periodic-only
+# report breaks the moment anyone pushes here. The daily run exists only to keep
+# `source_reported_at` inside the 48-hour staleness window on quiet weeks.
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "53 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: coverage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  coverage:
+    name: Coverage report
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Run authoritative coverage suite
+        id: coverage
+        shell: bash
+        run: |
+          set -o pipefail
+          # Braced: without it only the SECOND command's output reaches tee,
+          # and the pass count below would silently miss the first script.
+          {
+            python3 templates/scripts/validate-findings.py --self-test \
+              && python3 templates/scripts/contract-metrics.py --self-test
+          } 2>&1 | tee coverage-output.txt
+          # count_only producer: these suites report pass lines, not coverage.
+          # Fail closed rather than posting a fabricated zero.
+          COUNT=$(grep -c 'SELF-TEST PASS' coverage-output.txt || true)
+          [ "$COUNT" -gt 0 ] || { echo "ERROR: no self-test output to count" >&2; exit 1; }
+          {
+            echo "test_count=$COUNT"
+            echo "test_files=2"
+            echo "tests_passed=$COUNT"
+            echo "tests_failed=0"
+            echo "coverage_percent=null"
+          } >> "$GITHUB_OUTPUT"
+      - name: Report coverage to Portfolio
+        env:
+          COVERAGE_SECRET: ${{ secrets.COVERAGE_SECRET }}
+          REPO: juan294/cc-rpi
+          TEST_COUNT: ${{ steps.coverage.outputs.test_count }}
+          TEST_FILES: ${{ steps.coverage.outputs.test_files }}
+          TESTS_PASSED: ${{ steps.coverage.outputs.tests_passed }}
+          TESTS_FAILED: ${{ steps.coverage.outputs.tests_failed }}
+          COVERAGE_PERCENT: ${{ steps.coverage.outputs.coverage_percent }}
+          SOURCE_COMMIT_SHA: ${{ github.sha }}
+          COVERAGE_RUN_ID: ${{ github.run_id }}
+          COVERAGE_WORKFLOW_REF: ${{ github.workflow_ref }}
+          SOURCE_TARGET_BRANCH: main
+        run: bash scripts/report-coverage.sh
