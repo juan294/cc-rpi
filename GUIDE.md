@@ -191,6 +191,7 @@ install when you want the same cleanup pass in Codex.
 | Command | What It Does | When to Use |
 |---------|-------------|-------------|
 | `/brainstorm [idea]` | Optional front end to RPI. Refines a vague or greenfield idea through one-question-at-a-time Socratic intake into a design brief at `docs/research/`. Feeds `/plan`. | When the request is a goal, not a spec — and there's no existing code to `/research`. |
+| `/tool-design [goal]` | WebMCP: turns a stated user goal into a tool contract plus seed evals by role-playing the conversation twice (clean and vague) against the codebase's real initial state. Saves to `docs/plans/`. Feeds `/plan`. | When a project exposes (or plans to expose) an agent-facing tool surface and the goal is already stated. Sits between `/brainstorm` and `/plan`. |
 | `/describe-pr` | Generates a PR description from the current branch's diff and commit history. | Before opening or updating a PR. |
 | `/pre-launch` | Spawns 8 parallel specialist agents (Principal Architect, Staff FE, Staff BE, Performance Engineer, DevOps/SRE Lead, Security Reviewer, QA/Reliability Lead, Product Designer/UX Lead) for a deep launch-readiness audit. Produces a 16-section report with 5-tier severity findings, finding IDs, and Before/After/Later time horizons. | Before any production release. Run `/remediate` after to fix findings in 3 waves. |
 | `/remediate` | Parses the 16-section pre-launch report, groups findings by wave (Before / After / Later launch), creates GitHub issues for every finding (Rule #58), spawns parallel TDD agents per wave in worktrees, merges sequentially, verifies CI, runs `/simplify` twice per wave. Wave 3 strategic items are filed as issues but not auto-fixed. | After `/pre-launch` when findings exist. Automates the full fix cycle in 3 waves. |
@@ -207,7 +208,7 @@ Each command runs on a model tier — frontier where reasoning matters, the chea
 
 | Tier | Commands | Why |
 |------|----------|-----|
-| **opus** (frontier) | `/brainstorm`, `/research`, `/plan`, `/pre-launch`, `/explore-release` | Deep reasoning — a bad output amplifies downstream. |
+| **opus** (frontier) | `/brainstorm`, `/tool-design`, `/research`, `/plan`, `/pre-launch`, `/explore-release` | Deep reasoning — a bad output amplifies downstream. |
 | **sonnet** (mid) | `/implement`, `/validate`, `/remediate`, `/fix-ci`, `/triage`, `/bootstrap`, `/adopt`, `/detach`, `/release`, `/update-docs`, `/update` | Executes against a reviewed plan. |
 | **haiku** (floor) | `/status`, `/describe-pr` | Mechanical read-and-summarize. |
 
