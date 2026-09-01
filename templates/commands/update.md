@@ -43,7 +43,7 @@ On incremental syncs (lastSyncCommit exists), prioritize reading files that appe
 
 7. Compare each file in cc-rpi `templates/commands/` against this project's `.claude/commands/`:
    - **Skip** `bootstrap.md`, `adopt.md`, and `update.md` — these are user-level commands, not project-level.
-   - For each remaining command (research, plan, implement, validate, describe-pr, pre-launch, explore-release):
+   - For each remaining command (research, plan, implement, validate, describe-pr, pre-launch, explore-release, tool-design):
      - If it exists in both locations and the cc-rpi version is different → replace the project version.
      - If it exists in cc-rpi but not in this project → add it.
      - If it exists only in this project → leave it (project-specific command).
@@ -55,20 +55,22 @@ On incremental syncs (lastSyncCommit exists), prioritize reading files that appe
      - If it exists in both locations and the cc-rpi SKILL.md is different -> replace the project's SKILL.md.
      - If it exists in cc-rpi but not in this project -> create the directory and copy SKILL.md (new skill from blueprint).
      - If it exists only in this project -> leave it (project-specific skill).
-   - Blueprint skills: `shell-tools/`, `git-workflow/`, `multi-agent/`, `deployment-safety/`, `ci-workflow/`, `github-cli/`, `error-patterns/`, `systematic-debugging/`, `python-rules/`, `macos-rules/`, `supabase/`
+   - Blueprint skills: `shell-tools/`, `git-workflow/`, `multi-agent/`, `deployment-safety/`, `ci-workflow/`, `github-cli/`, `error-patterns/`, `systematic-debugging/`, `python-rules/`, `macos-rules/`, `supabase/`, `webmcp/`
    - A skill may be a directory with more than just `SKILL.md` -- copy the whole
      directory, including any `references/` subdirectory.
-   - Skip stack-irrelevant skills: if this is not a Python project, skip `python-rules/`. If not using Supabase, skip `supabase/`. If not on macOS, skip `macos-rules/`.
+   - Skip stack-irrelevant skills: if this is not a Python project, skip `python-rules/`. If not using Supabase, skip `supabase/`. If not on macOS, skip `macos-rules/`. If the project exposes no tools to an agent, skip `webmcp/`. Detect agent-facing surface with:
+     `grep -rlE 'modelContext|registerTool|toolname=' --include='*.ts' --include='*.tsx' --include='*.js' --include='*.jsx' --include='*.html' . 2>/dev/null | head -1`
+     — non-empty means install; empty means skip. If unsure, skip and report.
 
 ## Phase 4b: Update Rules
 
 9. Compare each file in cc-rpi `templates/rules/` against this project's `.claude/rules/`:
-   - Blueprint rules: `rpi-details.md`, `push-accountability.md`, `deployment-safety.md`, `supabase.md`, `testing.md`
+   - Blueprint rules: `rpi-details.md`, `push-accountability.md`, `deployment-safety.md`, `supabase.md`, `testing.md`, `webmcp.md`
    - For each blueprint rule:
      - If it exists in both and the cc-rpi version is different → update the content but **preserve custom `paths`** the project may have adapted.
      - If it exists in cc-rpi but not in this project → add it (new rule from blueprint). Adapt `paths` to match project structure.
      - If it exists only in this project → leave it (project-specific rule).
-   - Skip stack-irrelevant rules: if not using Supabase, skip `supabase.md`. If no test framework, skip `testing.md`. If no deployment pipeline, skip `deployment-safety.md`.
+   - Skip stack-irrelevant rules: if not using Supabase, skip `supabase.md`. If no test framework, skip `testing.md`. If no deployment pipeline, skip `deployment-safety.md`. If the project exposes no tools to an agent, skip `webmcp.md` — use the same detection grep as the skills step above. If unsure, skip and report.
    - **Never delete** project-added custom rule files.
 
 ## Phase 4c: Update AGENTS.md

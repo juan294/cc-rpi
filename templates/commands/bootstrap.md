@@ -30,30 +30,33 @@ Read these files to understand what you'll be creating:
 Now execute the setup checklist against THIS project. Work through it section by section:
 
 1. **Ask me** what type of project this is (web app, library, CLI, monorepo, Python, static site) so you can adapt accordingly.
-2. **Ask me** for the project name, description, stack, and any specifics you need to fill in the templates.
-3. Create the CLAUDE.md — adapt from the template, manually crafting every line for this project's needs.
-4. Create the AGENTS.md — adapt from the template so Codex can follow this project's cc-rpi setup too.
-5. Create `.claude/settings.json` — adapt from the template.
-6. Create `.claude/commands/` — copy slash commands from `cc-rpi/templates/commands/` and adjust file paths.
-7. Install skills from `cc-rpi/templates/skills/` to `.claude/skills/`:
+2. **Ask me** whether this project will expose tools to an AI agent (WebMCP tools in a web UI, or an MCP server) -- any project type can, so ask regardless of the answer to question 1.
+3. **Ask me** for the project name, description, stack, and any specifics you need to fill in the templates.
+4. Create the CLAUDE.md — adapt from the template, manually crafting every line for this project's needs.
+5. Create the AGENTS.md — adapt from the template so Codex can follow this project's cc-rpi setup too.
+6. Create `.claude/settings.json` — adapt from the template.
+7. Create `.claude/commands/` — copy slash commands from `cc-rpi/templates/commands/` and adjust file paths.
+8. Install skills from `cc-rpi/templates/skills/` to `.claude/skills/`:
    - Always install: `shell-tools/`, `git-workflow/`, `multi-agent/`, `deployment-safety/`, `ci-workflow/`, `github-cli/`, `error-patterns/`, `systematic-debugging/`
    - If Python project: also install `python-rules/`
    - If macOS development: also install `macos-rules/`
    - If using Supabase: also install `supabase/`
+   - If the project exposes tools to an agent: also install `webmcp/`
    - Each skill is a directory with a SKILL.md file -- copy the entire directory.
-8. Install rules from `cc-rpi/templates/rules/` to `.claude/rules/`:
+9. Install rules from `cc-rpi/templates/rules/` to `.claude/rules/`:
    - Always copy: `rpi-details.md`, `push-accountability.md`
    - If deployment pipeline exists: copy `deployment-safety.md`
    - If using Supabase: copy `supabase.md`
    - If test framework detected: copy `testing.md`
+   - If the project exposes tools to an agent: copy `webmcp.md`
    - Adapt `paths` in frontmatter to match the project's actual file structure.
-9. Create the directory structure (`docs/research/`, `docs/plans/`, `docs/decisions/`).
-10. Install release verification (E2E Pro) — copy `cc-rpi/templates/e2e-pro-playbook-template.md` into the project (e.g. `docs/release/e2e-pro-playbook.md`) and complete its Project Adaptation Profile with verified values. Adopt **Wave A always** (the truthful release gate); adopt Waves C–H by project risk. See the setup checklist's "Release Verification (E2E Pro)" section.
-11. Set up the README with the standard header.
-12. Add `.claude/settings.local.json` to `.gitignore`. If scheduled agents will be used, also check repo visibility with `gh repo view --json visibility --jq '.visibility'`: on `PUBLIC` (or no remote), add `docs/agents/`, `logs/`, and `scripts/agents/` to `.gitignore` (Rule #70); on `PRIVATE`/`INTERNAL`, leave them tracked.
-13. Walk through the remaining checklist items (pre-commit hooks, CI, git setup) — ask me for decisions where needed.
-14. Unless the user explicitly opts out, always make the project Codex compatible by creating `AGENTS.md`.
-15. If the user says "make this Codex compatible", treat that as an explicit instruction to create or update `AGENTS.md` and verify the Codex compatibility layer is complete.
+10. Create the directory structure (`docs/research/`, `docs/plans/`, `docs/decisions/`).
+11. Install release verification (E2E Pro) — copy `cc-rpi/templates/e2e-pro-playbook-template.md` into the project (e.g. `docs/release/e2e-pro-playbook.md`) and complete its Project Adaptation Profile with verified values. Adopt **Wave A always** (the truthful release gate); adopt Waves C–H by project risk. See the setup checklist's "Release Verification (E2E Pro)" section.
+12. Set up the README with the standard header.
+13. Add `.claude/settings.local.json` to `.gitignore`. If scheduled agents will be used, also check repo visibility with `gh repo view --json visibility --jq '.visibility'`: on `PUBLIC` (or no remote), add `docs/agents/`, `logs/`, and `scripts/agents/` to `.gitignore` (Rule #70); on `PRIVATE`/`INTERNAL`, leave them tracked.
+14. Walk through the remaining checklist items (pre-commit hooks, CI, git setup) — ask me for decisions where needed.
+15. Unless the user explicitly opts out, always make the project Codex compatible by creating `AGENTS.md`.
+16. If the user says "make this Codex compatible", treat that as an explicit instruction to create or update `AGENTS.md` and verify the Codex compatibility layer is complete.
 
 ## Phase 4: Save to Memory
 

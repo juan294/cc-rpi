@@ -40,6 +40,11 @@ Now investigate THIS project. Spawn parallel Explore agents to assess the curren
 **Agent 2 — Infrastructure Audit:**
 - What's the project type? (web app, library, CLI, monorepo, Python, static site)
 - What's the stack? (language, framework, package manager, test runner, linter)
+- Does the project expose tools to an AI agent? (WebMCP tools in a web UI, or
+  an MCP server) Check with:
+  `grep -rlE 'modelContext|registerTool|toolname=' --include='*.ts' --include='*.tsx' --include='*.js' --include='*.jsx' --include='*.html' . 2>/dev/null | head -1`
+  If it finds a match but `.claude/skills/webmcp/` is missing, name that gap
+  in the report.
 - Are pre-commit hooks set up? What do they run?
 - Is there CI? What does it check?
 - What's the git workflow? (branches, protection rules)
@@ -117,18 +122,26 @@ After presenting the report:
    - Preserve any project-specific Codex notes already present
    - Unless the user explicitly opts out, always make the adopted project Codex compatible
    - If the user says "make this Codex compatible", treat that as explicit approval to create or repair this layer
-6. **Install `.claude/rules/`** — copy rule templates from `cc-rpi/templates/rules/`:
+6. **Install missing `.claude/skills/`** — copy skill directories from `cc-rpi/templates/skills/` for any blueprint skill the audit found missing:
+   - Always: `shell-tools/`, `git-workflow/`, `multi-agent/`, `deployment-safety/`, `ci-workflow/`, `github-cli/`, `error-patterns/`, `systematic-debugging/`
+   - If Python project: also `python-rules/`
+   - If macOS development: also `macos-rules/`
+   - If using Supabase: also `supabase/`
+   - If the project exposes tools to an agent: also `webmcp/`
+   - Each skill is a directory with a SKILL.md file -- copy the entire directory.
+7. **Install `.claude/rules/`** — copy rule templates from `cc-rpi/templates/rules/`:
    - Always: `rpi-details.md`, `push-accountability.md`
    - If deployment pipeline: `deployment-safety.md`
    - If Supabase: `supabase.md`
    - If tests: `testing.md`
+   - If the project exposes tools to an agent: `webmcp.md`
    - Adapt `paths` in frontmatter to match the project's file structure.
-7. **Migrate `<important if>` blocks** — if the project's CLAUDE.md has `<important if>` blocks:
+8. **Migrate `<important if>` blocks** — if the project's CLAUDE.md has `<important if>` blocks:
    - Extract each block's content
    - Create a `.claude/rules/` file with `paths` frontmatter
    - Remove the block from CLAUDE.md
    - Verify path globs match the project's actual files
-8. **Install release verification (E2E Pro)** — copy
+9. **Install release verification (E2E Pro)** — copy
    `cc-rpi/templates/e2e-pro-playbook-template.md` into the project (e.g.
    `docs/release/e2e-pro-playbook.md`) and complete its Project Adaptation Profile
    with verified values. Adopt **Wave A always** (the truthful release gate that

@@ -22,3 +22,21 @@
   maintainer-only file made the framework's most load-bearing scoping
   judgment unreachable at the one moment it's needed. Surfaced by the
   `/simplify` altitude-angle review.
+
+## Phase 6
+
+- Plan said: "The skills install step gains `webmcp/` on the same
+  condition" in `templates/commands/adopt.md`, implying an existing
+  numbered step installs `.claude/skills/`.
+- Found: `adopt.md` had no such step. Its Phase 4 execution list only ever
+  installed `.claude/rules/`; the Phase 3 audit report flags "Missing
+  `.claude/skills/`" as a gap, but nothing in Phase 4 closed it -- a
+  pre-existing hole unrelated to WebMCP.
+- Chose: added a new numbered step, "Install missing `.claude/skills/`",
+  mirroring `bootstrap.md`'s conditional skills list (core skills always,
+  `python-rules/`/`macos-rules/`/`supabase/`/`webmcp/` conditionally), and
+  renumbered the two steps after it.
+- Why: the plan's instruction had nowhere to attach without it. Closing
+  the pre-existing gap was the narrower fix -- inventing a different home
+  for the `webmcp/` conditional would have papered over the same hole
+  instead of fixing it.

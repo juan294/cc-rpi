@@ -117,6 +117,7 @@ Copy and adapt from `templates/commands/`:
 - [ ] `/remediate` — Fix all pre-launch findings with parallel TDD agents
 - [ ] `/triage` — Morning agent report processing and action
 - [ ] `/explore-release` — Fresh-context exploratory release charters (E2E Pro Wave B)
+- [ ] `/tool-design` — Design agent-facing tools before implementing them (if the project exposes tools to an agent)
 
 Adjust file paths in each command to match your project's docs directory.
 
@@ -159,6 +160,22 @@ the matching slash-style command.
   adjust globs to match your project's file structure
 - [ ] Add project-specific rules as needed
   (e.g., API conventions, database patterns)
+
+## Agent-Facing Surface (WebMCP)
+
+Optional -- only applies if this project exposes tools to an AI agent
+(WebMCP tools in a web UI, or an MCP server). Most projects will record
+a "no" here and move on.
+
+- [ ] Decide whether the project will expose tools to an agent, and record
+  the decision -- including "no", so a later reader knows it was considered
+- [ ] If so, install the `webmcp` skill and rule, adapting `paths`
+- [ ] Run `/tool-design` before `/plan` for the first agent-facing feature
+- [ ] Confine the pre-standard `document.modelContext` global to one adapter
+  module (rule #91)
+- [ ] Seed the eval suite from the `/tool-design` transcripts (rule #92)
+- [ ] Register for the Chrome origin trial, or enable
+  `chrome://flags/#enable-webmcp-testing` for local development
 
 ## Agent Tool Hooks
 
