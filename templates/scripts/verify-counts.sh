@@ -138,8 +138,8 @@ check_count "GUIDE.md" 'to spawn [0-9]+ core specialist agents' "$SPECIALIST_COU
 check_count "GUIDE.md" 'Spawns [0-9]+ core specialist agents' "$SPECIALIST_COUNT" "Specialist count (Supporting Commands table)"
 check_count "methodology/agent-design.md" '[0-9]+ parallel specialists, each auditing one domain' "$SPECIALIST_COUNT" "Specialist count (Team Design Principles table)"
 check_count "methodology/agent-design.md" 'Spawn [0-9]+ parallel specialists before any production release' "$SPECIALIST_COUNT" "Specialist count (Pre-Launch Audit Template intro)"
-check_count "methodology/cost-monitoring.md" 'pre-launch\` \([0-9]+ specialists' "$SPECIALIST_COUNT" "Specialist count (fan-out cost gating)"
-check_count "templates/commands/adopt.md" 'pre-launch\` spawns [0-9]+ core specialist agents' "$SPECIALIST_COUNT" "Specialist count (adopt.md next-step suggestion)"
+check_count "methodology/cost-monitoring.md" 'pre-launch` \([0-9]+ specialists' "$SPECIALIST_COUNT" "Specialist count (fan-out cost gating)"
+check_count "templates/commands/adopt.md" 'pre-launch` spawns [0-9]+ core specialist agents' "$SPECIALIST_COUNT" "Specialist count (adopt.md next-step suggestion)"
 
 # --- No duplicate rule numbers ----------------------------------------------
 DUPES=$(grep -oE '^[0-9]+\.' "$RULES_FILE" | tr -d '.' | sort -n | uniq -d || true)
