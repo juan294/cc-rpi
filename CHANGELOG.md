@@ -6,6 +6,81 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.29.0] - 2026-09-01
+
+### Added
+
+- **WebMCP as a first-class blueprint surface.** A new `webmcp` skill
+  (`templates/skills/webmcp/`) teaches the agent-facing tool contract in
+  wrong/right pairs -- one function per tool, name by effect, take raw
+  input, validate strictly in code, ship errors as recovery instructions,
+  register/unregister tools with page state -- plus a
+  `references/tool-design-framework.md` worked example. A new `webmcp.md`
+  rule template confines the pre-standard `document.modelContext` global
+  to a single adapter module. A new `methodology/webmcp-tool-design.md`
+  maps the whole framework onto RPI (define goal + initial state is
+  Research, role-play is Plan, evals + telemetry is Validate). Adds rules
+  #85-92, bringing the rule count to 89, skill count to 12, and rule
+  template count to 6. Installed conditionally -- alongside the existing
+  supabase/python-rules/macos-rules pattern -- via `/bootstrap`, `/adopt`,
+  and `/update`, so projects with no agent-facing surface pay nothing.
+  Nothing retired this cycle: the 8 new rules are tool-contract facts, an
+  environment fact about a pre-standard global, and a process obligation
+  with no hook to enforce it -- none are retirement candidates under
+  `.claude/rules/contributing.md`'s four grounds.
+
+- **`/tool-design` command.** Turns a stated user goal into a tool
+  contract plus seed evals by role-playing the conversation twice (clean,
+  then deliberately vague) against the project's real codebase state.
+  Sits between `/brainstorm` and `/plan` in the pipeline; derives tools
+  from what the role-play actually required rather than the existing
+  UI's button list. Model tier: opus.
+
+- **Conditional 9th `/pre-launch` specialist: Agent Surface Engineer**
+  (domain `AS`). Spawns only when a read-only gate detects an
+  agent-facing surface (`modelContext`/`registerTool`/`toolname=`).
+  Covers tool inventory, naming, schema validation, error-recovery text,
+  registration lifecycle, and adapter isolation. Adds a conditional
+  §11a report section and extends the Finding-ID domain grammar to
+  include `AS` in both `validate-findings.py` and `remediate.md`.
+  `verify-counts.sh` now machine-checks the "8 core specialists" claim,
+  computed as the roster total minus every specialist marked
+  `-- conditional`, so it stays correct as the roster grows.
+
+- **Probabilistic-surface verification.** A new "Verifying Probabilistic
+  Surfaces" section in the testing hierarchy covers evals for a caller
+  that's a model rather than a program: fix the contract, then assert
+  tool selection / parameter extraction / state management as
+  probabilistic outcomes, preferring a code-based check over
+  LLM-as-judge whenever one exists. Adds an agent-tool-call-failures
+  error-logging category and conditional agent-surface obligations to
+  the E2E Pro playbook's Wave A, scoped so a project with no agent
+  surface inherits nothing new.
+
+- **Coverage reporting to Portfolio** on every default-branch push
+  (`.github/workflows/coverage.yml`, `scripts/report-coverage.sh`),
+  replacing a stale local batch script.
+
+### Fixed
+
+- `verify-edit.sh` no longer blocks edits to files outside the project
+  root -- a markdownlint `RangeError` on out-of-project files (e.g. agent
+  memory writes) was being read as a lint violation.
+- `verify-counts.sh` dropped an invalid backslash-escaped backtick in two
+  `check_count` patterns; backtick isn't an ERE metacharacter, and GNU
+  grep (CI) treats the escape literally where local grep implementations
+  don't, so the pattern silently failed only in CI.
+- Removed an unused variable in `morning-triage.sh` that tripped
+  shellcheck and made CLAUDE.md's documented shellcheck command fail even
+  though CI's own file list never covered that script.
+
+### Changed
+
+- `README.md` and `methodology/four-phases.md` synced to the above: the
+  methodology file count, a WebMCP Tool Design bullet, `/tool-design` in
+  the slash-command list, and a `/tool-design` branch in the Architecture
+  Overview diagram.
+
 ## [1.28.2] - 2026-07-25
 
 ### Fixed

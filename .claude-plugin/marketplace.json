@@ -11,7 +11,7 @@
       "name": "cc-rpi",
       "source": "./",
       "description": "Research-Plan-Implement methodology, domain skills, and a 64-pattern agent-error knowledge base for Claude Code.",
-      "version": "1.28.2"
+      "version": "1.29.0"
     }
   ]
 }
