@@ -43,6 +43,17 @@ RULE_COUNT=$(grep -cE '^[0-9]+\.' "$RULES_FILE")
 SKILL_COUNT=$(find templates/skills -maxdepth 2 -name SKILL.md | wc -l | tr -d ' ')
 RULE_TEMPLATE_COUNT=$(find templates/rules -maxdepth 1 -name '*.md' | wc -l | tr -d ' ')
 
+# Specialist count -- guards the "8 core specialists" prose in pre-launch.md
+# and its downstream mentions. Specialist 9 (Agent Surface Engineer) is
+# conditional, spawned only when a project exposes tools to an agent, so it
+# is described in prose rather than counted: the guarded number stays the
+# CORE count, computed as every roster header minus every header marked
+# "-- conditional". Adding a tenth core specialist later still resolves
+# correctly; adding a second conditional one does too.
+SPECIALIST_TOTAL=$(grep -cE '^\*\*Specialist [0-9]+ ' templates/commands/pre-launch.md || true)
+SPECIALIST_CONDITIONAL=$(grep -cE '^\*\*Specialist [0-9]+ .*-- conditional' templates/commands/pre-launch.md || true)
+SPECIALIST_COUNT=$((SPECIALIST_TOTAL - SPECIALIST_CONDITIONAL))
+
 # --- check_count <file> <pattern> <expected> <label> -----------------------
 # Extracts the first number matched by <pattern> in <file> and compares it
 # against <expected>, which the caller computed from the catalogs
@@ -113,6 +124,22 @@ check_count "GUIDE.md" 'The [0-9]+ rule templates' "$RULE_TEMPLATE_COUNT" "Rule-
 # Bonus location found by a whole-repo sweep, not in the original nine —
 # kept here so it can't silently drift again.
 check_count "templates/commands/bootstrap.md" '[0-9]+-error catalog' "$ERROR_COUNT" "Error count (bootstrap command)"
+
+# Specialist count -- adding a 9th (conditional) specialist made "8
+# specialists" wrong in ten unguarded prose sites; guard the ones that state
+# a number rather than describe the ninth conditionally.
+check_count "templates/commands/pre-launch.md" '[0-9]+ core specialists, plus a conditional ninth' "$SPECIALIST_COUNT" "Specialist count (header line)"
+check_count "templates/commands/pre-launch.md" '^Spawn all [0-9]+ core specialists as parallel' "$SPECIALIST_COUNT" "Specialist count (Step 1 spawn line)"
+check_count "templates/commands/pre-launch.md" '^After all [0-9]+ core specialists \(and Specialist 9' "$SPECIALIST_COUNT" "Specialist count (Step 3 synthesis intro)"
+check_count "templates/commands/pre-launch.md" '[0-9]+ core specialists \(\+ conditional Agent Surface Engineer\)' "$SPECIALIST_COUNT" "Specialist count (report template header)"
+check_count "templates/commands/pre-launch.md" '^- All [0-9]+ core specialists \(and Specialist 9, when spawned\) are read-only' "$SPECIALIST_COUNT" "Specialist count (Execution rules, read-only bullet)"
+check_count "templates/commands/pre-launch.md" '^- All [0-9]+ core specialists \(and Specialist 9, when spawned\) run in' "$SPECIALIST_COUNT" "Specialist count (Execution rules, parallel bullet)"
+check_count "GUIDE.md" 'to spawn [0-9]+ core specialist agents' "$SPECIALIST_COUNT" "Specialist count (Pre-Launch Audit section)"
+check_count "GUIDE.md" 'Spawns [0-9]+ core specialist agents' "$SPECIALIST_COUNT" "Specialist count (Supporting Commands table)"
+check_count "methodology/agent-design.md" '[0-9]+ parallel specialists, each auditing one domain' "$SPECIALIST_COUNT" "Specialist count (Team Design Principles table)"
+check_count "methodology/agent-design.md" 'Spawn [0-9]+ parallel specialists before any production release' "$SPECIALIST_COUNT" "Specialist count (Pre-Launch Audit Template intro)"
+check_count "methodology/cost-monitoring.md" 'pre-launch\` \([0-9]+ specialists' "$SPECIALIST_COUNT" "Specialist count (fan-out cost gating)"
+check_count "templates/commands/adopt.md" 'pre-launch\` spawns [0-9]+ core specialist agents' "$SPECIALIST_COUNT" "Specialist count (adopt.md next-step suggestion)"
 
 # --- No duplicate rule numbers ----------------------------------------------
 DUPES=$(grep -oE '^[0-9]+\.' "$RULES_FILE" | tr -d '.' | sort -n | uniq -d || true)
@@ -185,5 +212,6 @@ if [[ "$FAILED" -ne 0 ]]; then
 fi
 
 echo "PASS: $ERROR_COUNT errors, $RULE_COUNT rules, $SKILL_COUNT skills, $RULE_TEMPLATE_COUNT rule templates,"
+echo "      $SPECIALIST_COUNT core specialists (+ 1 conditional),"
 echo "      all hardcoded locations agree, all index destinations resolve."
 exit 0

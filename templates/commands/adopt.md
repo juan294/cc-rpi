@@ -153,7 +153,7 @@ This ensures the next session doesn't start from zero — the agent already know
 
 ## Recommended Next Step
 
-After adoption is complete, suggest the user run `/pre-launch` in a new session to baseline their codebase quality. `/pre-launch` spawns 8 specialist agents (Principal Architect, Staff FE, Staff BE, Performance Engineer, DevOps/SRE Lead, Security Reviewer, QA/Reliability Lead, Product Designer/UX Lead) that audit the entire codebase and produce a launch-readiness report.
+After adoption is complete, suggest the user run `/pre-launch` in a new session to baseline their codebase quality. `/pre-launch` spawns 8 core specialist agents (Principal Architect, Staff FE, Staff BE, Performance Engineer, DevOps/SRE Lead, Security Reviewer, QA/Reliability Lead, Product Designer/UX Lead), plus a conditional ninth (Agent Surface Engineer) when the project exposes tools to an agent, that audit the entire codebase and produce a launch-readiness report.
 
 For code quality findings (dead code, duplicates, inefficiencies), `/simplify` handles the bulk of fixes automatically. Security, infrastructure, and accessibility findings require manual implementation or a targeted `/implement` cycle.
 

@@ -193,7 +193,7 @@ install when you want the same cleanup pass in Codex.
 | `/brainstorm [idea]` | Optional front end to RPI. Refines a vague or greenfield idea through one-question-at-a-time Socratic intake into a design brief at `docs/research/`. Feeds `/plan`. | When the request is a goal, not a spec — and there's no existing code to `/research`. |
 | `/tool-design [goal]` | WebMCP: turns a stated user goal into a tool contract plus seed evals by role-playing the conversation twice (clean and vague) against the codebase's real initial state. Saves to `docs/plans/`. Feeds `/plan`. | When a project exposes (or plans to expose) an agent-facing tool surface and the goal is already stated. Sits between `/brainstorm` and `/plan`. |
 | `/describe-pr` | Generates a PR description from the current branch's diff and commit history. | Before opening or updating a PR. |
-| `/pre-launch` | Spawns 8 parallel specialist agents (Principal Architect, Staff FE, Staff BE, Performance Engineer, DevOps/SRE Lead, Security Reviewer, QA/Reliability Lead, Product Designer/UX Lead) for a deep launch-readiness audit. Produces a 16-section report with 5-tier severity findings, finding IDs, and Before/After/Later time horizons. | Before any production release. Run `/remediate` after to fix findings in 3 waves. |
+| `/pre-launch` | Spawns 8 core specialist agents (Principal Architect, Staff FE, Staff BE, Performance Engineer, DevOps/SRE Lead, Security Reviewer, QA/Reliability Lead, Product Designer/UX Lead), plus a conditional ninth (Agent Surface Engineer) when the project exposes tools to an agent, for a deep launch-readiness audit. Produces a 16-section report with 5-tier severity findings, finding IDs, and Before/After/Later time horizons. | Before any production release. Run `/remediate` after to fix findings in 3 waves. |
 | `/remediate` | Parses the 16-section pre-launch report, groups findings by wave (Before / After / Later launch), creates GitHub issues for every finding (Rule #58), spawns parallel TDD agents per wave in worktrees, merges sequentially, verifies CI, runs `/simplify` twice per wave. Wave 3 strategic items are filed as issues but not auto-fixed. | After `/pre-launch` when findings exist. Automates the full fix cycle in 3 waves. |
 | `/triage` | Discovers overnight agent reports via timestamp-based scanning, checks for agent failures in logs, queries GitHub Security & Quality Alerts (code scanning/CodeQL, Dependabot security, secret scanning) every run, scans open Dependabot PRs (Rule #84), and extracts `leanness-report.md` items individually. Synthesizes findings, proposes action plan, implements fixes, then auto-merges safe Dependabot PRs (patch/minor with green CI) and defers majors. Public repos: reports stay local. Private repos: reports are committed alongside fixes. | Every morning. First command of the day for each project. |
 | `/explore-release` | Wave B of E2E Pro: diff-driven, fresh-context exploratory release charters run as parallel agents, each completing the mandatory eight-maneuver table under a synthetic-fixture safety contract. Blocks on any failure or skipped high-risk area. Feeds evidence to `/release`; never tags. | Once there's a deployed release candidate to test, before `/release`. |
@@ -335,8 +335,7 @@ Claude Code has an experimental feature called Agent Teams that lets the main ag
 
 ### Pre-Launch Audit
 
-Before any production release, you can run `/pre-launch` to spawn 8
-specialist agents in parallel:
+Before any production release, you can run `/pre-launch` to spawn 8 core specialist agents in parallel:
 
 1. **Principal Architect** — System-wide architecture, module boundaries,
    dependency health, dead code, typecheck
@@ -354,12 +353,17 @@ specialist agents in parallel:
    failure modes, retry/idempotency coverage
 8. **Product Designer / UX Lead** — Visual hierarchy, design-system gaps,
    component reuse, messaging/voice consistency, a11y
+9. **Agent Surface Engineer** (conditional) — Tool inventory and naming,
+   input schemas vs. handler validation, error recovery text,
+   registration lifecycle. Spawns only when the project exposes tools to
+   an agent (WebMCP, an MCP server); otherwise the audit runs with 8.
 
-They all run simultaneously, read-only, and produce a 16-section report
-with a verdict: READY, CONDITIONAL, or NOT READY. Each finding carries a
-stable ID, a severity (launch-blocker / high / medium / low / strategic),
-a time horizon (Before / After / Later launch), and an evidence/inference
-label. No auto-fixing — you decide what to address.
+The 8 core specialists always run; the ninth joins when detected. All run
+simultaneously, read-only, and produce a 16-section report with a
+verdict: READY, CONDITIONAL, or NOT READY. Each finding carries a stable
+ID, a severity (launch-blocker / high / medium / low / strategic), a time
+horizon (Before / After / Later launch), and an evidence/inference label.
+No auto-fixing — you decide what to address.
 
 When findings exist, run `/remediate` to process them in 3 waves. Wave 1
 (Before launch — blockers + high-severity must-fix) runs first with full

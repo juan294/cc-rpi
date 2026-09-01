@@ -494,7 +494,7 @@ Beyond individual subagents, teams of parallel agents can tackle complex multi-d
 | Scenario | Team Shape | Example |
 |----------|-----------|---------|
 | **Debugging** | 3-5 parallel investigators, each testing a different hypothesis | API, cache, rendering, config, dependencies |
-| **Pre-launch audit** | 8 parallel specialists, each auditing one domain | Principal Architect, Staff FE, Staff BE, Performance, DevOps/SRE, Security, QA/Reliability, UX Cohesion |
+| **Pre-launch audit** | 8 parallel specialists, each auditing one domain, plus a conditional ninth for agent-facing surfaces | Principal Architect, Staff FE, Staff BE, Performance, DevOps/SRE, Security, QA/Reliability, UX Cohesion, (Agent Surface Engineer) |
 | **Self-healing pipeline** | Audit phase (parallel) → fix phase (parallel) → verify phase | Lint, tests, a11y, security, bundle size |
 | **Health check** | 4 parallel checkers with optional auto-fix | Tests, code quality, CI health, dependency health |
 | **Feature implementation** | Sequential workflow with parallel sub-steps | Read issue → TDD → implement → docs (parallel) → CI verify |
@@ -511,7 +511,7 @@ Beyond individual subagents, teams of parallel agents can tackle complex multi-d
 
 ### Pre-Launch Audit Template
 
-The most common team pattern. Spawn 8 parallel specialists before any production release:
+The most common team pattern. Spawn 8 parallel specialists before any production release, plus a conditional ninth when the project exposes tools to an agent:
 
 | Specialist | Focus |
 |------------|-------|
@@ -523,6 +523,7 @@ The most common team pattern. Spawn 8 parallel specialists before any production
 | **Security Reviewer** | Dependency audit, hardcoded secrets, auth/authz, injection (SQL/XSS/SSRF/CSRF), unsafe defaults, CORS |
 | **QA / Reliability Lead** | Full test suite, coverage of critical flows, graceful degradation, failure modes, retry/idempotency coverage |
 | **Product Designer / UX Lead** | Visual hierarchy, design-system gaps, component reuse, messaging/voice, a11y, error/empty/loading states |
+| **Agent Surface Engineer** (conditional) | Tool inventory and overlap, naming, input schemas vs. handler validation, error recovery text, registration lifecycle, adapter isolation, eval coverage |
 
 Each produces findings carrying a 5-tier severity (launch-blocker / high /
 medium / low / strategic), a 3-tier time horizon (Before launch / After

@@ -58,7 +58,7 @@ The **cost-report scheduled agent** (see [scheduled-agents.md](scheduled-agents.
 [deployment-safety.md](../patterns/deployment-safety.md) already requires justifying every external action before triggering it (Rule #35: *is this needed, justified, verifiable?*). Cost monitoring extends that from CI/deployment actions to **inference itself**:
 
 - **Frontier exploration is gated by expected payback.** Before kicking off a frontier `/research` + `/plan` cycle on a large problem, the expected outcome should justify the inference bill — the same bar as triggering a deployment. A throwaway question does not warrant a frontier loop.
-- **Scaled fan-out is gated explicitly.** `/pre-launch` (8 specialists) and `/remediate` (parallel agents) multiply cost. Run them when the outcome — a production launch, a remediation wave — justifies the spend, not as a casual check.
+- **Scaled fan-out is gated explicitly.** `/pre-launch` (8 specialists, plus a conditional ninth for agent-facing surfaces) and `/remediate` (parallel agents) multiply cost. Run them when the outcome — a production launch, a remediation wave — justifies the spend, not as a casual check.
 - **Investment beyond the playbook is an intentional bet.** Any AI investment past this baseline (custom agents, larger fan-outs, new frontier workflows) should be a deliberate decision made *after* monitoring is in place — so you can confirm it delivers net-positive ROI rather than assuming it does.
 
 ## Order of Operations
