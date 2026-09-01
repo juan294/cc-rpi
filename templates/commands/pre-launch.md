@@ -135,6 +135,12 @@ Commands: read UI source tree, component library, design tokens.
 
 **Specialist 9 — Agent Surface Engineer** (`agent-surface`, AS) -- conditional: spawned only when the Step 1 gate check finds an agent-facing surface
 
+The literal `-- conditional` text on the header line above is
+load-bearing: `verify-counts.sh` greps for it, on that one line, to
+exclude this specialist from the guarded "8 core specialists" count.
+Keep the header on a single line and keep that exact phrase if you
+edit it.
+
 Scope: tool inventory and overlap; tool naming against the
 execute-vs-initiate distinction; input schemas versus in-handler
 validation; error paths and whether their text is actionable

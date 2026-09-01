@@ -161,7 +161,6 @@ mkdir -p "$(dirname "$SUMMARY_FILE")"
 RESULTS=()
 PASS=0
 FAIL=0
-TODAY=$(date +%Y-%m-%d)
 
 echo "[$(date)] Morning triage starting for ${#PROJECTS[@]} project(s)..."
 
