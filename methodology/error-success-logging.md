@@ -41,6 +41,12 @@ The goal is to improve USER skill at agentic coding, not catalog model failures.
 - Missing validation — no check that agent output was correct
 - Trusted without verification — accepted output without review
 
+**Agent Tool-Call Failures:**
+- Tool selected — which tool the agent chose for the turn
+- Parameters extracted — the values it pulled from the conversation and available state
+- State at call time — what the surface looked like when the call was made
+- Recovery text returned — the guidance the failure gave the agent, if any
+
 ### Log Template Key Fields
 
 - What happened (2-3 sentences)
@@ -104,6 +110,8 @@ When a pattern appears 3 or more times in your logs:
 1. Extract it as a rule in CLAUDE.md or `patterns/quick-reference.md`
 2. Add a detailed entry to `patterns/agent-errors.md` if it's a Claude Code error
 3. The log entries remain as historical evidence, but the rule becomes the primary reference
+
+For agent tool-call failures, the loop is narrower and runs continuously rather than waiting for a count of 3: role-play covers the prototype, production interaction logs cover what the role-play couldn't anticipate. A deviation seen in the logs becomes one of two things — a new eval case, or a tool description change. A logged deviation that produces neither has not been processed.
 
 ### Compression Over Time
 

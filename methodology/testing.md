@@ -18,6 +18,36 @@ Manual (ONLY when automation is impossible)
 └── Requires browser visual validation that truly can't be captured programmatically
 ```
 
+## Verifying Probabilistic Surfaces
+
+The hierarchy above assumes a check either passes or fails, and that running it once tells you the answer. That assumption breaks down for a surface whose caller is a model rather than a program: a WebMCP tool, an MCP server tool, a prompt with structured output. The same input can produce a different selection, a different set of extracted parameters, or a different response shape on two separate runs. The question stops being "did it pass" and becomes "how often, and how does it fail when it doesn't."
+
+This does not apply to application code that merely runs near an LLM -- a request handler, a database write, a UI component -- those stay fully deterministic and belong in the hierarchy above, unchanged. It applies only where the thing making the decision under test is the model itself. If a check can be made deterministic, it is not an eval -- keep it in the automated suite above rather than routing it through this section.
+
+### What an Eval Is Here
+
+Fix the contract first: the input type, the output format, the constraints the response must satisfy. Only once the contract is fixed do a baseline result (what the surface does today) and an ideal result (what it should do) mean anything. An eval that skips straight to "does it work," without recording both a baseline and an ideal, is a vibe check, not an eval.
+
+### What to Assert
+
+Three things, run across multiple attempts or paraphrased inputs rather than eyeballed once:
+
+- **Selection** -- did the model pick the right tool, path, or branch for the turn?
+- **Extraction** -- did it pull the right values out of the conversation and available state?
+- **State management** -- did the resulting sequence of calls respect the state transitions the surface expects?
+
+A single passing run proves the happy path is reachable, not that it's reliable.
+
+### How to Judge
+
+Prefer a code-based check wherever the output is checkable -- schema validation, an exact-match assertion, a state readback. Reach for LLM-as-judge only where no deterministic check exists, such as judging whether free-text recovery guidance actually gives the caller something to do. This extends the hierarchy's automated-first preference one level up rather than replacing it: a deterministic check beats a model's opinion of its own output for the same reason it beats a human's.
+
+### When an Eval Fails
+
+Fix the surface, not the eval. Adjust the tool description, the prompt, or the schema that produced the wrong behavior. A special case bolted onto the eval to accommodate one bad run hides the defect instead of fixing it -- a surface that needs a carve-out per phrasing has a bad contract, not an eval with a missing exception.
+
+See [rule #92](webmcp-tool-design.md#rule-92) for the concrete discipline -- role-play the conversation, then ship an eval derived from it -- that this section generalizes from.
+
 ## Success Criteria Format
 
 Always separate into two sections:

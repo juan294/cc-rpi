@@ -339,7 +339,8 @@ Choose the initial set by risk, not by convenience. It SHOULD cover:
 - persistence or datastore readback;
 - cleanup or rollback of synthetic data;
 - the most important external integration seam;
-- the highest-risk regression from recent production history.
+- the highest-risk regression from recent production history;
+- for a project whose agent surface (WebMCP or MCP server tools) is a shipped feature, a smoke check that the declared tool set is actually registered on the deployed candidate. A project with no agent surface has no obligation here.
 
 Every required probe MUST:
 
@@ -1224,7 +1225,11 @@ Include:
 - multiple sessions and roles;
 - navigation, refresh, back, resume, and stale tabs;
 - client/server copy consistency;
-- preview/staging/production artifact identity.
+- preview/staging/production artifact identity;
+- tool registration and unregistration across navigation, for projects with an agent surface;
+- tool inventory matching the declared spec;
+- every tool error path returning actionable recovery text;
+- the eval suite running against the candidate build.
 
 ### APIs and backend services
 
