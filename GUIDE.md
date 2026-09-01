@@ -319,11 +319,11 @@ This sounds restrictive, but it's the single most impactful rule for research qu
 
 ### Error Prevention
 
-The blueprint includes 81 operational rules learned from real sessions. These aren't theoretical — they're patterns that caused actual failures and wasted time. Rather than loading all rules into every session, the blueprint uses **progressive disclosure** across three layers: a slim CLAUDE.md (~70 lines) for universal instructions, `.claude/rules/` for conditional rules that load only when working with matching files, and `.claude/skills/` for detailed domain knowledge that loads on demand. This keeps the agent's context window clean and focused.
+The blueprint includes 89 operational rules learned from real sessions. These aren't theoretical — they're patterns that caused actual failures and wasted time. Rather than loading all rules into every session, the blueprint uses **progressive disclosure** across three layers: a slim CLAUDE.md (~70 lines) for universal instructions, `.claude/rules/` for conditional rules that load only when working with matching files, and `.claude/skills/` for detailed domain knowledge that loads on demand. This keeps the agent's context window clean and focused.
 
 `patterns/quick-reference.md` is the **index** to those rules, not a catalog of them: each rule body lives in the skill, rule file, command, or methodology doc that needs it, and the index is one line per rule naming where it went. Rule numbers are permanent — a gap means the number was retired, and the ledger in `.claude/rules/contributing.md` records the ground.
 
-The 11 blueprint-provided skills cover: shell and tools, git workflow, CI verification, deployment safety, multi-agent coordination, GitHub CLI, Python, macOS, Supabase, error patterns, and systematic debugging. The 5 rule templates cover: RPI details, push accountability, deployment safety, Supabase, and testing.
+The 12 blueprint-provided skills cover: shell and tools, git workflow, CI verification, deployment safety, multi-agent coordination, GitHub CLI, Python, macOS, Supabase, WebMCP, error patterns, and systematic debugging. The 6 rule templates cover: RPI details, push accountability, deployment safety, Supabase, testing, and WebMCP.
 
 ### Agent Teams
 
@@ -484,9 +484,9 @@ The blueprint repository contains detailed documentation on every topic mentione
 | CI ownership | `methodology/push-accountability.md` | Background CI monitoring, fix-and-repush |
 | Model economics | `methodology/cost-monitoring.md` | Cost pools, model-tier binding, access tiers, cost-per-outcome |
 | Error patterns | `patterns/agent-errors.md` | 64 documented errors with symptoms and solutions |
-| Operational rules | `patterns/quick-reference.md` | Index of 81 rules, each pointing to the surface that holds it |
-| Domain skills | `templates/skills/` | 11 blueprint-provided skills for progressive disclosure |
-| Rule templates | `templates/rules/` | 5 conditional/modular rules for `.claude/rules/` |
+| Operational rules | `patterns/quick-reference.md` | Index of 89 rules, each pointing to the surface that holds it |
+| Domain skills | `templates/skills/` | 12 blueprint-provided skills for progressive disclosure |
+| Rule templates | `templates/rules/` | 6 conditional/modular rules for `.claude/rules/` |
 | Deployment safety | `patterns/deployment-safety.md` | Resource efficiency and production deployment rules |
 | Release verification | `templates/e2e-pro-playbook-template.md` | E2E Pro: auditable release-evidence system (Wave A gate + structural waves) |
 | Worked examples | `examples/README.md` | Sample research docs, plans, logs, pseudocode |

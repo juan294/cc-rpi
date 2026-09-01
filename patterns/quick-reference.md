@@ -106,6 +106,17 @@ ledger in `.claude/rules/contributing.md`.
 
 72. Test migrations locally before pushing to remote -> skills/supabase
 
+## Agent-Facing Tools [skill:webmcp]
+
+85. Scope each WebMCP tool to one function -> skills/webmcp
+86. Name agent tools by effect -- execute vs initiate -> skills/webmcp
+87. Take raw user input; don't make the agent compute -> skills/webmcp
+88. Validate strictly in code, loosely in schema -> skills/webmcp
+89. A tool error is a recovery instruction, not a stack trace -> skills/webmcp
+90. Register and unregister tools with page state -> skills/webmcp
+91. Confine the pre-standard modelContext global to one adapter -> rules/webmcp.md
+92. Role-play and ship an eval before shipping a tool -> methodology/webmcp-tool-design.md
+
 ## RPI Process
 
 14. Exhaust all tools before suggesting manual steps -> rules/rpi-details.md

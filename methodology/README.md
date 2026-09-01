@@ -15,6 +15,7 @@
 9. **[scheduled-agents.md](scheduled-agents.md)** — Recurring quality agents on cron/launchd, shared context system.
 10. **[cost-monitoring.md](cost-monitoring.md)** — Model economics: cost pools, model-tier binding, access tiers, and measuring cost-per-outcome.
 11. **[error-success-logging.md](error-success-logging.md)** — Framework for systematic skill improvement through logging.
+12. **[webmcp-tool-design.md](webmcp-tool-design.md)** — Agent-facing tool design as an RPI application: the WebMCP/server-MCP boundary, the role-play-then-eval obligation. Conditional knowledge, not part of the spine -- read it when a project exposes tools to an agent.
 
 ## The One-Paragraph Summary
 

@@ -4,7 +4,7 @@
 
 Blueprint repository for Claude Code projects, with Codex compatibility
 via `AGENTS.md` plus Codex-only helper skills in `.codex/skills/`.
-Contains the RPI methodology, 64 known agent error patterns, 81
+Contains the RPI methodology, 64 known agent error patterns, 89
 operational rules, and templates for CLAUDE.md, AGENTS.md, slash
 commands, skills, rules, and project setup.
 
@@ -102,13 +102,13 @@ Go directly to these paths -- never search the codebase for them.
 | Topic | Path | Notes |
 |-------|------|-------|
 | Error catalog | `patterns/agent-errors.md` | 64 errors, source of truth |
-| Operational rules | `patterns/quick-reference.md` | Index of 81 rules -> their surfaces |
+| Operational rules | `patterns/quick-reference.md` | Index of 89 rules -> their surfaces |
 | Deployment safety | `patterns/deployment-safety.md` | Resource efficiency rules |
-| Skill templates | `templates/skills/` | 11 domain skills |
+| Skill templates | `templates/skills/` | 12 domain skills |
 | Codex-only skills | `.codex/skills/` | Personal Codex helpers such as `codex-simplify` |
-| Rule templates | `templates/rules/` | 5 conditional/universal rules |
+| Rule templates | `templates/rules/` | 6 conditional/universal rules |
 | Active rules | `.claude/rules/` | cc-rpi's own rules |
-| Methodology | `methodology/` | 12 files, order in README.md |
+| Methodology | `methodology/` | 13 files, order in README.md |
 | Commands | `templates/commands/` | Canonical command definitions |
 | Release verification | `templates/e2e-pro-playbook-template.md` | E2E Pro playbook; Wave A gate + structural waves, `/explore-release` runs Wave B |
 | Active commands | `.claude/commands/` | This repo's own commands |
