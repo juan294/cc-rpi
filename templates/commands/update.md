@@ -104,19 +104,33 @@ On incremental syncs (lastSyncCommit exists), prioritize reading files that appe
 19. If CLAUDE.md still contains `<important if>` blocks, migrate them to `.claude/rules/` files with `paths` frontmatter and remove the blocks from CLAUDE.md.
 20. The verification sequencing rule ("Run verification sequentially with `;` or `&&`") should be a one-liner in the Git Workflow section, not a separate subsection.
 
-## Phase 6: Update settings.json
+## Phase 6: Update settings.json and Hooks
 
 21. Read this project's `.claude/settings.json`.
 22. Compare against cc-rpi's `templates/settings.json.template`.
 23. Add any new `permissions.allow` entries from the template that are missing in the project.
 24. Add any new `env` entries from the template that are missing.
-25. **Never remove** project-specific permissions, env vars, hooks, or deny rules.
+25. Sync hook scripts: for each file in `cc-rpi/templates/hooks/` (currently
+    `guard-bash.sh`, `verify-edit.sh`):
+    - If `.claude/hooks/<name>.sh` doesn't exist in this project, create
+      `.claude/hooks/` if needed and copy it in.
+    - If it exists and differs from the blueprint copy, replace it -- hook
+      scripts are blueprint-managed, the same rule as skills, not a place
+      for project customization.
+26. Sync hook registrations: for each entry in the template's `hooks` object
+    (`PreToolUse`, `PostToolUse`, etc.):
+    - If this project's settings.json has no entry whose `command`
+      references that same `.claude/hooks/<name>.sh`, add the entire
+      matcher-plus-hooks block for it.
+    - If a matching entry already exists, leave it alone -- do not
+      overwrite a project's own matcher or command customization.
+27. **Never remove** project-specific permissions, env vars, hooks, or deny rules.
 
 ## Phase 7: Write Sync Metadata
 
-26. Get the current HEAD commit hash of cc-rpi: `git -C <cc-rpi-path> rev-parse HEAD`
-27. Get the current version tag: `git -C <cc-rpi-path> describe --tags --abbrev=0 2>/dev/null`
-28. Write/update `.claude/cc-rpi-sync.json`:
+28. Get the current HEAD commit hash of cc-rpi: `git -C <cc-rpi-path> rev-parse HEAD`
+29. Get the current version tag: `git -C <cc-rpi-path> describe --tags --abbrev=0 2>/dev/null`
+30. Write/update `.claude/cc-rpi-sync.json`:
     ```json
     {
       "lastSyncCommit": "<commit-hash>",
@@ -130,12 +144,12 @@ On incremental syncs (lastSyncCommit exists), prioritize reading files that appe
 
 ## Phase 8: Report and Commit
 
-29. If any project files were changed (commands, skills, rules, AGENTS.md, CLAUDE.md, settings.json):
+31. If any project files were changed (commands, skills, rules, AGENTS.md, CLAUDE.md, settings.json, hooks):
     - Stage only the changed files (not unrelated changes).
     - Commit with: `chore: sync with cc-rpi blueprint <version-tag>`
     - Always update the sync metadata even if no other files changed.
 
-30. Present a summary:
+32. Present a summary:
     - cc-rpi version synced to (tag + commit hash)
     - Commands updated/added (list them)
     - Skills updated/added (list them)
@@ -143,6 +157,7 @@ On incremental syncs (lastSyncCommit exists), prioritize reading files that appe
     - AGENTS.md updated/added (state whether Codex compatibility was installed or synced)
     - CLAUDE.md sections updated/added (list them)
     - settings.json changes (list them)
+    - Hooks added/updated (list them)
     - Notable new content: new error patterns, new rules, methodology changes
     - "Already up to date" if nothing changed
     - Suggest the user run `/doctor` in an interactive session after this update, to
@@ -154,6 +169,7 @@ On incremental syncs (lastSyncCommit exists), prioritize reading files that appe
 - **Never delete project content.** Only add or update blueprint-managed sections.
 - **Preserve project identity.** Stack, deployment, key commands, commit conventions — these are the project's own.
 - **Preserve Codex compatibility.** `AGENTS.md` is part of the blueprint-managed compatibility layer.
+- **Hook scripts are blueprint-managed, like skills.** `.claude/hooks/*.sh` and their `settings.json` registrations sync the same way skill SKILL.md files do -- replace on drift, add if missing, never invented by the project. A project's own additional hook entries are left untouched.
 - **Be idempotent.** Running twice with no cc-rpi changes should produce zero file changes.
 - **Commit atomically.** All sync changes go in one commit with the sync metadata.
 - **If unsure, skip and report.** When a section has been heavily customized beyond the template, leave it alone and note it in the report as "skipped — heavily customized."
