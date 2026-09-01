@@ -4,6 +4,12 @@
 > `/brainstorm` precedes Research. It is an interactive Socratic intake that
 > produces a design brief in `docs/research/`, not a phase of the pipeline
 > below. Skip it whenever the task is already well-specified.
+>
+> Optional pre-step: when a project exposes (or plans to expose) tools to an
+> agent and a user goal is already stated, `/tool-design` precedes Plan. It
+> role-plays the conversation against real codebase state and emits a tool
+> contract plus seed evals to `docs/plans/`, not a phase of the pipeline
+> below. Skip it on projects with no agent-facing surface.
 
 ## Architecture Overview
 
@@ -12,6 +18,9 @@ User
  │
  ├── /brainstorm ────► Brainstorm Facilitator (optional pre-step)
  │                       └── Socratic Q&A with user → design brief
+ │
+ ├── /tool-design ───► Tool Design Orchestrator (optional pre-step)
+ │                       └── Role-plays clean + vague conversations vs. codebase state → tool contract + seed evals
  │
  ├── /research  ─────► Research Orchestrator
  │                       ├── Codebase Locator (find WHERE)

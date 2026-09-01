@@ -80,7 +80,7 @@ New here? Read **[GUIDE.md](GUIDE.md)** — a human-readable walkthrough of the 
 
 ### Methodology (`methodology/`)
 
-The full Research-Plan-Implement pattern adapted for Claude Code, based on HumanLayer's opencode-rpi and ACE-FCA framework. Organized by topic (11 files, in reading order):
+The full Research-Plan-Implement pattern adapted for Claude Code, based on HumanLayer's opencode-rpi and ACE-FCA framework. Organized by topic (12 files, in reading order):
 
 - **Philosophy** — Core tenets, error amplification principle, mental alignment
 - **Context Engineering** — The foundational discipline: compaction, context quality, settings & permissions
@@ -93,6 +93,7 @@ The full Research-Plan-Implement pattern adapted for Claude Code, based on Human
 - **Scheduled Agents** — Recurring quality agents on cron/launchd, shared context system
 - **Cost Monitoring** — Model economics: cost pools, model-tier binding, access tiers, cost-per-outcome
 - **Error & Success Logging** — Framework for systematic improvement
+- **WebMCP Tool Design** — Agent-facing tool design as an RPI application: the WebMCP/server-MCP boundary, the role-play-then-eval obligation (conditional reading, for projects that expose tools to an agent)
 
 ### Known Error Patterns (`patterns/`)
 
@@ -117,10 +118,10 @@ Ready-to-use starting points for new projects:
 - **Codex-only skills** — `.codex/skills/` holds personal Codex helpers
   that intentionally stay outside `.claude/skills/`; currently includes
   `codex-simplify`
-- **Rule templates** — `.claude/rules/` files with conditional loading (deployment, Supabase, testing) and universal rules (RPI details, push accountability)
+- **Rule templates** — `.claude/rules/` files with conditional loading (deployment, Supabase, testing, WebMCP) and universal rules (RPI details, push accountability)
 - **settings.json template** — `.claude/settings.json` with Agent Teams, hooks, and permissions
 - **Setup checklist** — Step-by-step guide including rules, skills, hooks, CI, and scheduled agents
-- **Slash commands** — `/bootstrap`, `/adopt`, `/update`, `/brainstorm`, `/research`, `/plan`, `/implement`, `/validate`, `/describe-pr`, `/pre-launch`, `/remediate`, `/triage`, `/status`, `/fix-ci`, `/explore-release` — plus Anthropic-native `/simplify` and `/batch`
+- **Slash commands** — `/bootstrap`, `/adopt`, `/update`, `/brainstorm`, `/tool-design`, `/research`, `/plan`, `/implement`, `/validate`, `/describe-pr`, `/pre-launch`, `/remediate`, `/triage`, `/status`, `/fix-ci`, `/explore-release` — plus Anthropic-native `/simplify` and `/batch`
 - **E2E Pro release-verification playbook** — Copy-and-adapt template that turns release verification into auditable evidence (Wave A truthful-gate floor + structural waves by risk)
 - **Scheduled agent scripts** — Nightly blueprint sync and multi-project morning triage with launchd/cron templates
 - **Repo-invariant scripts** — `verify-counts.sh` (stated counts match the catalogs), `verify-version.sh` (version strings match CHANGELOG, including the badge that repeats it 3x), `verify-skills.sh` (skill frontmatter and the 500-line ceiling), `check-tree-drift.sh` (`templates/` vs `.claude/`) — each reports a runnable fix and runs in CI
