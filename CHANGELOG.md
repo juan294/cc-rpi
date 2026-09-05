@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Changed
+
+- **Guarded shell policy now fails closed.** Malformed policy events, missing
+  prerequisites and unclassifiable sensitive commands block with an actionable
+  repair. Optional telemetry remains non-blocking. Native registration, trust
+  and observed enforcement are reported separately; see the
+  [v2 migration note](docs/migrations/v2.md).
+- **Model and effort inherit the owner's pane.** Removed workflow-wide price
+  tiers and generation pins from current guidance. Economy choices use explicit
+  native launches/profiles, respecting owner selection and native persistence.
+  New installations leave Agent Teams opt-in and preserve existing user opt-ins.
+
 ## [1.29.0] - 2026-09-01
 
 ### Added

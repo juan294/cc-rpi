@@ -494,6 +494,30 @@ def check_self(root, manifest):
                 raise ValueError("native conditional rule drift: " + str(native))
         elif native.exists() or native.is_symlink():
             raise ValueError("universal rule duplicated in native always-loaded rules: " + str(native))
+    configuration = load_sibling("rpi-config")
+    for component in selected_components(manifest, domains):
+        if component["kind"] in ("hook", "resource") and component["scope"] == "project":
+            for harness in component["harnesses"]:
+                destination = component["outputs"][harness]
+                if component["kind"] == "hook" and not destination.startswith("."):
+                    destination = "." + harness + "/" + destination
+                installed = root / destination
+                if not installed.is_file() or installed.read_bytes() != (root / component["source"]).read_bytes():
+                    raise ValueError("installed policy/runtime resource drift: " + destination)
+                checked += 1
+        elif component["kind"] == "config" and not component.get("distribution_only"):
+            records = json.loads((root / component["source"]).read_text())["entries"]
+            for harness in component["harnesses"]:
+                installed = root / component["destinations"][harness]
+                document = json.loads(installed.read_text()) if installed.is_file() else {}
+                for record in records:
+                    value = configuration.read(document, record)
+                    matches = (sum(configuration.same(item, record["value"]) for item in value)
+                               if record["mode"] == "entry" and value is not configuration.MISSING
+                               else int(configuration.same(value, record["value"])))
+                    if matches != 1:
+                        raise ValueError("native setup entry drift: " + str(installed) + " " + record["id"])
+                    checked += 1
     return checked
 
 
@@ -510,7 +534,15 @@ def self_paths(manifest):
             paths.append(".rpi/rules/" + name)
             if component["mapping"]["mode"] == "conditional":
                 paths.append(".claude/rules/" + name)
-    return sorted(paths)
+        elif component["kind"] in ("hook", "resource") and component["scope"] == "project":
+            for harness in component["harnesses"]:
+                destination = component["outputs"][harness]
+                if component["kind"] == "hook" and not destination.startswith("."):
+                    destination = "." + harness + "/" + destination
+                paths.append(destination)
+        elif component["kind"] == "config" and not component.get("distribution_only"):
+            paths.extend(component["destinations"].values())
+    return sorted(set(paths))
 
 
 def load_sibling(name):
@@ -522,7 +554,7 @@ def load_sibling(name):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("validate", "render", "check-generated", "check-native", "check-local-skills", "check-self", "self-paths", "counts", "plan", "apply", "check", "rollback", "detach"))
+    parser.add_argument("command", choices=("validate", "render", "check-generated", "check-native", "check-local-skills", "check-self", "self-paths", "counts", "plan", "apply", "check", "rollback", "detach", "diagnose"))
     parser.add_argument("--source", type=Path, default=Path(__file__).resolve().parents[2])
     parser.add_argument("--output", type=Path)
     parser.add_argument("--harness", choices=("both", *HARNESSES), default="both")
@@ -542,8 +574,15 @@ def main():
     parser.add_argument("--allow-capabilities", action="append", default=[])
     parser.add_argument("--fail-after", type=int, help=argparse.SUPPRESS)
     parser.add_argument("--fail-after-rename", type=int, help=argparse.SUPPRESS)
+    sys.dont_write_bytecode = True  # Read-only dispatch must not create source caches.
+    diagnostics = load_sibling("rpi-diagnostics")
+    diagnostics.add_arguments(parser)
     args = parser.parse_args()
     try:
+        if args.command == "diagnose":
+            if args.target is None:
+                raise ValueError("diagnose requires an explicit --target")
+            return diagnostics.cli(args)
         if args.command in ("plan", "apply", "check", "rollback", "detach"):
             lifecycle = load_sibling("rpi-lifecycle")
             try:

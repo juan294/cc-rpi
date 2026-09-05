@@ -195,7 +195,7 @@ launchd provides a minimal execution environment that breaks Claude CLI in four 
 | **Dependency health** | Weekly | Outdated packages, version conflicts, lockfile integrity |
 | **Performance check** | Weekly | Bundle sizes, build times, regression detection |
 | **Documentation sync** | Weekly | Stale docs, undocumented public APIs, broken links |
-| **Cost report** | Weekly | AI spend per workflow and per outcome, tier-adherence drift (see [cost-monitoring.md](cost-monitoring.md)) |
+| **Cost report** | Weekly | AI spend per workflow and per outcome, selection provenance and cost trends (see [cost-monitoring.md](cost-monitoring.md)) |
 | **Contract metrics** | Weekly | Block rates and verify-edit self-correction rate from the contract-layer hook log; deterministic (no Claude CLI). See [ci-and-guardrails.md](ci-and-guardrails.md) |
 
 ## Concrete Agent Prompts
@@ -297,7 +297,7 @@ Append to shared-context.md:
 
 ### Cost Report Agent
 
-Run this agent on the **floor tier (haiku)** — it reads and summarizes usage data, it does not reason.
+Use the configured session model and effort by default. An explicit economy launch may summarize already-calculated usage data; ambiguous attribution or recommendations require judgment and retain the owner selection. See [native profiles](../docs/model-profiles.md).
 
 ```bash
 PROMPT="You are the cost-report scheduled agent. You turn raw AI usage data into
@@ -309,21 +309,22 @@ Perform these checks:
    do not guess numbers.
 2. Attribute spend to workflows where possible: map runs to /research, /plan,
    /implement, /triage, /fix-ci, etc. (e.g. by branch, session label, or commit trailer).
-3. Compute cost-per-outcome: total spend / PRs merged this period, and average
+3. Compute cost-per-outcome: total spend / completed verified changes this period, and average
    cost per run for each recurring workflow.
-4. Compute the floor ratio: share of spend on the everyday floor tier vs frontier.
+4. Record requested model/effort and source, observed values where available,
+   and the evidence source/client version. Mark missing observations unavailable.
 5. Compare each workflow's per-run cost to the previous report; flag any that grew.
 
 Write your report to docs/agents/cost-report.md with sections:
-- Summary (1 line: GREEN/YELLOW/RED + total spend + floor ratio)
-- Cost Per Outcome (cost per merged PR; trend vs last period)
+- Summary (1 line: GREEN/YELLOW/RED + total spend + measurement gaps)
+- Cost Per Outcome (cost per completed verified change; trend vs last period)
 - Per-Workflow Cost (workflow, runs, avg cost/run, delta vs last period)
-- Tier Drift (any workflow trending above its declared tier or its historical cost)
-- Recommendations (re-tier, re-codify, or gate any workflow that is drifting)
+- Selection and Evidence (explicit requests, observed values, unavailable data)
+- Recommendations (investigate measured cost or rework changes; preserve explicit model choices)
 
 Append to shared-context.md:
-- Total spend and floor ratio for the period
-- Any workflow flagged for re-tiering"
+- Total spend and measurement gaps for the period
+- Any measured cost or rework regression"
 ```
 
 ## Resilience Patterns

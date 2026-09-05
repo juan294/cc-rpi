@@ -8,7 +8,8 @@ Destinations -- `skills/<n>` = `templates/skills/<n>/SKILL.md` (loads on
 description match); `rules/<f>` = `templates/rules/<f>` (loads via `paths:`
 frontmatter); namespaced `skills/rpi-<n>` = portable workflow source;
 `methodology/<f>` = authoring-time reading; `hook: <s>` = not relocated, a
-Tier 1 hook already enforces it.
+hook implementation. Actual enforcement requires native registration, trust,
+and invocation evidence.
 
 Numbers are permanent and never reused. A gap means **retired**, not missing.
 Retired so far: 67, 69, and 80 -- the ground for each is recorded in the
@@ -142,7 +143,7 @@ ledger in `.claude/rules/contributing.md`.
 
 ## Cost & Models
 
-74. Pin a model tier to every workflow -> methodology/cost-monitoring.md
+74. Inherit the owner pane model and effort; economy is explicit -> methodology/cost-monitoring.md
 75. Measure cost per outcome, not per token -> methodology/cost-monitoring.md
 
 ## Authoring & Doc Discipline

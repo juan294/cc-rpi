@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -10,7 +11,7 @@ INSTALLER = Path(__file__).resolve().parents[1] / 'scripts/install.sh'
 
 
 class InstallationEntryTests(unittest.TestCase):
-    def invoke(self, *args):
+    def invoke(self, *args, unsupported_runtime=False):
         with tempfile.TemporaryDirectory(prefix='rpi entry & quote ') as temporary:
             root = Path(temporary)
             checkout = root / 'source with spaces'
@@ -27,10 +28,28 @@ class InstallationEntryTests(unittest.TestCase):
             user_commands.mkdir()
             sentinel = user_commands / 'update.md'
             sentinel.write_text('custom command sentinel\n')
+            runtime_path = str(Path(sys.executable).parent) + os.pathsep + os.environ.get('PATH', '')
+            if unsupported_runtime:
+                binaries = root / 'bin'
+                binaries.mkdir()
+                python = binaries / 'python3'
+                python.write_text('#!/bin/sh\nexit 1\n')
+                python.chmod(0o755)
+                runtime_path = str(binaries) + os.pathsep + runtime_path
             result = subprocess.run(['bash', str(checkout / 'scripts/install.sh'), *args],
-                                    env={**os.environ, 'CLAUDE_COMMANDS_DIR': str(user_commands)},
+                                    env={**os.environ, 'PATH': runtime_path, 'CLAUDE_COMMANDS_DIR': str(user_commands)},
                                     capture_output=True, text=True)
             return result, sentinel.read_text(), sorted(p.name for p in user_commands.iterdir())
+
+    def test_unsupported_python_blocks_before_engine_execution(self):
+        for arguments in (('--check',), ('--apply', '/tmp/plan.json'),
+                          ('--target', '/tmp/project', '--output', '/tmp/plan.json')):
+            with self.subTest(arguments=arguments):
+                result, sentinel, _ = self.invoke(*arguments, unsupported_runtime=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('Python 3.11', result.stderr)
+                self.assertNotIn('ENGINE', result.stdout)
+                self.assertEqual(sentinel, 'custom command sentinel\n')
 
     def test_default_requires_explicit_destination_and_preserves_unknown_commands(self):
         result, sentinel, files = self.invoke()

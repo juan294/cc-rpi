@@ -202,9 +202,11 @@ Prose still has a place — as the fallback for behavior with no executable or d
 
 ## CLAUDE.md as Context Surface
 
-CLAUDE.md is your highest-leverage context engineering tool — it's the only file guaranteed to be in every conversation. Treat it accordingly:
+The managed root instruction block is the shared entry point. The effective
+native instruction chain can also include user, override and nested project files;
+verify actual discovery instead of assuming one file supplies the whole context.
 
-**Capacity:** Frontier models can follow ~150-200 instructions with consistency. Claude Code's system prompt already uses ~50 of those. Budget wisely.
+**Capacity:** Measure the effective native instruction chain, including user, override and project files. Keep the managed root within its byte budget; preserve user content and report overflow rather than truncating it or silently raising the native limit.
 
 **What to include vs exclude:**
 
@@ -255,31 +257,23 @@ For CI pipelines, batch operations, and scaling beyond a single session:
 
 Beyond CLAUDE.md content, the agent's operating environment is configured through Claude Code's settings and permission system. These control what tools the agent can use without asking.
 
-### Permission Whitelisting
+### Native Permission Boundaries
 
-Configure `.claude/settings.json` to pre-approve common operations so the agent doesn't pause for permission on routine tasks:
+Use the harness-specific adapter for native permissions. Claude's deny rules
+cover unconditionally forbidden forms; ask rules cover publication and deployment
+entry points. The stateful policy hook supplements these rules with branch,
+Preview and local-evidence checks. Do not add blanket `Bash(git *)` or
+`Bash(gh *)` allows. Preserve unrelated owner permissions and ordering during
+setup; permission changes are a separate reviewable diff.
 
-```json
-{
-  "permissions": {
-    "allow": [
-      "Bash(npm run *)",
-      "Bash(pnpm run *)",
-      "Bash(git *)",
-      "Bash(gh *)",
-      "Read",
-      "Write",
-      "Edit"
-    ]
-  }
-}
-```
-
-**Principle:** Whitelist development tools aggressively. The agent should never be blocked mid-task by a permission prompt for `git status` or `pnpm run test`. Reserve permission gates for genuinely dangerous operations.
+Codex uses its own native permissions and trusted hooks. Claude settings are not
+a Codex adapter. A structurally accepted command still requires the owner's
+authorization at the native boundary. See [guardrails](ci-and-guardrails.md) and
+the [v2 migration note](../docs/migrations/v2.md).
 
 ### Feature Flags
 
-Enable experimental features via `env` in settings.json:
+Experimental features are explicit owner opt-ins. For Agent Teams, an owner may set `env` in settings.json:
 
 ```json
 {
@@ -289,11 +283,11 @@ Enable experimental features via `env` in settings.json:
 }
 ```
 
-Agent Teams is the primary feature flag all cc-rpi projects enable by default. See [agent-design.md](agent-design.md) for full Agent Teams documentation.
+New installations leave Agent Teams disabled and use ordinary supported subagents. Ownership-aware updates preserve an existing explicit opt-in. See [agent-design.md](agent-design.md) for full Agent Teams documentation.
 
 ### Hooks
 
-Hooks run automatically at specific points in Claude's workflow. Unlike CLAUDE.md instructions (advisory), hooks are **guaranteed** to execute. Configure in `.claude/settings.json`:
+Hooks run automatically at specific points in Claude's workflow. Unlike advisory instructions, registered and trusted hooks can enforce matched events. Native registration, trust and observed invocation are separate checks. Configure in `.claude/settings.json`:
 
 ```json
 {
@@ -332,43 +326,67 @@ Agents inherit environment variables from the shell. For projects that need API 
 - Never hardcode secrets in CLAUDE.md or skills — reference `.env` instead
 - For headless/CI mode, pass variables via the environment: `API_KEY=xxx claude -p "prompt"`
 
-### Model Selection — Tier Each Workflow
+### Model Selection — Inherit the Owner Pane
 
-Model choice is the biggest single lever on your inference bill. The same task on a frontier model can cost 10-30x what it costs on the floor model, and for most of the RPI loop the frontier model buys you nothing — `/status` does not reason, it summarizes. The discipline: **explore once at frontier cost, then run the codified loop on the cheapest model that still does the job.**
+The default is native inheritance: omit model and effort overrides in shared
+workflows and helper definitions. Do not encode provider generations or assign a
+cheaper model to a workflow name. Research, implementation, validation and
+stateful diagnosis use the owner's active choice unless the owner explicitly
+selects another one for that work.
 
-Every command in this blueprint declares a **model tier** on the line directly under its title (e.g. `Model tier: **sonnet**`). Three tiers:
+An explicit Claude research/planning launch is:
 
-| Tier | Use for | Commands | Why |
-|------|---------|----------|-----|
-| **opus** (frontier) | Deep reasoning where a bad output amplifies downstream | `/research`, `/plan`, `/pre-launch` | A bad line of research → thousands of bad lines of code. Spend here. |
-| **sonnet** (mid) | Building and executing against a reviewed plan | `/implement`, `/validate`, `/remediate`, `/fix-ci`, `/triage`, `/bootstrap`, `/adopt`, `/detach`, `/release`, `/update-docs`, `/update` | The plan already removed the ambiguity; this tier executes it reliably. |
-| **haiku** (floor) | Mechanical read-and-summarize, no judgment | `/status`, `/describe-pr` | Deterministic-ish output. Frontier models are pure waste here. |
+```bash
+claude --model best --effort high
+```
 
-This blueprint is Claude-bound, so each tier maps to a concrete model already:
+For an implementation pane, retain the owner's supported family selector and
+effort choice. The launch alias `best` belongs to the CLI, not automatically to a
+subagent schema. Native omission expresses inheritance; `effort: inherit` is not
+a portable field value. This launch was verified with Claude Code 2.1.261 on 2026-09-05; see the
+[official model configuration](https://code.claude.com/docs/en/model-config).
 
-| Tier | Concrete model |
-|------|----------------|
-| opus | Claude Opus 5 |
-| sonnet | Claude Sonnet 5 (1M context) |
-| haiku | Claude Haiku 4.5 |
+Economy is optional and explicit. For a bounded mechanical locator or summary,
+an owner can start a separate Claude session with `claude --model haiku` when that
+family is available and adequate. The verified Haiku capability does not expose
+an effort setting, so this example omits it. Never silently reclassify
+architectural research or validation as mechanical. An explicit user selection
+wins over the economy preference.
 
-Bind the tier per workflow, not per session: run each command in a session on its declared model, and in custom agent definitions (`.claude/agents/`) set the `model` field to the tier the agent serves. The tier travels with the workflow so the choice re-applies every time anyone runs it, rather than defaulting to whatever model happens to be selected.
+Claude skill frontmatter model/effort controls can override an explicit session
+selection. RPI therefore supplies no automatic economy frontmatter. Use a
+separately selected launch/profile for the bounded task. Codex turn-level model
+and effort overrides persist into later turns, so a temporary parent switch
+cannot promise automatic restoration either. Optional native profiles belong to
+the user; installers do not rewrite global profiles.
 
-**Subagents inherit the tier.** Fan-out commands spawn helpers — `/pre-launch`'s core specialists (plus a conditional ninth for agent-facing surfaces), `/remediate`'s parallel TDD agents, `/research`'s locator/analyzer/pattern agents. A frontier parent that spawns N frontier children multiplies the bill by N. Pin spawned agents to the same tier as their workflow (or lower) — which is why each command's tier line says `All subagents: model: "..."`. Only raise a child above its parent's tier when it genuinely needs to reason harder.
+See [native model profiles](../docs/model-profiles.md) for verified client syntax
+and the dated adapter descriptor. Catalog defaults are neither quality rankings
+nor proof of account access. Offline catalog lookup preserves the explicit
+request and reports unresolved identity as unavailable.
 
-**Override upward, never silently downward.** The tier is the default, not a ceiling. If a task turns out harder than its tier — a gnarly `/implement` phase, a `/validate` that uncovers a design flaw — bump that session up a tier and note why. Never quietly drop a workflow below its declared tier to save tokens; that trades a small bill for a large downstream error. See [cost-monitoring.md](cost-monitoring.md) for measuring whether a tier change actually paid back.
+Record four fields when reporting selection:
 
-**Don't switch tiers mid-conversation to save money** — prompt caches are per-model (see [Session Stability](#session-stability-and-prompt-caching) below). Pick the tier when you start the session; if you need a cheaper model for a sub-task, spawn a subagent rather than switching the active model.
+1. Requested role, such as research, implementation or mechanical locator.
+2. Requested model/effort and its source: owner request, launch, profile or inherited configuration.
+3. Resolved model/effort, only when a supported session-bound observation exposes it.
+4. Evidence source, client version, session binding and freshness.
+
+In Claude session Bash, `CLAUDE_EFFORT` is an observed effort value when present.
+There is no assumed generic model-ID environment variable. Model prose, a pane
+title, an unrelated statusline cache or the newest rollout file does not identify
+the active pane. Missing effort stays unavailable too. Optional native
+statusline/event observations must match the session and be fresh; diagnostics
+never install a global statusline or require a model-ID cache to run RPI.
 
 ### Session Stability and Prompt Caching
 
-Claude Code uses prompt caching to reuse computation from previous turns — the API caches everything from the start of the request as a prefix. This makes long sessions dramatically cheaper and faster, but the cache is fragile: any change to the prefix invalidates it.
-
-Two common actions silently break the cache:
-
-**Don't switch models mid-conversation.** Prompt caches are per-model. If you're 100k tokens into an Opus session and switch to Haiku for a "quick question," Haiku must rebuild the entire cache from scratch — making it *more* expensive than letting Opus answer. Use subagents for cheaper models instead: Opus prepares a focused handoff, the subagent runs on Haiku in its own context, and only the result returns.
-
-**Don't add or remove MCP tools mid-session.** Tools are part of the cached prefix. Loading or unloading an MCP server during a conversation invalidates the cache for everything after it. Configure your MCP servers before starting work. If you need a tool you didn't load, it's cheaper to start a new session with the right tools than to add one and pay for a full cache rebuild.
+Keep the active pane stable while it owns a task. Cache reuse depends on provider,
+model, request prefix and cache lifetime; a smaller model does not by itself prove
+a cheaper complete outcome. Tool configuration changes can also affect cached
+prefixes. Measure usage and rework rather than asserting a universal savings
+ratio. When an explicit economy task needs a different model, give a separate
+session a compact handoff and return its result to the owner pane.
 
 ## You Need a Domain Expert
 

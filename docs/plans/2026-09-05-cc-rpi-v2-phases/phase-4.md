@@ -45,3 +45,35 @@ TDD: supported model metadata, optional economy on/off, unsupported effort, expl
 Use direct event fixtures first; Phase 6 supplies actual registration/trust/invocation evidence. Track changed Python modules with measured line/branch coverage and require tests for every ownership/destructive/authorization decision branch. Coverage percentages must come from coverage tooling, not self-test message counts.
 
 Automated acceptance: model/policy/telemetry fixtures, nonempty validator coverage and full local gate pass. Human review: inspect the capability table and compare one allowed and denied result per adapter. No unsupported guarantee is labeled enforced. Handoff exact client schema/version assumptions and the remaining live acceptance cases to Phase 6.
+
+## Implementation handoff
+
+- Inherited model selection and explicit economy/profile contracts have native
+  schema/precedence evidence and 20 focused model tests. Global owner profiles
+  remain untouched. Four-field observations distinguish requested and resolved
+  values, current-process effort and session-bound evidence.
+- Shared fail-closed policy, Claude settings, Codex hooks/native prompt rules and
+  entry-level capability reconciliation are implemented. Runtime requires Python
+  3.11 or newer; Codex remote automation is scoped to tested version 0.153.4.
+  Native trust and actual accepted/declined enforcement remain Phase 6 gates.
+- Publication binds one explicit integration ref or annotated version tag to
+  current complete project verification. Bounded release creation additionally
+  binds its repository, tag and local notes. Project check declarations and
+  receipts do not grant consent. Unsupported remote forms remain blocked.
+- Read-only diagnostics preserve project data, report ownership/source drift,
+  distinguish registration/trust/observation, and match native instruction and
+  skill discovery bounds. Legacy broad allows remain unowned review findings
+  unless exact prior provenance supports removal.
+- Measured policy coverage reached 99.19% lines and 98.98% branches; ownership
+  configuration and package modules reached 100% for both. Remaining defensive
+  and copied-runtime coverage paths are explicitly classified in local evidence.
+  The new recovery tests found and repaired malformed journal progress; cleanup
+  also repaired duplicate native-entry checking and bounded discovery work.
+- Three independent simplify passes completed: shared helpers satisfy reuse;
+  quality and efficiency findings received focused fixes and regression tests.
+  Authoritative acceptance is `bash scripts/verify-local.sh`, with every exit,
+  candidate/runtime identity and measured result in `.rpi/local/verification.json`.
+  The final Phase 4 log is `.rpi/local/phase-4-gates.log`.
+- Phase 5 starts from these finalized workflow/runtime contracts. Phase 6 must
+  exercise actual interactive invocation, trusted allowed/denied hooks, native
+  approval, economy observations and the local cross-platform adopter matrix.

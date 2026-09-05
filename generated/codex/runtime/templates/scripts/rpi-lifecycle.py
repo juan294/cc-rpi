@@ -181,6 +181,9 @@ def desired_entries(engine, source, manifest, request, domains):
         validate_component_destination(root_id, destination)
         entry = {'component_id': component, 'root_id': root_id, 'destination': destination,
                  'ownership': 'cc-rpi', 'adapter': {'harness': harness, 'sha256': digest(serialized(engine.load_adapter(source, harness)))}, 'data': data}
+        declaration = next((item for item in manifest['components'] if item['id'] == component), {})
+        if declaration.get('capability'):
+            entry['capability'] = True
         if block:
             entry['block'] = block
         key = (root_id, destination, block)
@@ -366,6 +369,8 @@ def make_plan(engine, request):
             selected_request = {**request, 'harnesses': [harness], 'route': routes[harness]}
             desired.update(desired_entries(engine, source, manifest, selected_request, domains_by_harness[harness]))
     old = {(e['root_id'], e['destination'], e.get('block')): e for e in previous['entries'] if 'config_record' not in e} if previous else {}
+    authorized = set(request.get('allow_capabilities', []))
+    capability_ids = {c['id'] for c in manifest['components'] if c.get('capability')}
     conflicts, retained, operations, baselines, next_entries = [], [], [], {}, []
     file_changes = {}
     observations = {}
@@ -470,8 +475,14 @@ def make_plan(engine, request):
                 retained.append({'destination': destination, 'reason': 'local-only customization retained'})
             else:
                 result = merge_bytes(local, base, upstream)
+            capability = (proposed or {}).get('capability') or (prior or {}).get('capability') or (proposed or prior).get('component_id') in capability_ids
+            cid = (proposed or prior).get('component_id')
+            if capability and (result != local or proposed and (not prior or upstream != base)) and cid not in authorized and request['action'] != 'detach':
+                raise Conflict('native capability file addition/change/removal requires --allow-capabilities ' + cid)
             if proposed:
                 entry = {k: v for k, v in proposed.items() if k != 'data'}
+                if capability:
+                    entry['capability'] = True
                 entry.update({'base_hash': digest(upstream), 'source': identity,
                               'status': 'clean' if result == upstream else 'local-only'})
                 baselines[digest(upstream)] = upstream
@@ -538,8 +549,9 @@ def make_plan(engine, request):
     config_groups = {}
     selected_configs = [c for c in engine.selected_components(manifest, domains)
                         if c['kind'] == 'config' and not c.get('distribution_only') and c['scope'] == request['scope']]
-    authorized = set(request.get('allow_capabilities', []))
-    if authorized - ({c['id'] for c in selected_configs} | {e['component_id'] for e in (previous or {}).get('entries', []) if 'config_record' in e}):
+    selected_capabilities = {c['id'] for c in engine.selected_components(manifest, domains)
+                             if c.get('capability') and c['scope'] == request['scope'] and set(c['harnesses']) & set(request['harnesses'])}
+    if authorized - ({c['id'] for c in selected_configs if set(c['harnesses']) & set(request['harnesses'])} | selected_capabilities | {e['component_id'] for e in (previous or {}).get('entries', []) if 'config_record' in e or e.get('capability')}):
         raise ValueError('capability authorization names an unselected configuration component')
     for entry in (previous or {}).get('entries', []):
         if 'config_record' not in entry:
@@ -764,8 +776,19 @@ def rollback(journal_path):
         raise ValueError('journal cannot be a symlink')
     journal_path = journal_path.resolve()
     journal = json.loads(journal_path.read_text())
-    if journal.get('schema_version') != 1 or not re.fullmatch('[0-9a-f]{32}', journal.get('transaction', '')):
+    if (not isinstance(journal, dict) or journal.get('schema_version') != 1 or
+            not isinstance(journal.get('transaction'), str) or
+            not re.fullmatch('[0-9a-f]{32}', journal['transaction'])):
         raise ValueError('invalid transaction journal')
+    operations, completed, pending = journal.get('operations'), journal.get('completed'), journal.get('pending')
+    if (not isinstance(operations, list) or type(completed) is not int or
+            not 0 <= completed <= len(operations) or
+            journal.get('status') not in ('applying', 'complete', 'rolled-back')):
+        raise ValueError('invalid recovery progress')
+    if pending is not None and (type(pending) is not int or pending != completed or not 0 <= pending < len(operations)):
+        raise ValueError('invalid pending journal operation')
+    if journal['status'] == 'complete' and (completed != len(operations) or pending is not None):
+        raise ValueError('completed journal has inconsistent recovery progress')
     expected = bound_path(journal['state_root'], 'local/transactions/' + journal['transaction'] + '/journal.json')
     if expected != journal_path:
         raise ValueError('journal does not match its bound state root')
@@ -796,8 +819,6 @@ def rollback(journal_path):
     try:
         completed = journal['operations'][:journal['completed']]
         if journal.get('pending') is not None:
-            if journal['pending'] != journal['completed'] or journal['pending'] >= len(journal['operations']):
-                raise ValueError('invalid pending journal operation')
             pending = journal['operations'][journal['pending']]
             actual = snapshot(operation_path(journal, pending))
             if actual == pending['after']:

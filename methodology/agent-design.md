@@ -435,7 +435,7 @@ This extends the three-tier enforcement model (see [ci-and-guardrails.md](ci-and
 
 ### Custom Agent Definitions (`.claude/agents/`)
 
-Define reusable subagent specs with their own tool restrictions and model selection. These formalize the subagent catalog entries above into Claude Code's native format.
+Define reusable subagent specs with their own tool restrictions. Omit model and effort fields to inherit the owner pane; explicit economy choices belong in a separately selected launch or profile. These formalize the subagent catalog entries above into Claude Code's native format.
 
 ```markdown
 # .claude/agents/security-reviewer.md
@@ -443,7 +443,6 @@ Define reusable subagent specs with their own tool restrictions and model select
 name: security-reviewer
 description: Reviews code for security vulnerabilities
 tools: Read, Grep, Glob, Bash
-model: opus
 ---
 You are a senior security engineer. Review code for:
 - Injection vulnerabilities (SQL, XSS, command injection)
@@ -454,15 +453,17 @@ You are a senior security engineer. Review code for:
 Provide specific line references and suggested fixes.
 ```
 
+The omitted model and effort fields preserve the active selection; do not add `best` or an invented `effort: inherit` to a subagent schema. See [model selection](context-engineering.md#model-selection--inherit-the-owner-pane) for native controls.
+
 This maps directly to the tool restriction table above — the `tools` field enforces what each agent can access. Use custom agents for recurring review patterns, specialized analysis, or any task that benefits from isolated context with constrained tools.
 
 ### Hooks
 
-Hooks are deterministic scripts that run automatically at specific points in Claude's workflow. Unlike CLAUDE.md instructions (which are advisory), hooks are **guaranteed** to execute.
+Hooks are deterministic scripts that run automatically at specific points in Claude's workflow. Unlike advisory instructions, registered and trusted hooks can enforce a matched event deterministically. Registration alone does not prove execution; inspect native trust and invocation evidence.
 
 **Common hook patterns:**
-- **Stop hook on file edit** — Run formatter/linter after every file change. Claude sees the errors and fixes them.
-- **Stop hook on commit** — Run typecheck/lint before the commit is created.
+- **PostToolUse on Write/Edit** — Run formatter/linter after a matching edit and return corrective feedback; the write already occurred.
+- **Git pre-commit hook** — Run typecheck/lint before the commit is created.
 - **Notification hook** — Alert when a long task completes.
 
 **Hooks vs CLAUDE.md instructions:**
@@ -529,7 +530,7 @@ See [templates/commands/pre-launch.md](../templates/commands/pre-launch.md) for 
 
 ## Claude Code Agent Teams (Native Feature)
 
-Claude Code has a native Agent Teams feature that implements the patterns above as a first-class capability. It is experimental and disabled by default — all cc-rpi projects enable it via `.claude/settings.json`:
+Claude Code has a native Agent Teams feature that implements the patterns above as a first-class capability. It is experimental and remains disabled in new cc-rpi installations. An owner who explicitly wants it can opt in through `.claude/settings.json`; updates preserve an existing opt-in:
 
 ```json
 {

@@ -45,14 +45,17 @@ for an existing one. Or just tell Claude Code:
 > Go read the cc-rpi repository and set up this project following all the best practices. Read the quick reference and methodology first, use the error-patterns skill or full error catalog only if needed, then configure CLAUDE.md, AGENTS.md, and slash commands for this project.
 
 Bootstrapped and adopted projects now also get an `AGENTS.md`
-compatibility layer so the same methodology can be operated from Codex /
-GPT-5.x without changing the workflow.
+compatibility layer so the same methodology can be operated from Codex without changing the workflow.
 
 If you also use Codex, the blueprint ships a Codex-only
 `codex-simplify` skill at `cc-rpi/.codex/skills/codex-simplify/`.
 Copy it into `~/.codex/skills/codex-simplify/` if you want a reusable
 equivalent of Claude Code's native `/simplify` without creating a
 project skill named `simplify`.
+
+Model and effort inherit the owner pane. See [native model profiles](docs/model-profiles.md)
+for explicit Claude launches and optional user-local Codex profiles, and the
+[v2 migration note](docs/migrations/v2.md) for policy compatibility changes.
 
 ## Harness Scope
 
@@ -99,7 +102,7 @@ The full Research-Plan-Implement pattern adapted for Claude Code, based on Human
 - **Push Accountability** — Local gates, one authorized integration push, exact-candidate CI observation
 - **CI & Guardrails** — Pre-commit hooks, CI workflows, development guardrails, enforcement stack
 - **Scheduled Agents** — Recurring quality agents on cron/launchd, shared context system
-- **Cost Monitoring** — Model economics: cost pools, model-tier binding, access tiers, cost-per-outcome
+- **Cost Monitoring** — Session inheritance, explicit economy choices, and cost per outcome
 - **Error & Success Logging** — Framework for systematic improvement
 - **WebMCP Tool Design** — Agent-facing tool design as an RPI application: the WebMCP/server-MCP boundary, the role-play-then-eval obligation (conditional reading, for projects that expose tools to an agent)
 
@@ -127,7 +130,7 @@ Ready-to-use starting points for new projects:
   that intentionally stay outside `.claude/skills/`; currently includes
   `codex-simplify`
 - **Rule templates** — `.claude/rules/` files with conditional loading (deployment, Supabase, testing, WebMCP) and universal rules (RPI details, push accountability)
-- **settings.json template** — `.claude/settings.json` with Agent Teams, hooks, and permissions
+- **settings.json template** — `.claude/settings.json` with native permissions and hooks; Agent Teams remains opt-in
 - **Setup checklist** — Step-by-step guide including rules, skills, hooks, CI, and scheduled agents
 - **Slash commands** — `/bootstrap`, `/adopt`, `/update`, `/brainstorm`, `/tool-design`, `/research`, `/plan`, `/implement`, `/validate`, `/describe-pr`, `/pre-launch`, `/remediate`, `/triage`, `/status`, `/fix-ci`, `/explore-release` — plus Anthropic-native `/simplify` and `/batch`
 - **E2E Pro release-verification playbook** — Copy-and-adapt template that turns release verification into auditable evidence (Wave A truthful-gate floor + structural waves by risk)

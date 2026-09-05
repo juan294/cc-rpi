@@ -111,7 +111,10 @@ class ExtractedPackageTests(unittest.TestCase):
         artifact.write_text('Existing project research.\n')
         plan = self.target / '.rpi/local/install-plan.json'
         self.invoke(self.engine, 'plan', '--target', self.target, '--harness', 'both',
-                    '--route', 'direct', '--action', 'install', '--output', plan)
+                    '--route', 'direct', '--action', 'install', '--output', plan,
+                    '--allow-capabilities', 'config:claude-policy',
+                    '--allow-capabilities', 'config:codex-hooks',
+                    '--allow-capabilities', 'resource:codex-permissions')
         self.invoke(self.engine, 'apply', '--plan', plan)
         for directory in ['.claude/skills', '.agents/skills']:
             skill = self.target / directory / 'rpi-research'

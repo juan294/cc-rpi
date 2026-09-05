@@ -195,7 +195,7 @@ class DistributionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.render()
 
-    def test_self_application_preserves_local_extension_and_rejects_duplicate_route(self):
+    def install_self_fixture(self):
         tree = self.render()
         for harness, directory in (("claude", ".claude/skills"), ("codex", ".agents/skills")):
             prefix = harness + "/skills/"
@@ -207,11 +207,33 @@ class DistributionTests(unittest.TestCase):
         self.write(".rpi/rules/testing.md", "# Testing\nUse TDD.\n")
         self.write(".claude/rules/testing.md", "# Testing\nUse TDD.\n")
         self.write(".claude/skills/drawio/personal.txt", "local extension sentinel")
+
+    def test_self_application_preserves_local_extension_and_rejects_duplicate_route(self):
+        self.install_self_fixture()
         self.assertGreater(distribution.check_self(self.root, self.manifest), 0)
         self.assertEqual((self.root / ".claude/skills/drawio/personal.txt").read_text(), "local extension sentinel")
         self.manifest["self_application"]["codex"] = "plugin"
         with self.assertRaises(ValueError):
             distribution.check_self(self.root, self.manifest)
+
+    def test_native_self_check_requires_exact_one_entry_and_supports_scalars(self):
+        self.install_self_fixture()
+        self.manifest['components'].append({'id': 'config:test', 'kind': 'config', 'source': 'templates/adapters/test-config.json',
+            'scope': 'project', 'selection': 'default', 'dependencies': [], 'harnesses': ['claude'],
+            'destinations': {'claude': '.claude/settings.json'}})
+        self.write('templates/adapters/test-config.json', json.dumps({'schema_version': 1, 'entries': [
+            {'id': 'ask', 'mode': 'entry', 'pointer': ['permissions', 'ask'], 'value': 'Bash(git push:*)'},
+            {'id': 'flag', 'mode': 'value', 'pointer': ['flag'], 'value': True}]}))
+        valid = {'permissions': {'ask': ['Bash(git push:*)', 'unrelated']}, 'flag': True, 'private': 'preserve'}
+        self.write('.claude/settings.json', json.dumps(valid))
+        self.assertGreater(distribution.check_self(self.root, self.manifest), 0)
+        for document in ({**valid, 'permissions': {'ask': ['Bash(git push:*)'] * 2}},
+                         {**valid, 'flag': False}, {**valid, 'flag': 1}):
+            self.write('.claude/settings.json', json.dumps(document))
+            before = (self.root / '.claude/settings.json').read_bytes()
+            with self.assertRaisesRegex(ValueError, 'native setup entry drift'):
+                distribution.check_self(self.root, self.manifest)
+            self.assertEqual((self.root / '.claude/settings.json').read_bytes(), before)
 
     def test_local_extension_validation_preserves_general_yaml(self):
         directory = self.root / ".claude/skills/drawio"

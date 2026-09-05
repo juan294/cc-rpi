@@ -9,7 +9,7 @@ Level 0: Agent-time (PreToolUse hooks)
 ├── Intercepts commands BEFORE they execute
 ├── Blocks known-bad patterns (dirty pull, --tags)
 ├── Agent sees the block reason and self-corrects
-└── Most reliable layer — prevents errors, not just consequences
+└── Prevention depends on matched events and native registration/trust
 
 Level 1: Editor-time (PostToolUse hooks on file edit)
 ├── Claude Code: verify-edit.sh post-Write/Edit (emoji + markdownlint on .md)
@@ -35,7 +35,7 @@ Each level catches progressively harder-to-detect issues. The goal: **no broken 
 
 ## Agent Tool Hooks (Level 0)
 
-PreToolUse hooks intercept agent commands before they execute. Unlike CLAUDE.md rules (which are advisory), hooks are deterministic — they always run, they can't be forgotten, and they block the command with an explanation.
+PreToolUse hooks can intercept matched agent commands before execution. Their policy evaluation is deterministic, but enforcement depends on the native adapter being registered, trusted and invoked for that tool. Report those states separately; a copied hook file is not proof of protection.
 
 ### Why Hooks Beat Rules
 
@@ -45,27 +45,28 @@ Hooks fix this by moving enforcement from "remember the rule" to "the command is
 
 ### Setup
 
-Configure in `.claude/settings.json`:
+Use the ownership-aware lifecycle engine to plan the native settings diff and
+apply it within existing setup authorization. Preserve project/user hooks, deny
+rules and ordering. Claude native `permissions.deny` and `permissions.ask` form
+the structural boundary; the stateful hook checks the documented branch,
+Preview, tag and local-verification conditions. Broad git/gh allows are not a
+substitute. Codex gets its own native schema and trust process.
 
-```json
-{
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash .claude/hooks/guard-bash.sh"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
+The shared policy implementation is
+[`templates/scripts/rpi-policy.py`](../templates/scripts/rpi-policy.py), with
+[`guard-bash.sh`](../templates/hooks/guard-bash.sh) as the compatible Claude
+wrapper. Supported command shapes are explicit in the implementation and its
+fixtures. A shell substring match cannot establish arbitrary command safety.
+Malformed guarded shell events, missing policy prerequisites and ambiguous
+policy-sensitive forms block with `BLOCKED / WHY / FIX`; ordinary unrelated
+tools remain unaffected. See the [migration note](../docs/migrations/v2.md).
 
-The guard script (`.claude/hooks/guard-bash.sh`) receives the command as JSON on stdin, checks for known-bad patterns, and exits non-zero with a message to block. Exit 0 allows the command through. Copy from `templates/hooks/guard-bash.sh` and add project-specific guards.
+A structural pass does not authorize publication. The active owner instruction
+and native trusted permission boundary carry authorization. Never use a
+model-written receipt, release skill invocation or `--follow-tags` as proof of
+consent. When the client cannot provide the required native approval boundary,
+keep remote automation blocked and provide the exact owner-executed commands at
+release review.
 
 ### What to Enforce via Hooks
 
@@ -74,10 +75,10 @@ Only promote a rule to hook enforcement when:
 2. **Mechanically detectable** — a shell script can identify the bad pattern
 3. **Has a clear fix** — the block message tells the agent exactly what to do instead
 
-The current guard script enforces:
-- **Error #33**: `git pull --rebase` with uncommitted changes (checks `git status --porcelain`)
-- **Error #44**: `git push --tags` instead of specific tag names (pattern match)
-- **Error #48**: direct push to `main`/`master` (template default; commented out in cc-rpi's own copy, where `main` is the long-lived branch)
+The stateful policy preserves dirty-pull, named-tag and protected-branch
+checks, and adds the owner's working-branch and Preview restrictions. Completed
+integration and named-tag publication must satisfy the documented local evidence
+and target checks before reaching the separate native approval boundary.
 
 ### Block messages are corrective hints
 
@@ -94,8 +95,9 @@ FIX:
   <copy-pasteable command or concrete instruction>
 ```
 
-Hooks build this with a shared `emit_block <hook> <reason> <why> <fix>` helper
-(see `templates/hooks/guard-bash.sh`). The `FIX` block must be runnable as-is.
+Adapters preserve this corrective format from the shared policy result. The
+`FIX` block must identify the missing prerequisite or malformed input and provide
+a runnable repair or exact safe next action.
 This mirrors the deterministic "retry hint" idea from contract-driven agent
 designs — when enforcement moves out of the prompt and into code, the code still
 has to tell the agent exactly how to comply. (Idea source:
@@ -105,7 +107,7 @@ has to tell the agent exactly how to comply. (Idea source:
 
 | Tier | Mechanism | Reliability | When to Use |
 |------|-----------|-------------|-------------|
-| **Enforce** | PreToolUse hooks, PostToolUse verification, pre-commit hooks, CI | High — mechanically prevented | Top repeat offenders. Rules that keep getting violated despite documentation. |
+| **Enforce** | PreToolUse hooks, PostToolUse verification, pre-commit hooks, CI | Mechanical for matched, active and trusted boundaries | Top repeat offenders. Rules that keep getting violated despite documentation. |
 | **Prompt** | Command recipes in CLAUDE.md | Medium — agent copies the pattern | Frequent operations. Give compound commands to copy instead of compose. |
 | **Document** | agent-errors.md, quick-reference.md | Low — advisory only | Long tail. Reference for when things go wrong. |
 
@@ -128,8 +130,10 @@ properties matter:
 - **It cannot un-write the file.** The edit already happened; `exit 2` feeds the
   hint back to the agent as "fix this now". Prevention still belongs to CI and
   pre-commit — this layer closes the feedback loop fast.
-- **It fails open.** Missing `jq`/`perl`/`markdownlint` → allow through, exactly
-  like `guard-bash.sh`.
+- **It is supplemental feedback.** Missing optional post-edit tooling can leave
+  a check unobserved; report that limitation. The pre-action policy guard has a
+  separate fail-closed contract, so post-edit behavior cannot authorize a shell
+  action.
 
 The shipped checks on edited `.md` files:
 
@@ -163,12 +167,13 @@ the emoji check's structure.
 
 ### Measuring whether enforcement works
 
-Enforcement you can't measure is enforcement you trust blindly. Both hooks append
-one **fail-open** JSONL row per evaluated command/edit to
+Enforcement you can't measure is enforcement you trust blindly. Available hook adapters append
+one best-effort JSONL row per evaluated command/edit to
 `.claude/metrics/contract-events.jsonl` — `{ts, session_id, hook, decision, rule,
 file}`. They never log command text or file contents (guard-bash sees commands
 that may carry tokens), and any logging error is swallowed so telemetry can never
-break a hook.
+break policy evaluation. A missing telemetry stream means unobserved coverage,
+not zero violations; logs alone do not prove every native tool path is guarded.
 
 `templates/scripts/contract-metrics.py` aggregates that log into:
 

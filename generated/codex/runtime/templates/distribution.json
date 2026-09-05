@@ -1088,13 +1088,17 @@
       "kind": "hook",
       "source": "templates/hooks/guard-bash.sh",
       "harnesses": [
-        "claude"
+        "claude",
+        "codex"
       ],
       "scope": "project",
       "selection": "default",
-      "dependencies": [],
+      "dependencies": [
+        "resource:policy-engine"
+      ],
       "outputs": {
-        "claude": "hooks/guard-bash.sh"
+        "claude": "hooks/guard-bash.sh",
+        "codex": "hooks/guard-bash.sh"
       },
       "ownership": {
         "direct": "cc-rpi",
@@ -1158,6 +1162,348 @@
         "plugin": "native-manager"
       },
       "distribution_only": true
+    },
+    {
+      "id": "resource:candidate-identity",
+      "kind": "resource",
+      "source": "templates/scripts/rpi-candidate.py",
+      "scope": "project",
+      "selection": "default",
+      "harnesses": [
+        "claude",
+        "codex"
+      ],
+      "dependencies": [],
+      "outputs": {
+        "claude": ".rpi/scripts/rpi-candidate.py",
+        "codex": ".rpi/scripts/rpi-candidate.py"
+      },
+      "ownership": {
+        "direct": "cc-rpi",
+        "plugin": "cc-rpi"
+      }
+    },
+    {
+      "id": "resource:policy-engine",
+      "kind": "resource",
+      "source": "templates/scripts/rpi-policy.py",
+      "scope": "project",
+      "selection": "default",
+      "harnesses": [
+        "claude",
+        "codex"
+      ],
+      "dependencies": [
+        "resource:candidate-identity"
+      ],
+      "outputs": {
+        "claude": ".rpi/scripts/rpi-policy.py",
+        "codex": ".rpi/scripts/rpi-policy.py"
+      },
+      "ownership": {
+        "direct": "cc-rpi",
+        "plugin": "cc-rpi"
+      }
+    },
+    {
+      "id": "resource:diagnostics",
+      "kind": "resource",
+      "source": "templates/scripts/rpi-diagnostics.py",
+      "scope": "project",
+      "selection": "default",
+      "harnesses": [
+        "claude",
+        "codex"
+      ],
+      "dependencies": [
+        "resource:models",
+        "resource:distribution-engine",
+        "resource:lifecycle-engine",
+        "resource:configuration-engine",
+        "resource:package-engine",
+        "resource:distribution-manifest",
+        "resource:claude-adapter",
+        "resource:codex-adapter"
+      ],
+      "outputs": {
+        "claude": ".rpi/scripts/rpi-diagnostics.py",
+        "codex": ".rpi/scripts/rpi-diagnostics.py"
+      },
+      "ownership": {
+        "direct": "cc-rpi",
+        "plugin": "cc-rpi"
+      }
+    },
+    {
+      "id": "resource:models",
+      "kind": "resource",
+      "source": "templates/scripts/rpi-models.py",
+      "scope": "project",
+      "selection": "default",
+      "harnesses": [
+        "claude",
+        "codex"
+      ],
+      "dependencies": [
+        "resource:model-profiles"
+      ],
+      "outputs": {
+        "claude": ".rpi/scripts/rpi-models.py",
+        "codex": ".rpi/scripts/rpi-models.py"
+      },
+      "ownership": {
+        "direct": "cc-rpi",
+        "plugin": "cc-rpi"
+      }
+    },
+    {
+      "id": "resource:model-profiles",
+      "kind": "resource",
+      "source": "templates/adapters/model-profiles.json",
+      "scope": "project",
+      "selection": "default",
+      "harnesses": [
+        "claude",
+        "codex"
+      ],
+      "dependencies": [],
+      "outputs": {
+        "claude": ".rpi/adapters/model-profiles.json",
+        "codex": ".rpi/adapters/model-profiles.json"
+      },
+      "ownership": {
+        "direct": "cc-rpi",
+        "plugin": "cc-rpi"
+      }
+    },
+    {
+      "id": "resource:codex-permissions",
+      "kind": "resource",
+      "source": "templates/adapters/codex-permissions.rules",
+      "scope": "project",
+      "selection": "default",
+      "harnesses": [
+        "codex"
+      ],
+      "dependencies": [],
+      "outputs": {
+        "codex": ".codex/rules/rpi.rules"
+      },
+      "ownership": {
+        "direct": "cc-rpi",
+        "plugin": "cc-rpi"
+      },
+      "capability": true
+    },
+    {
+      "id": "config:claude-policy",
+      "kind": "config",
+      "source": "templates/adapters/claude-policy.json",
+      "scope": "project",
+      "selection": "default",
+      "harnesses": [
+        "claude"
+      ],
+      "dependencies": [
+        "hook:guard-bash",
+        "hook:verify-edit"
+      ],
+      "outputs": {
+        "claude": "configuration/claude-policy.json"
+      },
+      "destinations": {
+        "claude": ".claude/settings.json"
+      },
+      "ownership": {
+        "direct": "cc-rpi",
+        "plugin": "cc-rpi"
+      }
+    },
+    {
+      "id": "config:codex-hooks",
+      "kind": "config",
+      "source": "templates/adapters/codex-hooks.json",
+      "scope": "project",
+      "selection": "default",
+      "harnesses": [
+        "codex"
+      ],
+      "dependencies": [
+        "hook:guard-bash",
+        "resource:codex-permissions"
+      ],
+      "outputs": {
+        "codex": "configuration/codex-hooks.json"
+      },
+      "destinations": {
+        "codex": ".codex/hooks.json"
+      },
+      "ownership": {
+        "direct": "cc-rpi",
+        "plugin": "cc-rpi"
+      }
+    },
+    {
+      "id": "resource:verification-runner",
+      "kind": "resource",
+      "source": "templates/scripts/rpi-verify.py",
+      "scope": "project",
+      "selection": "default",
+      "harnesses": [
+        "claude",
+        "codex"
+      ],
+      "dependencies": [
+        "resource:candidate-identity"
+      ],
+      "outputs": {
+        "claude": ".rpi/scripts/rpi-verify.py",
+        "codex": ".rpi/scripts/rpi-verify.py"
+      },
+      "ownership": {
+        "direct": "cc-rpi",
+        "plugin": "cc-rpi"
+      }
+    },
+    {
+      "id": "resource:distribution-engine",
+      "kind": "resource",
+      "source": "templates/scripts/rpi-distribution.py",
+      "scope": "project",
+      "selection": "default",
+      "harnesses": [
+        "claude",
+        "codex"
+      ],
+      "dependencies": [],
+      "outputs": {
+        "claude": ".rpi/scripts/rpi-distribution.py",
+        "codex": ".rpi/scripts/rpi-distribution.py"
+      },
+      "ownership": {
+        "direct": "cc-rpi",
+        "plugin": "cc-rpi"
+      }
+    },
+    {
+      "id": "resource:lifecycle-engine",
+      "kind": "resource",
+      "source": "templates/scripts/rpi-lifecycle.py",
+      "scope": "project",
+      "selection": "default",
+      "harnesses": [
+        "claude",
+        "codex"
+      ],
+      "dependencies": [],
+      "outputs": {
+        "claude": ".rpi/scripts/rpi-lifecycle.py",
+        "codex": ".rpi/scripts/rpi-lifecycle.py"
+      },
+      "ownership": {
+        "direct": "cc-rpi",
+        "plugin": "cc-rpi"
+      }
+    },
+    {
+      "id": "resource:configuration-engine",
+      "kind": "resource",
+      "source": "templates/scripts/rpi-config.py",
+      "scope": "project",
+      "selection": "default",
+      "harnesses": [
+        "claude",
+        "codex"
+      ],
+      "dependencies": [],
+      "outputs": {
+        "claude": ".rpi/scripts/rpi-config.py",
+        "codex": ".rpi/scripts/rpi-config.py"
+      },
+      "ownership": {
+        "direct": "cc-rpi",
+        "plugin": "cc-rpi"
+      }
+    },
+    {
+      "id": "resource:package-engine",
+      "kind": "resource",
+      "source": "templates/scripts/rpi-package.py",
+      "scope": "project",
+      "selection": "default",
+      "harnesses": [
+        "claude",
+        "codex"
+      ],
+      "dependencies": [],
+      "outputs": {
+        "claude": ".rpi/scripts/rpi-package.py",
+        "codex": ".rpi/scripts/rpi-package.py"
+      },
+      "ownership": {
+        "direct": "cc-rpi",
+        "plugin": "cc-rpi"
+      }
+    },
+    {
+      "id": "resource:distribution-manifest",
+      "kind": "resource",
+      "source": "templates/distribution.json",
+      "scope": "project",
+      "selection": "default",
+      "harnesses": [
+        "claude",
+        "codex"
+      ],
+      "dependencies": [],
+      "outputs": {
+        "claude": ".rpi/distribution.json",
+        "codex": ".rpi/distribution.json"
+      },
+      "ownership": {
+        "direct": "cc-rpi",
+        "plugin": "cc-rpi"
+      }
+    },
+    {
+      "id": "resource:claude-adapter",
+      "kind": "resource",
+      "source": "templates/adapters/claude.json",
+      "scope": "project",
+      "selection": "default",
+      "harnesses": [
+        "claude",
+        "codex"
+      ],
+      "dependencies": [],
+      "outputs": {
+        "claude": ".rpi/adapters/claude.json",
+        "codex": ".rpi/adapters/claude.json"
+      },
+      "ownership": {
+        "direct": "cc-rpi",
+        "plugin": "cc-rpi"
+      }
+    },
+    {
+      "id": "resource:codex-adapter",
+      "kind": "resource",
+      "source": "templates/adapters/codex.json",
+      "scope": "project",
+      "selection": "default",
+      "harnesses": [
+        "claude",
+        "codex"
+      ],
+      "dependencies": [],
+      "outputs": {
+        "claude": ".rpi/adapters/codex.json",
+        "codex": ".rpi/adapters/codex.json"
+      },
+      "ownership": {
+        "direct": "cc-rpi",
+        "plugin": "cc-rpi"
+      }
     }
   ],
   "consolidations": [

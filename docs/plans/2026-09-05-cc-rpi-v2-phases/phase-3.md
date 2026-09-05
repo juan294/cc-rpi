@@ -51,3 +51,14 @@ Write failing filesystem tests before implementing each transition. Cover clean 
 Use synthetic Roots-incomplete, Archy-release-override, Coach-partial-policy, generated-Next and partial-Codex-import fixtures. Full directories must retain optional references and mandatory scripts/playbooks. Project-specific release semantics must survive. No actual adopter under ~/code is an apply target.
 
 Automated acceptance: lifecycle matrix passes, generated artifact works outside the maintainer checkout, `--check` is byte-for-byte read-only, full local gate passes. Human acceptance: inspect a clean migration diff, a conflict report, and a mixed-ownership detach preview. Handoff manifests, fixture outcomes, recovery commands and unchanged custom-content proofs.
+
+## Execution status
+
+- [x] Transactional lifecycle and explicit root/config ownership.
+- [x] Immutable v1 migration, conflicts, recovery and per-harness preservation.
+- [x] Independent review and local full gate: 10 checks, 121 tests.
+- [x] Final extracted-package Linux and native discovery acceptance.
+- [x] Clean migration, conflict report and mixed detach preview inspected.
+
+Completed locally in `9fe3da7`; native trust/enforcement and complete instruction
+chain diagnostics remain the explicitly assigned Phase 4/6 acceptance work.

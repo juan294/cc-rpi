@@ -15,7 +15,9 @@ and the named tag/release, after trigger inspection. No fleet rollout is include
 - Local integration branch: `work/cc-rpi-v2` in a separate worktree.
 - Phase 1 accepted in local commit `e9dad45`; full local gate passed.
 - Phase 2 accepted in local commit `54b2fa8`: shared skills/adapters and native route gate passed.
-- Phase 3 transactional lifecycle implementation in progress.
+- Phase 3 accepted in local commit `9fe3da7`: full 10-check gate and 121 tests passed.
+- Phase 4 implementation and independent cleanup reviews complete; final gate
+  evidence is recorded before the phase commit and Phase 5 entry.
 - Actual clients available: Claude Code 2.1.261; Codex CLI 0.153.4.
 - Local verification prerequisites: Python 3.13.15, PyYAML 6.0.3,
   coverage.py 7.16.0, ShellCheck 0.11.0. Local Docker is available.
@@ -123,3 +125,67 @@ and the named tag/release, after trigger inspection. No fleet rollout is include
   `.rpi/local/phase-3-gates.log` and the native probe report before the phase commit.
 - Phase 4 inherits the 40,026-byte project instruction fixture for complete chain
   diagnostics. Managed root content remains separately bounded at 8 KiB.
+
+## Phase 3 accepted evidence
+
+- Final isolated Linux extraction: five tests passed with the source checkout
+  inaccessible and the extracted package read-only. Native discovery: exactly
+  32 Claude skills and 33 Codex skills, no runtime skill leakage or aliases.
+- Package inventory hashes: Codex
+  `a7b85c7e2352897e986096fbc104813f6bb9257d16c7ad6a4037c379f72515ac`;
+  Claude `a320c3c850f3c40c8e4e0f8d614fe69156a2638e4acc9fc88a9e9002fc365996`.
+  Native checks used no inference. Task containers stopped.
+- Inspected durable clean migration, three-way conflict diffs and mixed detach
+  preview under `.rpi/local/phase3-review/`. Strict eight-maneuver project release
+  requirements and modified skill content were preserved.
+
+## Phase 4 work in progress
+
+- Model selection inherits the owner by default. Explicit economy profiles cover
+  bounded mechanical work only, and explicit requests take precedence. Twenty
+  model tests pass; native no-inference probes verified actual profile precedence.
+- Read-only diagnostics distinguish configured, trusted and observed hooks;
+  requested and observed model evidence; and managed root versus complete
+  instruction-chain budgets. Twenty-five diagnostics tests pass, including
+  preservation of the 40,026-byte fixture, private data and source directories.
+- Coverage now measures executed Python lines and branches, including child
+  processes. The authoritative suite runs once and its report is reused only for
+  the same candidate and runtime. Loopback reporting tests use synthetic secrets.
+- Independent review repaired stale runtime reuse, predictable temporary-file
+  symlink overwrite, and multiple-subtest count inflation with regression tests.
+  Shared runtime fingerprints record tool metadata without executing probes or
+  dumping environment values. Installer preflight requires Python 3.11 or newer.
+- Additional ownership tests reproduced malformed rollback progress accepting
+  negative, oversized and boolean counters. Recovery now validates progress and
+  status before locking or restoring; the initial 21 decision tests pass.
+- Native policy integration and ownership/authorization branch coverage remain
+  in progress. The first diagnostic run passed 191 of 192 tests; the unfinished
+  Codex positive publication path failed. This is not accepted gate evidence.
+- Codex hook `ask` is unsupported. Pinned native source confirms that applicable
+  execpolicy prompt rules require approval or deny when prompting is disabled.
+  Actual trusted hook invocation and accepted/declined approval remain Phase 6
+  requirements; file registration and offline diagnostics cannot prove them.
+- Phase 3 is accepted at `9fe3da7`; Phase 4 is uncommitted. No remote writes,
+  extra inference cases, global profile changes or adopter fleet updates occurred.
+
+## Phase 4 implementation handoff
+
+- Canonical runtime now includes a portable verifier. Each adopter declares its
+  own complete CI selection in `.rpi/policy.json`; this repo declares ten checks.
+  Exact ordered check names/argv, candidate bytes and runtime must match. Custom
+  partial selections cannot stand in for full CI. Native consent remains separate.
+- The first complete local run passed ten checks and 273 tests. Subsequent
+  independent cleanup corrected exact-one native registration checks, native
+  bounded skill traversal, and Python runtime handling; focused tests passed.
+  Final whole-gate acceptance runs against the regenerated candidate.
+- Authorization decision tests cover every reachable branch. Measured policy
+  lines/branches reached 99.19%/98.98%; configuration and package modules reached
+  100%/100%. Recovery coverage and residual classification are preserved in
+  `.rpi/local/lifecycle-decision-closure.json`.
+- Self-application preserves unknown settings and explicit Agent Teams opt-in.
+  Only exactly proven old blueprint git/gh blanket allows were removed; unknown
+  legacy entries are reported for separate review. Native setup recovery remains
+  local. No registration or receipt is labeled actual native enforcement.
+- Native core versions remain Claude 2.1.261 and Codex 0.153.4. Python 3.11.2
+  compilation also passed in the pinned local Linux container; complete 3.11/3.13
+  cross-platform execution and actual harness acceptance remain Phase 6.

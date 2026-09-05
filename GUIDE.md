@@ -7,7 +7,7 @@ A practical guide to using the cc-rpi blueprint for AI-assisted software develop
 cc-rpi is a blueprint repository. You clone it once, and every time you start a new project, you point Claude Code at it and say "set this project up." The agent reads the blueprint, learns the rules, and configures your new project with battle-tested practices — slash commands, error prevention rules, CI setup, the works.
 
 That setup now includes an `AGENTS.md` compatibility layer so the same
-project can be operated from Codex / GPT-5.x without changing the
+project can be operated from Codex without changing the
 underlying methodology. Claude Code still handles bootstrap and adopt,
 but the resulting project is portable across agent harnesses.
 
@@ -212,15 +212,24 @@ install when you want the same cleanup pass in Codex.
 | `/release` | Detects project type and branching strategy, bumps versions everywhere, generates CHANGELOG entry, creates release commit and tag, publishes GitHub release, advises on registry publish. | When ready to cut a new version. Run `/update-docs` first. |
 | `/fix-ci` | Reads CI failure evidence, reproduces and repairs locally, and runs full local gates before an authorized integration push. | When CI is red. Automates the diagnose-fix-verify loop. |
 
-### Model Tiers at a Glance
+### Model and Effort Selection
 
-Each command runs on a model tier — frontier where reasoning matters, the cheap floor where the task is mechanical. Run the floor by default. See [methodology/cost-monitoring.md](methodology/cost-monitoring.md).
+RPI workflows and their helpers inherit the owner's active pane model and
+effort. Shared skills omit native model/effort overrides; a workflow name does
+not determine the difficulty of its tasks.
 
-| Tier | Commands | Why |
-|------|----------|-----|
-| **opus** (frontier) | `/brainstorm`, `/tool-design`, `/research`, `/plan`, `/pre-launch`, `/explore-release` | Deep reasoning — a bad output amplifies downstream. |
-| **sonnet** (mid) | `/implement`, `/validate`, `/remediate`, `/fix-ci`, `/triage`, `/bootstrap`, `/adopt`, `/detach`, `/release`, `/update-docs`, `/update` | Executes against a reviewed plan. |
-| **haiku** (floor) | `/status`, `/describe-pr` | Mechanical read-and-summarize. |
+For an explicit Claude research/planning pane:
+
+```bash
+claude --model best --effort high
+```
+
+Keep your chosen implementation pane selection. Optional economy launches apply
+only to a bounded mechanical task you select, such as formatting or locating
+files. Architectural research, validation and stateful diagnosis retain the
+owner's selection. See [model selection](methodology/context-engineering.md#model-selection--inherit-the-owner-pane)
+and [cost monitoring](methodology/cost-monitoring.md) for explicit profiles,
+native precedence and requested-versus-observed identity.
 
 The recommended daily workflow:
 
@@ -338,7 +347,7 @@ The 12 blueprint-provided skills cover: shell and tools, git workflow, CI verifi
 
 ### Agent Teams
 
-Claude Code has an experimental feature called Agent Teams that lets the main agent spawn long-running teammate agents that work in parallel. The blueprint enables this by default and provides guidance on when to use teams vs. regular subagents:
+Claude Code has an experimental feature called Agent Teams that lets the main agent spawn long-running teammate agents that work in parallel. Agent Teams is an explicit opt-in; new installations use ordinary subagents. Updates preserve an existing user opt-in. The blueprint provides guidance on when to use teams vs. regular subagents:
 
 - **Subagents** (quick, focused): Read-only research, file exploration, code analysis. Seconds to minutes.
 - **Agent Teams** (long-running, parallel): Independent implementation work, concurrent phase execution across packages, complex multi-file changes. Minutes to longer.
@@ -407,7 +416,7 @@ After bootstrapping, your project will have:
 your-project/
 ├── CLAUDE.md                    # Project configuration (Claude reads this every session)
 ├── .claude/
-│   ├── settings.json            # Tool permissions, Agent Teams, hooks
+│   ├── settings.json            # Tool permissions and hooks; Agent Teams is opt-in
 │   ├── hooks/                   # guard-bash.sh (PreToolUse), verify-edit.sh (PostToolUse)
 │   ├── scripts/                 # validate-findings.py (contract), contract-metrics.py (hook telemetry)
 │   ├── metrics/                 # contract-events.jsonl (gitignored hook audit log)
@@ -497,7 +506,7 @@ The blueprint repository contains detailed documentation on every topic mentione
 | Plan notation | `methodology/pseudocode-notation.md` | How to write and read implementation plans |
 | Testing approach | `methodology/testing.md` | TDD protocol, verification hierarchy |
 | CI ownership | `methodology/push-accountability.md` | Local gates and exact-candidate CI observation |
-| Model economics | `methodology/cost-monitoring.md` | Cost pools, model-tier binding, access tiers, cost-per-outcome |
+| Model economics | `methodology/cost-monitoring.md` | Session inheritance, explicit economy choices, cost per outcome |
 | Error patterns | `patterns/agent-errors.md` | 64 documented errors with symptoms and solutions |
 | Operational rules | `patterns/quick-reference.md` | Index of 89 rules, each pointing to the surface that holds it |
 | Domain skills | `templates/skills/` | 12 blueprint-provided skills for progressive disclosure |

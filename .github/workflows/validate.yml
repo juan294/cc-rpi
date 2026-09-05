@@ -16,7 +16,7 @@ jobs:
           python-version: "3.13"
       - name: Install verification prerequisites
         run: |
-          python3 -m pip install --quiet PyYAML==6.0.3 uv==0.12.10
+          python3 -m pip install --quiet PyYAML==6.0.3 coverage==7.16.0 uv==0.12.10
           command -v shellcheck
           node --version
           gh --version

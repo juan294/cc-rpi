@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "integration_branch": "main",
+  "remote": "origin",
+  "verification_command": ["bash", "scripts/verify-local.sh"],
+  "verification_checks": [
+    {"name": "prerequisites", "argv": ["python3", "scripts/verification-checks.py", "prerequisites"]},
+    {"name": "internal-links", "argv": ["python3", "scripts/check-links.py"]},
+    {"name": "verify-counts", "argv": ["bash", "templates/scripts/verify-counts.sh"]},
+    {"name": "verify-version", "argv": ["bash", "templates/scripts/verify-version.sh"]},
+    {"name": "verify-skills", "argv": ["bash", "templates/scripts/verify-skills.sh"]},
+    {"name": "check-tree-drift", "argv": ["bash", "templates/scripts/check-tree-drift.sh"]},
+    {"name": "shellcheck", "argv": ["python3", "scripts/verification-checks.py", "shellcheck"]},
+    {"name": "syntax", "argv": ["python3", "scripts/verification-checks.py", "syntax"]},
+    {"name": "unit-tests", "argv": ["python3", "scripts/verification-checks.py", "unit-tests"]},
+    {"name": "coverage", "argv": ["python3", "scripts/verification-checks.py", "coverage"]}
+  ]
+}

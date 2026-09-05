@@ -1,0 +1,1 @@
+../../templates/scripts/rpi-candidate.py

@@ -43,6 +43,7 @@ manifest, avoiding a second hand-maintained inventory here.
 | `commands/triage.md` |
 | `commands/update-docs.md` |
 | `commands/validate.md` |
+| `hooks/guard-bash.sh` |
 | `hooks/verify-edit.sh` |
 | `scripts/contract-metrics.py` |
 | `scripts/validate-findings.py` |
@@ -50,11 +51,12 @@ manifest, avoiding a second hand-maintained inventory here.
 | `scripts/verify-skills.sh` |
 | `scripts/verify-version.sh` |
 
-## Divergent
-
-| File | Why it differs |
-| --- | --- |
-| `hooks/guard-bash.sh` | The v1 wrapper's generic protected-main guard differs from this repository's explicitly authorized main-only release topology. Phase 4 replaces this fail-open implementation with a shared fail-closed parser and explicit native boundaries. |
+## Policy behavior change
+There are no divergent policy wrappers. The canonical `guard-bash.sh` now fails
+closed on malformed guarded events and missing policy prerequisites, replacing
+v1's fail-open behavior. Structural passage emits no native allow decision;
+trusted native permissions retain approval authority. Registration is not proof
+of trust or observed enforcement; actual client acceptance is tracked separately.
 
 ## Compatibility and local ownership
 

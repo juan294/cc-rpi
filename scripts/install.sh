@@ -33,6 +33,12 @@ blocked() {
 value_required() {
   [[ $# -ge 2 && -n "$2" && "$2" != --* ]] || blocked "missing value for $1"
 }
+runtime_required() {
+  if ! command -v python3 >/dev/null 2>&1 || ! python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 11))'; then
+    printf '%s\n' 'BLOCKED / WHY: installation requires Python 3.11 or newer / FIX: uv python install 3.13 && uv run --python 3.13 bash scripts/install.sh --help; rerun the intended command through uv run --python 3.13' >&2
+    exit 1
+  fi
+}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -41,6 +47,7 @@ while [[ $# -gt 0 ]]; do
     --apply|--rollback)
       [[ $# -eq 2 && ${#rpi_arguments[@]} -eq 0 && "$rpi_operation" == plan ]] || blocked 'apply/rollback requires only its receipt path'
       value_required "$@"
+      runtime_required
       if [[ "$1" == --apply ]]; then
         exec python3 "$rpi_engine" apply --plan "$2"
       fi
@@ -60,8 +67,10 @@ done
 
 if [[ "$rpi_operation" == check && "$rpi_destination" == false ]]; then
   [[ ${#rpi_arguments[@]} -eq 0 ]] || blocked 'source-only check does not accept installation options without a destination'
+  runtime_required
   python3 "$rpi_engine" validate --source "$rpi_source"
   exec python3 "$rpi_engine" check-generated --source "$rpi_source"
 fi
 [[ "$rpi_destination" == true ]] || blocked 'choose --target PROJECT or --scope user'
+runtime_required
 exec python3 "$rpi_engine" "$rpi_operation" --source "$rpi_source" "${rpi_arguments[@]}"
