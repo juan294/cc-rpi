@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "acceptance_phase": "Phase 4 diagnostics; Phase 6 native boundary verification",
+  "project_instruction": {
+    "path": "AGENTS.md",
+    "prefix": "Project-owned knowledge.\n",
+    "repeat": "x",
+    "repeat_count": 40000,
+    "suffix": "\n",
+    "expected_bytes": 40026
+  },
+  "oracles": [
+    "Installation preserves all project-owned instruction bytes.",
+    "Diagnostics report managed-root bytes separately from the complete installed chain.",
+    "Complete chain accounting includes selected global, override, project and nested instruction files.",
+    "Diagnostics compare against the actual effective native limit, reporting assumptions when unavailable.",
+    "Neither diagnostics nor installation truncates instructions or raises the native limit automatically."
+  ]
+}

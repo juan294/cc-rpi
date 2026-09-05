@@ -80,8 +80,8 @@
     "sha256": "13d2c12f46e48777e38e76f6c756cf2849b6b39269c919194a78a03d186f2194"
   },
   "claude/skills/rpi-adopt/references/lifecycle-contract.md": {
-    "bytes": 2906,
-    "sha256": "342f62f6b71448f6fc606452dd5d84898ec7a1608fc44706d6f2f8e36d9d5e00"
+    "bytes": 6104,
+    "sha256": "00a060b9da9831ba8c2120c0876757f5e555a02b69dce1c2abd4755b59f6c2f3"
   },
   "claude/skills/rpi-assess/SKILL.md": {
     "bytes": 2455,
@@ -96,8 +96,8 @@
     "sha256": "13d2c12f46e48777e38e76f6c756cf2849b6b39269c919194a78a03d186f2194"
   },
   "claude/skills/rpi-bootstrap/references/lifecycle-contract.md": {
-    "bytes": 2906,
-    "sha256": "342f62f6b71448f6fc606452dd5d84898ec7a1608fc44706d6f2f8e36d9d5e00"
+    "bytes": 6104,
+    "sha256": "00a060b9da9831ba8c2120c0876757f5e555a02b69dce1c2abd4755b59f6c2f3"
   },
   "claude/skills/rpi-brainstorm/SKILL.md": {
     "bytes": 3700,
@@ -112,8 +112,8 @@
     "sha256": "f01f1244491ebed966831c6408d3b9b29fb6839d4cc21d3a3049b7781df1580e"
   },
   "claude/skills/rpi-detach/references/lifecycle-contract.md": {
-    "bytes": 2906,
-    "sha256": "342f62f6b71448f6fc606452dd5d84898ec7a1608fc44706d6f2f8e36d9d5e00"
+    "bytes": 6104,
+    "sha256": "00a060b9da9831ba8c2120c0876757f5e555a02b69dce1c2abd4755b59f6c2f3"
   },
   "claude/skills/rpi-explore-release/SKILL.md": {
     "bytes": 6564,
@@ -200,8 +200,8 @@
     "sha256": "a209f495c6039dfd5e50afa69d61f8bd0dec484b85c3d5b9aa6095ff113e63dc"
   },
   "claude/skills/rpi-update/references/lifecycle-contract.md": {
-    "bytes": 2906,
-    "sha256": "342f62f6b71448f6fc606452dd5d84898ec7a1608fc44706d6f2f8e36d9d5e00"
+    "bytes": 6104,
+    "sha256": "00a060b9da9831ba8c2120c0876757f5e555a02b69dce1c2abd4755b59f6c2f3"
   },
   "claude/skills/rpi-validate/SKILL.md": {
     "bytes": 2081,
@@ -262,6 +262,294 @@
   "codex/rules/webmcp.md": {
     "bytes": 1287,
     "sha256": "c6e6ee4e798c31158b7697012afe63d73652bf74485b0529d0c0c2c981bf22c1"
+  },
+  "codex/runtime/.codex/skills/codex-simplify/SKILL.md": {
+    "bytes": 4908,
+    "sha256": "d1c14833de1a949b5961ef1dfe98e86e218a1ea8f055c8dd5f907d2944b13c92"
+  },
+  "codex/runtime/methodology/pseudocode-notation.md": {
+    "bytes": 1155,
+    "sha256": "23104d62bda3299ea4e60cd4b1003ac07ee268f5be2f4683f030389e8eec3881"
+  },
+  "codex/runtime/templates/AGENTS.md.template": {
+    "bytes": 958,
+    "sha256": "a235471041f95149c2387f3b2a9e2ab6664e3a453b3e6a216987296f20636994"
+  },
+  "codex/runtime/templates/CLAUDE.md.template": {
+    "bytes": 688,
+    "sha256": "a0827053bbcd22b87f98fd551e95b9e051966f2b6f53e1380b1560c5e8818ad3"
+  },
+  "codex/runtime/templates/adapters/claude.json": {
+    "bytes": 403,
+    "sha256": "4cb727ff137ff6e803368ca93e13c58f71d1273b0855a5347d360fc8f46e7e4c"
+  },
+  "codex/runtime/templates/adapters/codex-marketplace.json": {
+    "bytes": 236,
+    "sha256": "bb4633121a7ec90147106d6bcf868c9bce232d001eae0cc66a7ccbb2dfe2fc14"
+  },
+  "codex/runtime/templates/adapters/codex-plugin.json": {
+    "bytes": 202,
+    "sha256": "5f2c7bd0760e26bc164bdb82f53000c250de4f1396fa17ad05530abdbf591a00"
+  },
+  "codex/runtime/templates/adapters/codex.json": {
+    "bytes": 178,
+    "sha256": "319be40b047f3953e92d8e500e29dd482e3d096699eff33c4552d9d6b2087420"
+  },
+  "codex/runtime/templates/distribution.json": {
+    "bytes": 27981,
+    "sha256": "96969d504885d794b6df5258ad0d56f2ea600b7bfa16ec738d204a1b017226ab"
+  },
+  "codex/runtime/templates/e2e-pro-playbook-template.md": {
+    "bytes": 52054,
+    "sha256": "13d2c12f46e48777e38e76f6c756cf2849b6b39269c919194a78a03d186f2194"
+  },
+  "codex/runtime/templates/hooks/guard-bash.sh": {
+    "bytes": 5312,
+    "sha256": "3c865d628f481fe9e15bc5770484619b3bb0f92a4f435faada1c52786207cc47"
+  },
+  "codex/runtime/templates/hooks/verify-edit.sh": {
+    "bytes": 5622,
+    "sha256": "f8bcec0eef0b62e3b0cb67a8b18f52527b9d0349210e25a347f60ef05d9d636d"
+  },
+  "codex/runtime/templates/instructions/rule-map.md": {
+    "bytes": 1481,
+    "sha256": "4e0143c0c9dc7846ef73e2fe04ee70020da391c0f5b7244aa2186c7b7e41d516"
+  },
+  "codex/runtime/templates/rules/deployment-safety.md": {
+    "bytes": 1730,
+    "sha256": "fb05dc4d4a9e3c1f3061d3d591817a6a234632f25d91afda43d061992911f106"
+  },
+  "codex/runtime/templates/rules/push-accountability.md": {
+    "bytes": 1234,
+    "sha256": "9cc0f3a17b160ae13a5c25591845ec6044ef15857c818c4ed244d528db200b22"
+  },
+  "codex/runtime/templates/rules/rpi-details.md": {
+    "bytes": 3324,
+    "sha256": "874e3f082296901ff0af057c9ea04d02f3e9e29ea677500d5e4e1064c5e06664"
+  },
+  "codex/runtime/templates/rules/supabase.md": {
+    "bytes": 1583,
+    "sha256": "c96fc92a476c32a11662d08bf34151d21b61004b42a59a336a4e453699b87aed"
+  },
+  "codex/runtime/templates/rules/testing.md": {
+    "bytes": 1185,
+    "sha256": "21a18b73f155184542e08ad08f784223bf2a8cc3bb26c807a1d8c228fd2cf294"
+  },
+  "codex/runtime/templates/rules/webmcp.md": {
+    "bytes": 1287,
+    "sha256": "c6e6ee4e798c31158b7697012afe63d73652bf74485b0529d0c0c2c981bf22c1"
+  },
+  "codex/runtime/templates/scripts/rpi-config.py": {
+    "bytes": 8136,
+    "sha256": "409e69edf7256a176a1b4407c4fc35f75139423ed22b86c5155191e904f896fc"
+  },
+  "codex/runtime/templates/scripts/rpi-distribution.py": {
+    "bytes": 32152,
+    "sha256": "4c04ff29805a114e5d323c9a38c264d53be53efef1689d7db352ab037a574c42"
+  },
+  "codex/runtime/templates/scripts/rpi-lifecycle.py": {
+    "bytes": 51693,
+    "sha256": "93d3c9894c60d8058db7c34d798d655511ca3be0bbfed1e16c761c9d62491d4c"
+  },
+  "codex/runtime/templates/scripts/rpi-package.py": {
+    "bytes": 2210,
+    "sha256": "0e4dc8aa15b48980d7b789c574e84ab85acf22f26b940ba97f76a8b3d4cb75b6"
+  },
+  "codex/runtime/templates/scripts/validate-findings.py": {
+    "bytes": 8522,
+    "sha256": "94e4e6b202f069fcbd0d1db4adff6bf7f3124a6e91650f23abea3c4b1842cca0"
+  },
+  "codex/runtime/templates/skills/ci-workflow/SKILL.md": {
+    "bytes": 3895,
+    "sha256": "ee12fdecb83cac9d80903e82ae32b6188ccb881e8d88aec1246a01cef6772d7a"
+  },
+  "codex/runtime/templates/skills/deployment-safety/SKILL.md": {
+    "bytes": 5137,
+    "sha256": "b0f6b826b7c2e91ced87d58c3766342b1a7b5b0a5cdde118179add24ed12f938"
+  },
+  "codex/runtime/templates/skills/error-patterns/SKILL.md": {
+    "bytes": 3231,
+    "sha256": "e3c97b007093bc0036a0f475b87327a9d5ce0f1294767ad8a94403d0aff3bb91"
+  },
+  "codex/runtime/templates/skills/error-patterns/references/error-catalog.md": {
+    "bytes": 8252,
+    "sha256": "2b51c40b81d4c399b051c56907fda8f1eac4e1ce3180fe4546f242e99855d39a"
+  },
+  "codex/runtime/templates/skills/git-workflow/SKILL.md": {
+    "bytes": 4324,
+    "sha256": "adfb3fbd6921022bf448eaba23ac586a580b6a1bd3664c6b94b65e3aa9ed2c5d"
+  },
+  "codex/runtime/templates/skills/github-cli/SKILL.md": {
+    "bytes": 3851,
+    "sha256": "a90bb082cdec25fc70f9ea5f134ff4474bf3f6ee648641856d2f20230b022db9"
+  },
+  "codex/runtime/templates/skills/macos-rules/SKILL.md": {
+    "bytes": 2444,
+    "sha256": "187196e6043f89c317967f6b2e7d5263e630df1da63050366a1ba70073457599"
+  },
+  "codex/runtime/templates/skills/multi-agent/SKILL.md": {
+    "bytes": 4807,
+    "sha256": "a1ccd932c0f1f246296c01718418b8e319ec66864e064bc81dfaf40834cbcb67"
+  },
+  "codex/runtime/templates/skills/python-rules/SKILL.md": {
+    "bytes": 1835,
+    "sha256": "d3fa772339a9df72223d96d8e31cd284094c71131c9fbfb30b2236362517aa2a"
+  },
+  "codex/runtime/templates/skills/rpi-adopt/SKILL.md": {
+    "bytes": 4761,
+    "sha256": "d796fc551be5da52e387dfe01d29cd91619dd115fa2f456f4a2854dc67fceeb5"
+  },
+  "codex/runtime/templates/skills/rpi-adopt/references/e2e-pro-playbook.md": {
+    "bytes": 52054,
+    "sha256": "13d2c12f46e48777e38e76f6c756cf2849b6b39269c919194a78a03d186f2194"
+  },
+  "codex/runtime/templates/skills/rpi-adopt/references/lifecycle-contract.md": {
+    "bytes": 6104,
+    "sha256": "00a060b9da9831ba8c2120c0876757f5e555a02b69dce1c2abd4755b59f6c2f3"
+  },
+  "codex/runtime/templates/skills/rpi-assess/SKILL.md": {
+    "bytes": 2368,
+    "sha256": "510dbf662991138af4f6302cc256beeda5328347c2ea7ef13411a3503295a186"
+  },
+  "codex/runtime/templates/skills/rpi-bootstrap/SKILL.md": {
+    "bytes": 4857,
+    "sha256": "062854885d0b2dfc8e165129b1b92ec3ee44318d0a94ec82ac950422bdb13be4"
+  },
+  "codex/runtime/templates/skills/rpi-bootstrap/references/e2e-pro-playbook.md": {
+    "bytes": 52054,
+    "sha256": "13d2c12f46e48777e38e76f6c756cf2849b6b39269c919194a78a03d186f2194"
+  },
+  "codex/runtime/templates/skills/rpi-bootstrap/references/lifecycle-contract.md": {
+    "bytes": 6104,
+    "sha256": "00a060b9da9831ba8c2120c0876757f5e555a02b69dce1c2abd4755b59f6c2f3"
+  },
+  "codex/runtime/templates/skills/rpi-brainstorm/SKILL.md": {
+    "bytes": 3613,
+    "sha256": "4b9dfe53c32345632369adcf2495a94dbb9cc15b4aa4c3517ed9da4c68e55c04"
+  },
+  "codex/runtime/templates/skills/rpi-describe-pr/SKILL.md": {
+    "bytes": 1411,
+    "sha256": "f88e52ed50e340d69ca2a363223314a72be4f353b3349e7f075b72c02aa454bd"
+  },
+  "codex/runtime/templates/skills/rpi-detach/SKILL.md": {
+    "bytes": 3134,
+    "sha256": "c96681ff3c14344ce1aac32c726a95aaff2d0008c479b91768bd3138166becec"
+  },
+  "codex/runtime/templates/skills/rpi-detach/references/lifecycle-contract.md": {
+    "bytes": 6104,
+    "sha256": "00a060b9da9831ba8c2120c0876757f5e555a02b69dce1c2abd4755b59f6c2f3"
+  },
+  "codex/runtime/templates/skills/rpi-explore-release/SKILL.md": {
+    "bytes": 6446,
+    "sha256": "617cd83f14a86c21af537b9ca97de2a61116689386b4b7cde6598300f5699eb4"
+  },
+  "codex/runtime/templates/skills/rpi-explore-release/references/e2e-pro-playbook.md": {
+    "bytes": 52054,
+    "sha256": "13d2c12f46e48777e38e76f6c756cf2849b6b39269c919194a78a03d186f2194"
+  },
+  "codex/runtime/templates/skills/rpi-fix-ci/SKILL.md": {
+    "bytes": 2953,
+    "sha256": "78cb517f08bbf9f27873c08c0b98d8f0f7889f0c13ea57db0ad304f1e05ec8ce"
+  },
+  "codex/runtime/templates/skills/rpi-implement/SKILL.md": {
+    "bytes": 3740,
+    "sha256": "f59802c6efab7f09677efec363205003f361568628fabdb23b6eefea65a0452d"
+  },
+  "codex/runtime/templates/skills/rpi-plan/SKILL.md": {
+    "bytes": 2591,
+    "sha256": "9acb08a776f905f06ab6cbb9aaa6b6aec8cf1f0e51d10e304d14212c8dfdc713"
+  },
+  "codex/runtime/templates/skills/rpi-plan/references/pseudocode-notation.md": {
+    "bytes": 1155,
+    "sha256": "23104d62bda3299ea4e60cd4b1003ac07ee268f5be2f4683f030389e8eec3881"
+  },
+  "codex/runtime/templates/skills/rpi-pre-launch/SKILL.md": {
+    "bytes": 16301,
+    "sha256": "2f0786b2aedae1de40bd92b6e5b3c8b1deb15c4c6da87f343081251154b4bca1"
+  },
+  "codex/runtime/templates/skills/rpi-pre-launch/scripts/validate-findings.py": {
+    "bytes": 8522,
+    "sha256": "94e4e6b202f069fcbd0d1db4adff6bf7f3124a6e91650f23abea3c4b1842cca0"
+  },
+  "codex/runtime/templates/skills/rpi-release/SKILL.md": {
+    "bytes": 6304,
+    "sha256": "831c4f6f953c5e501843b09907f216720977036033237471fe5a408eee84fffa"
+  },
+  "codex/runtime/templates/skills/rpi-release/references/e2e-pro-playbook.md": {
+    "bytes": 52054,
+    "sha256": "13d2c12f46e48777e38e76f6c756cf2849b6b39269c919194a78a03d186f2194"
+  },
+  "codex/runtime/templates/skills/rpi-remediate/SKILL.md": {
+    "bytes": 16339,
+    "sha256": "8d682a90d6c3272630f17d71b64f73e2a0306bbfcc5ae46b838d68079d1fce86"
+  },
+  "codex/runtime/templates/skills/rpi-remediate/scripts/validate-findings.py": {
+    "bytes": 8522,
+    "sha256": "94e4e6b202f069fcbd0d1db4adff6bf7f3124a6e91650f23abea3c4b1842cca0"
+  },
+  "codex/runtime/templates/skills/rpi-research/SKILL.md": {
+    "bytes": 2524,
+    "sha256": "13ecf5ef4e6e2987056269d651a7428c863a152a9cff941b5688ca871ee04589"
+  },
+  "codex/runtime/templates/skills/rpi-research/references/research-contract.md": {
+    "bytes": 1409,
+    "sha256": "d71eb54c03801d615600876d32953512cbbc4db264bda0dd275db7f6dc6785d1"
+  },
+  "codex/runtime/templates/skills/rpi-status/SKILL.md": {
+    "bytes": 1555,
+    "sha256": "174286e87095d0cd5ec9d6cbff58e09ee1c78ba460694eacb514d43bcd1aec95"
+  },
+  "codex/runtime/templates/skills/rpi-tool-design/SKILL.md": {
+    "bytes": 7182,
+    "sha256": "e5a66ab7a3c08a8a7b2d54abb3aee8ae8ba46940a795a94b0e36641825275b47"
+  },
+  "codex/runtime/templates/skills/rpi-tool-design/references/webmcp/DOMAIN.md": {
+    "bytes": 8734,
+    "sha256": "9bb3096d0174679a48fac1a3866b02f33e8dda5a30f6f84ec5f98e1139e8cbfd"
+  },
+  "codex/runtime/templates/skills/rpi-tool-design/references/webmcp/references/tool-design-framework.md": {
+    "bytes": 7650,
+    "sha256": "c802cc226b94e16df3b3978df190271f364fe38d00108574c3940ed288531def"
+  },
+  "codex/runtime/templates/skills/rpi-triage/SKILL.md": {
+    "bytes": 19994,
+    "sha256": "125f038fcc15e948f376056293af971909f16ed20884c86758aedb2b945be59a"
+  },
+  "codex/runtime/templates/skills/rpi-update-docs/SKILL.md": {
+    "bytes": 8195,
+    "sha256": "55ad5cd0d97d5f5ee3839f75d2be2b95f144b0a8ec8f708d3e2b8dfefc4c5418"
+  },
+  "codex/runtime/templates/skills/rpi-update/SKILL.md": {
+    "bytes": 3475,
+    "sha256": "59e49b5edae8dd9eb7c433f3ed2a90dec52c6fd611a8ce39097c852ea1d72d9e"
+  },
+  "codex/runtime/templates/skills/rpi-update/references/lifecycle-contract.md": {
+    "bytes": 6104,
+    "sha256": "00a060b9da9831ba8c2120c0876757f5e555a02b69dce1c2abd4755b59f6c2f3"
+  },
+  "codex/runtime/templates/skills/rpi-validate/SKILL.md": {
+    "bytes": 1994,
+    "sha256": "1300ec2d5607294c6cc98512424b159aa84fcb20fecbfe66e67b2fbc6e947f5f"
+  },
+  "codex/runtime/templates/skills/shell-tools/SKILL.md": {
+    "bytes": 6457,
+    "sha256": "9156fc4857e118a825b972e597583c9053ebfba00a2a5e22ec4d3d29b3333985"
+  },
+  "codex/runtime/templates/skills/supabase/SKILL.md": {
+    "bytes": 3913,
+    "sha256": "eb7f3cf20164a40c9322298f3b989b88a50d7037f43b565823ee14ec59f0e375"
+  },
+  "codex/runtime/templates/skills/systematic-debugging/SKILL.md": {
+    "bytes": 2776,
+    "sha256": "1fcc82ae237e69135ec3b79f5201e7ee6b6c2fa495b3030b747bbd5ac37eb834"
+  },
+  "codex/runtime/templates/skills/webmcp/SKILL.md": {
+    "bytes": 8734,
+    "sha256": "9bb3096d0174679a48fac1a3866b02f33e8dda5a30f6f84ec5f98e1139e8cbfd"
+  },
+  "codex/runtime/templates/skills/webmcp/references/tool-design-framework.md": {
+    "bytes": 7650,
+    "sha256": "c802cc226b94e16df3b3978df190271f364fe38d00108574c3940ed288531def"
   },
   "codex/skills/ci-workflow/SKILL.md": {
     "bytes": 3895,
@@ -352,8 +640,8 @@
     "sha256": "13d2c12f46e48777e38e76f6c756cf2849b6b39269c919194a78a03d186f2194"
   },
   "codex/skills/rpi-adopt/references/lifecycle-contract.md": {
-    "bytes": 2906,
-    "sha256": "342f62f6b71448f6fc606452dd5d84898ec7a1608fc44706d6f2f8e36d9d5e00"
+    "bytes": 6104,
+    "sha256": "00a060b9da9831ba8c2120c0876757f5e555a02b69dce1c2abd4755b59f6c2f3"
   },
   "codex/skills/rpi-assess/SKILL.md": {
     "bytes": 2370,
@@ -376,8 +664,8 @@
     "sha256": "13d2c12f46e48777e38e76f6c756cf2849b6b39269c919194a78a03d186f2194"
   },
   "codex/skills/rpi-bootstrap/references/lifecycle-contract.md": {
-    "bytes": 2906,
-    "sha256": "342f62f6b71448f6fc606452dd5d84898ec7a1608fc44706d6f2f8e36d9d5e00"
+    "bytes": 6104,
+    "sha256": "00a060b9da9831ba8c2120c0876757f5e555a02b69dce1c2abd4755b59f6c2f3"
   },
   "codex/skills/rpi-brainstorm/SKILL.md": {
     "bytes": 3615,
@@ -404,8 +692,8 @@
     "sha256": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94"
   },
   "codex/skills/rpi-detach/references/lifecycle-contract.md": {
-    "bytes": 2906,
-    "sha256": "342f62f6b71448f6fc606452dd5d84898ec7a1608fc44706d6f2f8e36d9d5e00"
+    "bytes": 6104,
+    "sha256": "00a060b9da9831ba8c2120c0876757f5e555a02b69dce1c2abd4755b59f6c2f3"
   },
   "codex/skills/rpi-explore-release/SKILL.md": {
     "bytes": 6448,
@@ -544,8 +832,8 @@
     "sha256": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94"
   },
   "codex/skills/rpi-update/references/lifecycle-contract.md": {
-    "bytes": 2906,
-    "sha256": "342f62f6b71448f6fc606452dd5d84898ec7a1608fc44706d6f2f8e36d9d5e00"
+    "bytes": 6104,
+    "sha256": "00a060b9da9831ba8c2120c0876757f5e555a02b69dce1c2abd4755b59f6c2f3"
   },
   "codex/skills/rpi-validate/SKILL.md": {
     "bytes": 1996,

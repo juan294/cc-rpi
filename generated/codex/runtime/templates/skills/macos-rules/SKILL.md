@@ -1,0 +1,94 @@
+---
+name: "macos-rules"
+description: "macOS-specific patterns: launchd agent configuration, brew vs pip, zsh regex quirks, file descriptor limits."
+---
+
+# macOS Development
+
+## pip on macOS
+
+Wrong -- system pip blocked on Python 3.12+ (PEP 668):
+
+```bash
+pip3 install some-tool  # externally-managed-environment
+```
+
+Right -- use Homebrew or pipx:
+
+```bash
+brew install some-tool
+pipx install some-python-app
+```
+
+## zsh Regex and Special Characters
+
+Shell quoting and executable capabilities are separate. Single-quoted
+patterns pass literally to bash and zsh. macOS BSD grep does not support
+`-P`; wrapping it in `bash -c` does not add PCRE support.
+
+For JSON, parse JSON:
+
+```bash
+python3 -c 'import json; print(json.load(open("package.json"))["version"])'
+```
+
+For plain text use `rg`, a supported `grep -E` pattern, or Python `re`.
+Discover which executable is installed and check its help before using
+nonportable flags. Use a script for complex parsing.
+
+## launchd Agent Configuration
+
+Wrong -- run script directly (crashes if dir has .claude/):
+
+```xml
+<key>ProgramArguments</key>
+<array>
+  <string>/project/scripts/agent.sh</string>
+</array>
+```
+
+Right -- bash wrapper + resource limits + environment vars:
+
+```xml
+<key>ProgramArguments</key>
+<array>
+  <string>/bin/bash</string>
+  <string>-c</string>
+  <string>exec /bin/bash /project/scripts/agent.sh</string>
+</array>
+<key>HardResourceLimits</key>
+<dict><key>NumberOfFiles</key><integer>122880</integer></dict>
+<key>SoftResourceLimits</key>
+<dict><key>NumberOfFiles</key><integer>122880</integer></dict>
+<key>EnvironmentVariables</key>
+<dict>
+  <key>HOME</key><string>/Users/you</string>
+  <key>TERM</key><string>xterm-256color</string>
+  <key>PATH</key><string>/usr/local/bin:/usr/bin:/bin</string>
+</dict>
+```
+
+launchd runs with no TTY, so an interactive OAuth login hangs forever.
+Generate a non-interactive token first and have the agent script use it:
+
+```bash
+claude setup-token
+```
+
+## launchd Testing
+
+Wrong -- test from terminal (masks launchd-specific failures):
+
+```bash
+./scripts/agent.sh  # works in terminal, fails silently under launchd
+```
+
+Right -- test with launchctl:
+
+```bash
+launchctl start com.yourorg.agent
+launchctl list | grep yourorg  # exit code shows 0 even on crash -- check logs, not just this
+```
+
+The exit code is 0 even when the agent crashed with "Unexpected" -- launchd
+testing must inspect log output, not just `launchctl list`'s status column.

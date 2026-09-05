@@ -1,0 +1,13 @@
+@AGENTS.md
+
+# Claude Code integration
+
+Shared project facts and RPI policy live in AGENTS.md. Read that import completely.
+Use namespaced native skills: `/rpi-research`, `/rpi-plan`, `/rpi-implement`,
+`/rpi-validate`; plugin installations use `/cc-rpi:rpi-plan` and corresponding IDs.
+Native `/plan` is a mode, not the RPI artifact workflow. Claude retains native
+`/simplify`. Rule bodies with path mappings use native `.claude/rules/` loading.
+
+Model and effort inherit the deliberate session choice unless an explicitly
+selected supported profile overrides them. Invocation visibility is not permission
+or a sandbox. Native hook registration, trust and observed execution are separate.

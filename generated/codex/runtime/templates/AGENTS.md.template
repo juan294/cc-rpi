@@ -1,0 +1,16 @@
+# Project intelligence
+
+Record verified project facts here before installation: project purpose, stack,
+source locations, exact local verification commands, integration/production
+branches, and the authoritative release runbook. Preserve project-owned facts,
+vendor/generated sections, safety constraints and local extensions during updates.
+
+The distribution engine adds marked shared RPI policy and conditional rule blocks.
+Those blocks have one canonical source under `templates/rules/` and
+`templates/instructions/`; never create a reverse dependency on CLAUDE.md.
+Claude reads the shared facts through its CLAUDE.md import. Codex reads AGENTS.md
+natively, with root-to-current-directory discovery and its configured byte limit.
+
+Version curated research, approved plans, phase files, decisions and handoffs.
+Raw machine inventories, telemetry and transient recovery data stay local.
+Operational report tracking follows repository visibility (Rule #70).
