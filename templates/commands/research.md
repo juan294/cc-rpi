@@ -1,22 +1,17 @@
-Research the codebase to answer: $ARGUMENTS
+---
+disable-model-invocation: true
+---
 
-Model tier: **opus** — Opus session. All subagents: `model: "opus"`.
+# Legacy command renamed
 
-Process:
-1. Read any directly mentioned files FULLY before doing anything else.
-2. Break down the question into research areas.
-3. Use the Task tool to spawn parallel Explore agents (model: `"opus"`):
-   - One to find WHERE relevant files live (locator role)
-   - One to understand HOW the relevant code works (analyzer role)
-   - One to find EXAMPLES of similar patterns (pattern finder role)
-   - One to find relevant historical docs if a docs/ directory exists
-4. WAIT for all agents to complete.
-5. Synthesize findings into a research document.
-6. Save to docs/research/YYYY-MM-DD-[description].md
+This legacy command is a rename notice only. Its workflow is now `rpi-research`.
 
-CRITICAL RULES:
-- You and all subagents are DOCUMENTARIANS. Describe what IS, never what SHOULD BE.
-- No improvement suggestions, no problem identification, no critiques.
-- Every claim needs a file:line reference.
-- Never write the document with placeholder values.
-- Present a summary to the user when done.
+- Claude direct installation: invoke `/rpi-research`.
+- Claude plugin installation: invoke `/cc-rpi:rpi-research`.
+- Codex direct installation: invoke `$rpi-research` or select the skill.
+- Codex plugin installation: use the actual selector recorded by package diagnostics.
+
+Report this rename and stop. Do not auto-forward, bypass invocation controls or
+execute an old workflow body. New installations do not add this legacy alias.
+Existing managed aliases may retain this explicit-only notice during the 2.x
+compatibility period; custom aliases remain user-owned.

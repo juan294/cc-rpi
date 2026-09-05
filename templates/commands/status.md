@@ -1,23 +1,12 @@
-Quick project status check. Output a concise orientation and stop.
+# Retired legacy status command
 
-Model tier: **haiku** — Haiku 4.5 session (mechanical read-and-summarize).
+The legacy `/status` registration is discontinued because it collides with a
+native harness command. Use the [rpi-status workflow](../skills/rpi-status/SKILL.md).
 
-Run these commands and present the results in a compact summary:
+Claude direct invocation: `/rpi-status`. Claude plugin invocation:
+`/cc-rpi:rpi-status`. Codex direct invocation: `$rpi-status` or the skill selector.
+Use the actual installed plugin selector recorded by package diagnostics on Codex.
 
-1. `git branch --show-current` — current branch
-2. `git log --oneline -3` — last 3 commits
-3. `git status --short` — uncommitted changes (if any)
-4. `gh run list --branch $(git branch --show-current) --limit 1 --json conclusion,status,name 2>/dev/null` — latest CI status (skip if gh unavailable)
-5. Check for any TODO/FIXME items in CLAUDE.md or open tasks
-
-Present as a 5-line summary:
-
-```
-Branch: <branch>
-Last commit: <message> (<hash>)
-Working tree: <clean / N files changed>
-CI: <status or "not available">
-Open items: <count or "none">
-```
-
-Do NOT start any other work. Just report status and stop.
+This file is migration documentation, never an installed command or forwarder.
+Migration preserves a recovery copy and digest for a proven managed old command.
+Unknown or customized commands are retained and reported rather than removed.

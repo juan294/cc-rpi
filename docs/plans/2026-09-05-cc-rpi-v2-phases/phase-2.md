@@ -56,3 +56,13 @@ Required cases: deterministic rerender; intentionally malformed metadata; duplic
 Automated: rendering, metadata/resource/rule/alias fixtures, self-application drift, full local gate, and clean generated-package extraction pass. All migrated commands retain their artifact/phase contract. No clone-path placeholder survives in published output. Complete the bounded plugin-route evidence now; remaining native menu/runtime coverage finishes in Phase 6. Do not claim discovery from file existence.
 
 Human review: inspect one research, planning, implementation and lifecycle skill in both outputs. Confirm shared content has one source, adapter differences are justified, and no existing project/global installation has been rewritten. Handoff the stable schema, output inventory, alias map and fixtures to Phase 3.
+
+## Execution status
+
+- [x] Canonical workflow/adapter migration and deterministic rendering.
+- [x] Resource, metadata, ownership-boundary and self-application verification.
+- [x] Actual package research invocation, update/revert and domain-route evidence.
+- [x] Full local gate: 10 checks and 53 unit tests passed.
+
+Native lifecycle execution follows the Phase 3 runtime implementation; remaining
+menu, instruction-chain and invocation cases remain in Phase 6 acceptance.

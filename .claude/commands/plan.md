@@ -1,1 +1,0 @@
-../../templates/commands/plan.md

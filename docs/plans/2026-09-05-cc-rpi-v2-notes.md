@@ -13,8 +13,9 @@ and the named tag/release, after trigger inspection. No fleet rollout is include
 
 - Base: `18129ae36942166175faa9726f750f5b61bd7b9f`, canonical `main`.
 - Local integration branch: `work/cc-rpi-v2` in a separate worktree.
-- Phase 1: implementation, independent plan-compliance review and simplify
-  review completed; final local acceptance is being recorded.
+- Phase 1 accepted in local commit `e9dad45`; full local gate passed.
+- Phase 2 complete: shared skills/adapters and bounded native route gate passed.
+- Phase 3 transactional lifecycle implementation next.
 - Actual clients available: Claude Code 2.1.261; Codex CLI 0.153.4.
 - Local verification prerequisites: Python 3.13.15, PyYAML 6.0.3,
   coverage.py 7.16.0, ShellCheck 0.11.0. Local Docker is available.
@@ -53,3 +54,32 @@ and the named tag/release, after trigger inspection. No fleet rollout is include
   actual native invocation and lifecycle transactions remain their owner phases.
 - Entry to Phase 2: use corrected canonical bodies, establish manifest/adapters
   and generated skill outputs, then prove the package routes before lifecycle work.
+
+## Phase 2 handoff
+
+- Canonical inventory: 20 workflows, 12 domain skills, one Codex-only helper,
+  six rule sources. Remote budget is consolidated into push accountability.
+- Deterministic renderer and native metadata validation; managed root policy is
+  5,992 bytes. Direct self-application preserves the local Drawio extension.
+- Shared bodies are byte-identical beneath declared adapter input preambles.
+  Explicit workflow invocation controls were verified against native clients.
+- Claude Code 2.1.261 discovered 32 packaged skills. Codex CLI 0.153.4 discovered
+  33. Actual selector is `cc-rpi:rpi-research` in both clients. Research cases read
+  installed bundled resources, preserved literal arguments, wrote only research
+  artifacts, and stopped at the research boundary.
+- Route decision: Claude plugin is suitable for the whole package; native
+  `skillOverrides` does not exclude plugin skills, so conditional domain
+  selection uses direct installation. Codex plugin supports per-skill native
+  enable/disable. Both package update/revert resource checks passed. Plugin
+  lifecycle source/runtime binding remains a required Phase 3 dependency.
+- Native probes used disposable profiles/container and no personal marketplace
+  changes. The first Codex inference encountered Docker seccomp blocking its
+  sandbox; it was recorded failed, then rerun once after a no-inference preflight
+  proved workspace access and outside-workspace denial. This is one extra failed
+  infrastructure attempt beyond the 16 named acceptance cases.
+- Renderer review repaired symlink escapes, resource aliases and undeclared
+  nested resources. Full local gate passed all 10 checks and 53 unit tests.
+- Legacy plan/status are removed only from this proven managed self-install;
+  recovery bytes and receipt are local. Other managed aliases are rename notices,
+  not claimed native forwarders. Unknown/custom aliases are migration candidates.
+- Phase 5 must add executable triage scan-start/late-arrival/failed-retry coverage.

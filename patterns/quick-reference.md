@@ -6,7 +6,7 @@ stack tags travel with the body.
 
 Destinations -- `skills/<n>` = `templates/skills/<n>/SKILL.md` (loads on
 description match); `rules/<f>` = `templates/rules/<f>` (loads via `paths:`
-frontmatter); `commands/<f>` = a step in that slash command;
+frontmatter); namespaced `skills/rpi-<n>` = portable workflow source;
 `methodology/<f>` = authoring-time reading; `hook: <s>` = not relocated, a
 Tier 1 hook already enforces it.
 
@@ -132,13 +132,13 @@ ledger in `.claude/rules/contributing.md`.
 
 ## Findings
 
-83. A finding's recommendation is a hypothesis -> commands/pre-launch.md + commands/remediate.md
+83. A finding's recommendation is a hypothesis -> skills/rpi-pre-launch + skills/rpi-remediate
 
 ## Agent Reports
 
-70. Report commit policy depends on repo visibility -> commands/triage.md
-71. Use timestamp-based discovery for triage -> commands/triage.md
-84. Triage processes Dependabot PRs -> commands/triage.md
+70. Report commit policy depends on repo visibility -> skills/rpi-triage
+71. Use timestamp-based discovery for triage -> skills/rpi-triage
+84. Triage processes Dependabot PRs -> skills/rpi-triage
 
 ## Cost & Models
 

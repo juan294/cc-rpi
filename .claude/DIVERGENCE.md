@@ -1,33 +1,45 @@
 # Divergence Manifest
 
-`templates/` is the **product** -- the blueprint shipped downstream. `.claude/`
-is cc-rpi's **self-application** of that product. They are not accidentally
-redundant: only `.claude/commands/` and `.claude/skills/` auto-discover when
-this repo is opened as a working directory, and `.claude-plugin/plugin.json` is
-consulted only under `claude --plugin-dir .` or a marketplace install.
+`templates/` is the canonical product. `generated/` contains deterministic native
+Claude/Codex output from `templates/distribution.json` and the two adapters.
+Never hand-edit generated files. The renderer checks exact source coverage,
+resources, metadata, instruction blocks and self-application.
 
-Most shared files are byte-identical, so they are **symlinks** into
-`templates/`: edit the template and the self-application follows. A few must
-differ, because a blueprint written for any repo cannot state a fact that is
-true only of this one. Those stay real files, listed below with the reason.
+## Generated self-application
 
-`scripts/check-tree-drift.sh` validates this file against the filesystem. It
-fails when a symlink has been materialized as a copy, when a file listed as
-divergent has become identical (a stale divergence that should be collapsed),
-and when a shared filename appears in neither list.
+The manifest selects direct self-application for both harnesses, project-scope
+workflows, the Codex-only helper and this repository's domain modules. Individual
+`.claude/skills/` and `.agents/skills/` links point into the matching generated
+skill directories. The four user lifecycle skills are not duplicated at project
+scope. Native plugin registration must not duplicate these direct registrations.
+
+Shared universal RPI and push policies render once into marked root AGENTS blocks;
+CLAUDE imports AGENTS. The old local `rules/rpi-details.md` divergence is removed:
+project facts in AGENTS specify main, so a second always-loaded workflow body is
+unnecessary. The remote-budget rule is consolidated into push accountability.
+Six rule bodies remain available under `.rpi/rules/`; only four conditional rules
+are native Claude registrations. Codex uses the explicit root task/path map.
+
+`rpi-distribution.py check-generated` compares a fresh render, and `check-self`
+checks the selected full native directories, root blocks and rule mappings.
+Copies are valid where native symlink support is unavailable, provided bytes
+match; native Windows execution is not claimed without testing.
 
 ## Linked
 
-Symlinks from `.claude/<path>` to `../../templates/<path>`. Edit the template.
+The following compatibility/infrastructure files remain linked directly to
+`templates/`. The other generated registrations are enumerated by the distribution
+manifest, avoiding a second hand-maintained inventory here.
 
 | File |
-|------|
+| --- |
 | `commands/describe-pr.md` |
-| `commands/plan.md` |
+| `commands/fix-ci.md` |
+| `commands/implement.md` |
 | `commands/pre-launch.md` |
+| `commands/release.md` |
 | `commands/remediate.md` |
 | `commands/research.md` |
-| `commands/status.md` |
 | `commands/triage.md` |
 | `commands/update-docs.md` |
 | `commands/validate.md` |
@@ -40,40 +52,20 @@ Symlinks from `.claude/<path>` to `../../templates/<path>`. Edit the template.
 
 ## Divergent
 
-Real files in both trees. Each divergence is load-bearing; collapsing it would
-either lie to downstream projects or misdescribe this one.
-
 | File | Why it differs |
-|------|----------------|
-| `commands/fix-ci.md` | The template says "a protected production branch" because it cannot know the repo's topology. This repo's is `main`, so the local copy names it. |
-| `commands/implement.md` | Same reason: the template says "the integration branch", the local copy says `main`, which is cc-rpi's long-lived canonical branch. |
-| `commands/release.md` | The template describes version-scanning generically. cc-rpi has repeatedly shipped with the README badge and `.claude-plugin/*.json` left one to two releases stale, so the local copy carries a specific warning about that history, and points the retirement review at this repo's own ledger. |
-| `hooks/guard-bash.sh` | The template blocks direct pushes to `main`/`master` (Error #48). cc-rpi's long-lived branch IS `main`, and validated changes may be pushed there after explicit approval, so the local copy comments that guard out and explains why. The policy here is "high-stakes and exceptional", not "never". |
-| `rules/rpi-details.md` | Same topology reason as `commands/implement.md`: the template says "the integration branch" because it cannot know a project's topology, while cc-rpi's copy names `main` and adds that `main` is the canonical branch, not the default edit target. The heading and `description` also name cc-rpi specifically. Roughly 94 percent of the file is shared, so this pair is the one most likely to drift by someone editing only one side -- which is exactly why it is tracked here rather than left as two unrelated filenames. |
+| --- | --- |
+| `hooks/guard-bash.sh` | The v1 wrapper's generic protected-main guard differs from this repository's explicitly authorized main-only release topology. Phase 4 replaces this fail-open implementation with a shared fail-closed parser and explicit native boundaries. |
 
-## Adding a shared file
+## Compatibility and local ownership
 
-When a file gains a counterpart in the other tree, add it to exactly one table
-above. If it is identical, replace the copy with a symlink:
+Known legacy commands now contain explicit-only rename notices. Managed `plan`
+and `status` registrations are discontinued because native commands own those
+names. Recovery copies are local under `.rpi/local/legacy-command-recovery/`, and
+immutable source history remains in commit `e9dad45`. Custom commands are not
+removed or inferred to be managed by filename.
 
-```bash
-rm .claude/<path>
-ln -s ../../templates/<path> .claude/<path>
-```
-
-If it must differ, record the reason in the Divergent table. "It just drifted"
-is not a reason -- that is a bug, and the fix is to relink it.
-
-## Windows
-
-Symlinks require developer mode or an elevated shell on Windows. A checkout
-without that support materializes them as regular files. `check-tree-drift.sh`
-reports that as a failure with a fix rather than passing silently, so the fork
-is visible instead of invisible.
-
-## Local extensions
-
-`.claude/skills/drawio/` is a user-owned local extension. It has no exported
-`templates/skills/` counterpart and is not one of the 12 domain skills.
-Preserve its editable sources and specialized desktop exporter instructions
-during generated self-application, update, and detach.
+`.claude/skills/drawio/` is a project-owned local extension. It has no exported
+`templates/skills/` counterpart and is not one of the 12 domain skills. Preserve
+its editable sources and specialized desktop exporter instructions during
+self-application, update and detach. Local contributing/git recipes and project
+facts likewise remain repository-owned extensions.

@@ -1,76 +1,13 @@
-# Project: [PROJECT NAME]
+@AGENTS.md
 
-## One-liner
+# Claude Code integration
 
-[Brief description of what this project does]
+Shared project facts and RPI policy live in AGENTS.md. Read that import completely.
+Use namespaced native skills: `/rpi-research`, `/rpi-plan`, `/rpi-implement`,
+`/rpi-validate`; plugin installations use `/cc-rpi:rpi-plan` and corresponding IDs.
+Native `/plan` is a mode, not the RPI artifact workflow. Claude retains native
+`/simplify`. Rule bodies with path mappings use native `.claude/rules/` loading.
 
-## Stack
-
-[Framework, language, key libraries]
-
-## RPI Workflow
-
-This project follows Research-Plan-Implement (RPI).
-
-1. /research -- Understand the codebase as-is
-2. /plan -- Create a phased implementation spec
-3. /implement -- Execute one phase at a time with review gates
-4. /validate -- Verify implementation against the plan
-
-Each phase is its own conversation. Stop after each phase unless the user
-explicitly authorizes continuation.
-Use /clear between tasks, /compact when context is heavy.
-
-## Key Commands
-
-```bash
-# [Adjust these for your project]
-pnpm run test           # Run all tests
-pnpm run typecheck      # Check types
-pnpm run lint           # Check linting
-pnpm run dev            # Local dev server
-pnpm run build          # Production build
-```
-
-## Git Workflow
-
-Document the actual branch topology for this repo:
-
-- Integration branch: `[e.g. main or develop]`
-- Production branch: `[e.g. main, release branch, or none]`
-- Implementation happens in git worktrees or temporary branches,
-  not directly on the long-lived branch
-
-Conventional commits:
-`feat|fix|test|refactor|chore|docs(scope): description`
-
-Working branches/worktrees stay local. Complete applicable local gates and
-integrate locally into the documented integration branch. Inspect hosted
-triggers, then push completed integration once only with explicit authorization.
-Never create Vercel Previews or use remote CI as a debugging loop. Production
-remains a separate authorized release. Preserve worktree changes and artifacts
-before removing only clean, integrated, task-owned worktrees.
-
-Run verification sequentially, preserving every required command exit.
-
-## Deployment
-
-[Describe your deployment pipeline]
-
-Rules load from `.claude/rules/` and `.claude/skills/` automatically.
-
-## Agent Behavior
-
-Exhaust tools before asking the user. Production actions need human authorization.
-Save operational lessons to auto memory immediately. Don't wait to be asked.
-
-## Project File Locations
-
-Go directly to these paths -- never search for them.
-
-| Topic | Path | Notes |
-|-------|------|-------|
-| Agent reports | `docs/agents/*-report.md` | Gitignored on public repos; tracked on private (Rule #70) |
-| Research | `docs/research/YYYY-MM-DD-*.md` | |
-| Plans | `docs/plans/YYYY-MM-DD-*.md` | `-phases/` |
-| ADRs | `docs/decisions/` | |
+Model and effort inherit the deliberate session choice unless an explicitly
+selected supported profile overrides them. Invocation visibility is not permission
+or a sandbox. Native hook registration, trust and observed execution are separate.

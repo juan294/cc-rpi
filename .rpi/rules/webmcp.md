@@ -1,0 +1,1 @@
+../../generated/claude/rules/webmcp.md

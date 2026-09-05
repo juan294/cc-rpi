@@ -1,0 +1,1 @@
+../../../../webmcp/references/tool-design-framework.md

@@ -1,95 +1,175 @@
-# Project: cc-rpi
+# cc-rpi: RPI for Claude Code and Codex
 
-## Codex Compatibility
+## Project facts
 
-This repository is the cc-rpi blueprint. It is authored for Claude Code,
-but this `AGENTS.md` file makes the same methodology operable in Codex.
+cc-rpi is a documentation, shell and Python blueprint. `templates/` is the
+canonical exported product; `generated/` contains deterministic native outputs.
+`main` is the long-lived canonical integration branch. Implementation uses local
+worktrees/temporary branches; direct main publication requires owner authorization.
+There is no application build or registry publish step.
 
-Source of truth for this repo:
+## Local verification
 
-- `CLAUDE.md` -- repo overview, workflow, commands, git conventions
-- `.claude/commands/*.md` -- active project-level workflow commands
-- `templates/commands/*.md` -- canonical exported command templates
-- `.claude/rules/*.md` -- repo-local rules
-- `templates/rules/*.md` -- canonical exported rule templates
-- `.claude/skills/*/SKILL.md` and `templates/skills/*/SKILL.md` --
-  skill content
-- `.codex/skills/*/SKILL.md` -- Codex-only skills that intentionally
-  stay outside `.claude/skills/`
+Run `bash scripts/verify-local.sh` sequentially for the complete portable CI
+selection. Prerequisites are Git, Bash, Python 3.11+, PyYAML, ShellCheck, Node,
+GitHub CLI and uv. The runner captures every exit and candidate identity in
+`.rpi/local/verification.json`; a changed candidate invalidates that evidence.
+Separate database and actual-harness acceptance receipts are required when the
+plan names them. Coverage counts and measured source coverage are distinct.
 
-## Command Dispatch
+There is no markdownlint configuration here; do not reflow prose to its default
+80-column rules. Validate internal links and apply the no-emoji documentation
+rule. Claude-only PostToolUse feedback is not prevention of an earlier edit.
 
-When the user invokes a slash-style command:
+## Source and task routing
 
-- Use `.claude/commands/<name>.md` when it exists in this repo
-- For blueprint-lifecycle commands that only exist in templates
-  (`/bootstrap`, `/adopt`, `/update`, `/detach`), use the matching file
-  in `templates/commands/`
-- Read the command file completely before acting
-- Follow it as the workflow spec, translating Claude-specific mechanics
-  to Codex equivalents when needed
+| Task | Authoritative source |
+| --- | --- |
+| RPI workflows | `templates/skills/rpi-*/SKILL.md` and bundled resources |
+| Distribution/install/update/detach | `templates/distribution.json`, `templates/scripts/rpi-distribution.py` |
+| Native metadata | `templates/adapters/claude.json`, `templates/adapters/codex.json` |
+| Domain rules | `templates/rules/`, `templates/skills/` |
+| Workflow methodology | `methodology/README.md` and its reading order |
+| Error/rule catalog | `patterns/agent-errors.md`, `patterns/quick-reference.md` |
+| Contributions and retirements | `.claude/rules/contributing.md` |
+| Git-heavy work | `.claude/rules/git-recipes.md` |
+| Local diagram work | `.claude/skills/drawio/SKILL.md` (local extension, not exported) |
+| Codex cleanup | `.codex/skills/codex-simplify/SKILL.md` |
 
-## Claude-to-Codex Translation
+Load controlling instructions and the selected workflow completely. Use Claude
+`/rpi-plan` or plugin `/cc-rpi:rpi-plan`; use Codex `$rpi-plan` or its skill selector.
+Native `/plan` and `/status` do not dispatch to old RPI artifact commands.
+Existing legacy names carry migration notices; do not recreate colliding aliases.
+`/simplify` means Claude's native command or Codex's `codex-simplify` helper.
+Parallel independent assignments stay within the current authorized phase and
+available resource limits; one integration owner manages local commits.
 
-- `/simplify` -- prefer `codex-simplify` when available; otherwise run a
-  dedicated post-implementation quality pass for reuse, cleanliness, and
-  efficiency
-- `/batch` -- use parallel agents and isolated worktrees for
-  `[batch-eligible]` work
-- `/worktree` or `EnterWorktree` -- implement in an isolated worktree
-- `Task` / `Explore` agents -- use Codex subagents or equivalent
-  parallel exploration with the same role split
-- `AskUserQuestion` -- ask the user directly only when the repo cannot
-  answer safely
-- `/clear` and `/compact` -- treat as context-management guidance
+## Ownership and artifacts
 
-## Rules and Skills
+Preserve project knowledge and local extensions when rendering self-application.
+Never edit generated output manually or merge native plugin caches. The engine's
+content-addressed baselines own selected files/blocks; unknown content is retained.
+A read-only installation check diagnoses drift; ordinary work does not silently
+rewrite the owner's user-level installation or update other projects.
 
-- Always follow `CLAUDE.md`
-- Always read `.claude/rules/rpi-details.md`
-- Read `.claude/rules/git-recipes.md` for git-heavy tasks
-- Read `.claude/rules/contributing.md` when changing docs, templates, or
-  patterns
-- Run `scripts/install.sh` after pulling cc-rpi to refresh the user-level
-  commands, or `scripts/install.sh --check` to see whether they have drifted
-- Load `.claude/skills/drawio/SKILL.md` when diagram work is requested
-- Load `.codex/skills/codex-simplify/SKILL.md` when a Codex session
-  needs a `/simplify`-style cleanup pass
+The approved `2026-09-05-cc-rpi-v2.md` plan, its phase directory and notes are
+explicitly tracked. Existing machine-specific research audits remain ignored.
+Do not bulk-stage `docs/research/`. Curated plans/research in new adopters are
+versioned knowledge; `docs/agents/` is ignored here under public-repo Rule #70.
+Keep raw runtime observations, schemas, telemetry and recovery in `.rpi/local/`.
 
-## Repo-Specific Notes
+Run `.claude/scripts/validate-findings.py` on a pre-launch report before parsing
+it for remediation; a nonzero result blocks dependent work. Preserve every
+confirmed finding's disposition. The portable contract metrics aggregator accepts
+`{ts, session_id, hook, decision, rule, file}` JSONL; an absent stream is unobserved.
+When a guard blocks, report `BLOCKED / WHY / FIX` with a runnable fix.
 
-- `main` is the long-lived canonical branch for this repo
-- Implementation still happens in isolated worktrees or temporary branches
-- Direct pushes to `main` are high-stakes and require explicit user confirmation
-- `templates/` is the exported blueprint; keep it canonical
-- `.claude/` is the repo's own self-applied installation of the
-  blueprint
-- `.codex/skills/` holds blueprint-shipped Codex-only skills; sync them
-  into `~/.codex/skills/` for local Codex discovery
-- This approved v2 plan, its phase directory and deviation/handoff notes are
-  explicitly tracked. Existing machine-specific research audits remain ignored;
-  do not bulk-stage `docs/research/`. Curated plans/research in new adopters are
-  versioned knowledge. `docs/agents/` is ignored here under public-repo Rule #70.
-- **Contract layer.** The `PostToolUse` hook `verify-edit.sh` (emoji +
-  markdownlint on `.md` edits) is Claude-Code-specific -- Codex will not run
-  it, so apply Rule #77 (no emojis in docs) by hand. The validator
-  `.claude/scripts/validate-findings.py` IS portable: run it on any
-  pre-launch report before parsing in a `/remediate`-style flow, and STOP if
-  it exits non-zero. When a guard blocks, phrase the reason as
-  `BLOCKED / WHY / FIX` with a runnable fix.
-- **Contract metrics.** The hook telemetry log is written by the Claude-Code
-  hooks, so Codex sessions won't populate it. But `contract-metrics.py` is
-  portable stdlib: if a Codex harness writes the same JSONL shape
-  (`{ts, session_id, hook, decision, rule, file}`) to
-  `.claude/metrics/contract-events.jsonl`, the aggregator and the weekly
-  `contract-metrics-agent.sh` snapshot work unchanged.
+<!-- rpi:rule-map:start -->
+## Conditional rule access
 
-## Owner remote compute policy
+Before acting on a matching task/path, read the installed rule body below.
+The installation manifest records the selected components and exact mappings.
+This root map applies even when a session starts at the repository root and
+later edits a nested directory; it is an instruction contract, not a native
+Codex glob loader. Sessions started inside a subproject also read their actual
+root-to-current-directory instruction chain. Preserve project-specific overrides.
 
-Working branches and worktrees stay local. Run complete applicable local gates,
-then integrate locally into the documented integration branch. Inspect hosted
-triggers before one explicitly authorized completed integration push. Never
-create Vercel Previews or use hosted CI as a debugging loop. Production and
-publication retain their explicit authorization boundary. Preserve dirty,
-untracked, unintegrated and foreign worktrees; remove only proven task-owned,
-clean, integrated work after its artifacts are preserved.
+| Task or path | Required resource | Essential constraint |
+| --- | --- | --- |
+| Deployment, CI, release or infrastructure configuration | `.rpi/rules/deployment-safety.md` | Local gates first; no Vercel Preview; production needs authorization. |
+| SQL, Supabase migrations, schema, data access or database tests | `.rpi/rules/supabase.md` | Reset/test locally; privileges and RLS are distinct; remote targets need authorization. |
+| Behavioral changes, tests, fixtures and validation | `.rpi/rules/testing.md` | TDD for behavioral code; every required check must run and pass. |
+| WebMCP, MCP tools, tool registration or agent-facing interfaces | `.rpi/rules/webmcp.md` | Validate on the server; isolate unstable browser APIs and test caller recovery. |
+
+If a required component is missing, report the exact missing path and run the
+read-only installation check before proceeding with dependent work. Never
+invent a successful read or silently treat an incomplete install as healthy.
+<!-- rpi:rule-map:end -->
+
+<!-- rpi:push-accountability:start -->
+# Push Accountability
+
+Keep working branches and worktrees local. Finish applicable tests, coverage,
+typechecks, lint, build and deployment preflight locally, resolve failures,
+and integrate completed work locally into the documented integration branch.
+Inspect workflow and deployment triggers before the single authorized push of
+that completed branch. Never create Vercel Preview deployments or publish
+working branches/PRs for experimentation. If an integration push would create a
+Preview, stop before pushing and use only a documented, non-destructive bypass.
+Production publication remains separately and explicitly authorized. Read-only
+inspection of existing runs and deployments is allowed.
+
+Commit or preserve intended changes before pulling; never pull through a dirty
+tree. After an authorized push, inspect every expected workflow for the exact
+pushed commit. Diagnose failures from existing logs and reproduce/fix locally.
+Report the failed remote result; do not trigger reruns or a fix-and-repush loop.
+A new remote action needs authorization after the complete local gates pass.
+<!-- rpi:push-accountability:end -->
+
+<!-- rpi:rpi-details:start -->
+# RPI Details
+
+## Context Management
+
+- Each RPI phase should be its own conversation.
+  Preserve their acceptance boundaries unless the user explicitly authorizes
+  continuation; a continuation instruction does not remove verification.
+- Use `/clear` between unrelated tasks.
+  Use `/compact` when context is heavy but the task continues.
+- Subagents are context control mechanisms --
+  they search/read in their window and return only distilled results.
+- Research and planning happen against the integration branch.
+  Implementation happens in worktrees or temporary branches.
+
+## Rules for All Phases
+
+- Read controlling instructions/contracts and directly mentioned files completely.
+  Inspect implementation to the depth needed; reuse valid prior reads.
+- In `rpi-research`, document what exists without improvement recommendations.
+  Use the separate `rpi-assess` workflow for evaluative research and alternatives.
+- Every code reference must include file:line.
+- Delegate only useful bounded independent assignments within this phase.
+  A narrow task may stay with the parent. Wait for all required results.
+- Never write documents with placeholder values.
+- Exhaust all tools before suggesting manual steps --
+  check CLI tools, shell commands, MCP servers, and file tools
+  before escalating to the user.
+
+## Rules for Implementation
+
+- Follow the atomic loop:
+  implement -> independent review -> repair -> simplify -> verify.
+  The native simplify command or Codex helper catches code reuse, quality, and efficiency issues
+  that the plan-compliance reviewer does not check.
+- Independent batch work stays local, one owner per file set/worktree and one
+  integration owner. Never use a batch mode that automatically publishes PRs.
+  Keep at most three simultaneous implementers; use fewer when the task or
+  available resources do not justify three.
+- Run ALL automated verification after each phase.
+- Stop after each phase for acceptance unless the user explicitly authorizes
+  continuation. Finish all authorized phase work before that gate.
+- If a technical discovery invalidates the plan contract, record the adjustment
+  and explain the impact before dependent work; ask only for a required new decision.
+
+## Pre-Release Workflow
+
+`rpi-pre-launch` -> `rpi-remediate` -> `rpi-update-docs` -> `rpi-release`
+
+After `rpi-pre-launch`, run a simplify pass first -- it fixes dead code,
+duplicates, and inefficiencies in one pass. Then address security
+and infrastructure findings manually.
+
+Resolve every confirmed actionable finding before acceptance. Reject false
+positives with evidence. Strategic findings needing a new architectural decision
+receive explicit local dispositions and owner review; external issue creation
+requires authorization. Never silently discard a finding.
+
+## Testing Philosophy
+
+Prefer automated verification.
+Manual only for: sudo, hardware, new installs, visual-only.
+Use deterministic linting/formatting tools. Preserve TDD for behavioral code
+changes. Run all required phase/final gates locally, sequentially with failure
+aggregation; a later success cannot erase an earlier failure. Reuse evidence
+only for unchanged tested inputs, never as a substitute for an invalidated gate.
+<!-- rpi:rpi-details:end -->

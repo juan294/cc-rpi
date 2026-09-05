@@ -1,11 +1,17 @@
-Generate a PR description for the current branch.
+---
+disable-model-invocation: true
+---
 
-Model tier: **haiku** — Haiku 4.5 session (mechanical read-and-summarize).
+# Legacy command renamed
 
-Process:
-1. Identify the PR (current branch or ask user).
-2. Get the full diff, commit history, and metadata.
-3. Analyze changes thoroughly — user-facing vs internal, breaking changes.
-4. For each verification step: run it if possible, mark pass/fail.
-5. Generate description with: summary, changes, verification results.
-6. Save and optionally update the PR via gh CLI.
+This legacy command is a rename notice only. Its workflow is now `rpi-describe-pr`.
+
+- Claude direct installation: invoke `/rpi-describe-pr`.
+- Claude plugin installation: invoke `/cc-rpi:rpi-describe-pr`.
+- Codex direct installation: invoke `$rpi-describe-pr` or select the skill.
+- Codex plugin installation: use the actual selector recorded by package diagnostics.
+
+Report this rename and stop. Do not auto-forward, bypass invocation controls or
+execute an old workflow body. New installations do not add this legacy alias.
+Existing managed aliases may retain this explicit-only notice during the 2.x
+compatibility period; custom aliases remain user-owned.

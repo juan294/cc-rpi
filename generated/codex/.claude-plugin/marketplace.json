@@ -1,0 +1,12 @@
+{
+  "name": "cc-rpi",
+  "owner": { "name": "Juan Gonzalez" },
+  "plugins": [
+    {
+      "name": "cc-rpi",
+      "source": "./",
+      "description": "Native Codex RPI workflows and domain skills.",
+      "version": "2.0.0"
+    }
+  ]
+}

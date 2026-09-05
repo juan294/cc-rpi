@@ -1,0 +1,1 @@
+../../rpi-bootstrap/references/lifecycle-contract.md

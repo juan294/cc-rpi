@@ -28,6 +28,10 @@ emit_block() {
   printf 'BLOCKED: %s\n\nWHY: %s\n\nFIX:\n%s\n\n' "$1" "$2" "$3"
 }
 
+python3 templates/scripts/rpi-distribution.py check-generated
+python3 templates/scripts/rpi-distribution.py check-self
+MANAGED_PATHS=$(python3 templates/scripts/rpi-distribution.py self-paths)
+
 FAILED=0
 
 if [[ ! -f "$MANIFEST" ]]; then
@@ -155,6 +159,10 @@ if [[ -n "$DUPES" ]]; then
 fi
 
 while IFS= read -r src; do
+  # Generated self-application is checked against a fresh render above.
+  if printf '%s\n' "$MANAGED_PATHS" | grep -qxF "$src"; then
+    continue
+  fi
   path="${src#.claude/}"
   [[ -e "templates/$path" ]] || continue
   if ! printf '%s\n' "$LISTED" | grep -qxF "$path"; then

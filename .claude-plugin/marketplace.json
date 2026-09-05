@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "cc-rpi",
-  "description": "The cc-rpi blueprint as an installable plugin: Research-Plan-Implement workflow commands, domain skills, and an agent-error knowledge base.",
+  "description": "The cc-rpi blueprint: shared Research-Plan-Implement workflows with native Claude Code skills.",
   "owner": {
     "name": "Juan Gonzalez",
     "url": "https://github.com/juan294"
@@ -10,7 +10,7 @@
     {
       "name": "cc-rpi",
       "source": "./",
-      "description": "Research-Plan-Implement methodology, domain skills, and a 64-pattern agent-error knowledge base for Claude Code.",
+      "description": "Namespaced RPI workflows and domain knowledge for Claude Code.",
       "version": "1.29.0"
     }
   ]

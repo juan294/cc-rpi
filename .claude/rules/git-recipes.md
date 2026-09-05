@@ -17,7 +17,10 @@ git add <files> && git commit -m "msg"
 git -C /absolute/path/to/main-worktree merge --ff-only <implementation-branch>
 # Reuse matching test evidence or verify the integrated candidate locally.
 # Only with explicit release/publication authorization:
-git push origin main && git push origin <named-release-tag>
+git push origin main
+# Observe the exact main SHA and all expected workflow/event checks.
+# Only after those checks pass, within the named release authorization:
+git push origin <named-release-tag>
 ```
 
 ## Worktree cleanup
