@@ -6,7 +6,7 @@ stack tags travel with the body.
 
 Destinations -- `skills/<n>` = `templates/skills/<n>/SKILL.md` (loads on
 description match); `rules/<f>` = `templates/rules/<f>` (loads via `paths:`
-frontmatter); namespaced `skills/rpi-<n>` = portable workflow source;
+frontmatter in Claude; Codex uses the explicit root map); namespaced `skills/rpi-<n>` = portable workflow source;
 `methodology/<f>` = authoring-time reading; `hook: <s>` = not relocated, a
 hook implementation. Actual enforcement requires native registration, trust,
 and invocation evidence.
@@ -18,9 +18,9 @@ ledger in `.claude/rules/contributing.md`.
 ## Shell & Tools [skill:shell-tools]
 
 1. Preserve every verification exit status -> skills/shell-tools
-3. Use absolute paths in file tools -- no `~` expansion -> skills/shell-tools
+3. Resolve paths explicitly unless the specific file API promises expansion -> skills/shell-tools
 17. Don't escape operators inside single-quoted jq filters -> skills/shell-tools
-19. Create boilerplate files sequentially -> skills/shell-tools
+19. Isolate an observed blocked write; preserve every batch result -> skills/shell-tools
 22. Re-read directory contents before bulk operations -> skills/shell-tools
 24. Use absolute paths for cross-project commands -> skills/shell-tools
 26. Separate shell quoting from regex executable support -> skills/shell-tools
@@ -82,8 +82,8 @@ ledger in `.claude/rules/contributing.md`.
 ## macOS [skill:macos-rules]
 
 21. Use `brew install` instead of `pip3 install` -> skills/macos-rules
-37. macOS launchd agents need four fixes -> skills/macos-rules
-38. launchd plists must not run project scripts directly -> skills/macos-rules
+37. Diagnose the actual launchd environment and authentication -> skills/macos-rules
+38. Reproduce launchd failures before applying the historical wrapper -> skills/macos-rules
 
 ## Multi-Agent [skill:multi-agent]
 
@@ -122,9 +122,9 @@ ledger in `.claude/rules/contributing.md`.
 
 14. Exhaust all tools before suggesting manual steps -> rules/rpi-details.md
 39. Run `/simplify` after reviewer approval -> rules/rpi-details.md
-40. Mark independent plan phases `[batch-eligible]` -> rules/rpi-details.md
-41. Use `/batch` for bulk changes outside RPI -> rules/rpi-details.md
-42. After `/pre-launch`, run `/simplify` first -> rules/rpi-details.md
+40. Mark independent assignments within the current phase `[batch-eligible]` -> rules/rpi-details.md
+41. Bound bulk assignments by ownership, resources and terminal conditions -> rules/rpi-details.md
+42. Include simplification in the complete pre-launch finding loop -> rules/rpi-details.md
 58. Fix everything, always -> rules/rpi-details.md
 
 ## Testing

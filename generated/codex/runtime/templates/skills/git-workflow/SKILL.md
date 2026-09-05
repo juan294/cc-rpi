@@ -63,7 +63,9 @@ git push --tags
 Right -- after release authorization, push only the named release tag:
 
 ```bash
-git push origin main && git push origin v1.0.0
+git push origin main
+# Observe required main CI passing for the exact pushed SHA before the tag:
+git push origin v1.0.0
 ```
 
 ## Branch Verification
@@ -82,7 +84,8 @@ git branch --show-current && git commit -m "feat: add feature"
 
 ## Worktree Management
 
-Use absolute worktree paths. Before cleanup, establish that this task owns the
+Use absolute worktree paths or the tool's explicit per-call working directory.
+Do not infer cwd or branch from an earlier shell call. Before cleanup, establish that this task owns the
 worktree and branch, all source changes are integrated, and plans, handoffs,
 ignored evidence and untracked files are preserved outside the disposable tree.
 A clean `git status` alone cannot prove ignored artifacts are preserved.

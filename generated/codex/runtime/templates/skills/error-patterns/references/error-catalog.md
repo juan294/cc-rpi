@@ -9,8 +9,8 @@ blueprint repository.
 ## Shell & Tools
 
 - **#1: Sibling tool call errored (parallel verification)** -- Preserve each verification exit status; use && or explicit aggregation.
-- **#2: Shell cwd resets to main repo in a worktree** -- prefix every command with `cd /absolute/path &&`.
-- **#8: Tilde in file paths** -- never use `~` in Read/Write/Edit; use full absolute paths.
+- **#2: Shell cwd resets to main repo in a worktree** -- use an observed absolute worktree path or explicit per-call workdir; verify branch.
+- **#8: Tilde in file paths** -- resolve absolute paths unless the specific file API promises expansion.
 - **#16: Dependencies not installed** -- run `pnpm install` / `uv sync` before build/test/lint.
 - **#17: jq syntax error from over-escaping** -- use single quotes; `!=` needs no escaping inside them.
 - **#22: `rm` fails on stale file list** -- Re-list and delete only known task-owned disposable files.
@@ -63,8 +63,8 @@ blueprint repository.
 - **#21: `pip3 install` externally-managed-environment** -- use `brew`, `pipx`, or a venv instead of system `pip3` on macOS.
 - **#26: Complex shell regex fails in zsh** -- Separate shell quoting from unsupported flags; macOS grep lacks -P.
 - **#29: `uv sync` picks a Python too new for packages** -- pin `.python-version` or pass `--python <version>`.
-- **#37: Scheduled agent silently fails under launchd** -- set resource limits and env vars in the plist; auth via `claude setup-token`.
-- **#38: Claude CLI crashes ("Unexpected") from plist script** -- wrap ProgramArguments as `bash -c "exec bash <script>"`.
+- **#37: Scheduled agent silently fails under launchd** -- inspect actual limits, environment and supported non-interactive auth; no universal four-fix requirement.
+- **#38: Claude CLI crashes ("Unexpected") from plist script** -- reproduce the version-bound failure before applying the historical exec wrapper.
 - **#40: `python3` used instead of `uv run python`** -- always invoke Python through the project's dependency manager.
 - **#41: Over-escaped `!=` as `\!=` in inline Python** -- use single-quoted shell strings; don't escape operators inside them.
 - **#42: Package-relative import fails without `-m`** -- run as a module (`python -m pkg.mod`) or install the package with `-e .`.
@@ -76,9 +76,9 @@ blueprint repository.
 
 ## Multi-Agent
 
-- **#19: API content filter blocks parallel file creation** -- create boilerplate files (LICENSE, SECURITY.md, etc.) sequentially.
+- **#19: API content filter blocks parallel file creation** -- inspect each result and isolate an observed blocked write; no universal filename restriction.
 - **#49: Sub-agent git conflicts from parallel work** -- each sub-agent owns distinct files; only the main agent commits/pushes.
-- **#63: Parallel agents exhaust local resources running full test suites** -- scope tests to changed files; cap concurrent agents to 3-4.
+- **#63: Parallel agents exhaust local resources running full test suites** -- scope tests to changed files; keep at most three implementers in the current phase, with lower resource limits as needed.
 
 ## Process
 

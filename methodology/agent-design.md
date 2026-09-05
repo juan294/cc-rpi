@@ -2,7 +2,9 @@
 
 ## The Documentarian Rule
 
-Every research-phase agent follows one absolute constraint:
+Every `rpi-research` assignment follows the descriptive constraint below.
+Use `rpi-assess` for evaluative investigation, comparisons and alternatives,
+with evidence clearly distinguished from judgment:
 
 > **Describe what EXISTS. Never suggest what SHOULD BE.**
 
@@ -57,7 +59,10 @@ This means:
 | Implementer | Yes | Yes | Yes | No |
 | Reviewer | Yes | Yes (plan edits only) | Yes (tests only) | No |
 
-**In Claude Code terms:** When spawning Task agents for research, instruct them to only use Glob, Grep, and Read tools. When spawning implementers, they get the full tool set.
+The table describes role permissions, not a fixed provider tool list. Read-only
+shell inspection is allowed when needed to answer an investigation; grant
+implementers only the actions needed for their bounded assignment. Use the
+current native tool schema rather than copying legacy spawn parameters.
 
 ## Subagent Prompting Best Practices
 
@@ -65,8 +70,8 @@ This means:
 2. **Specify the output format** you expect.
 3. **Remind agents of the documentarian constraint** in every research prompt.
 4. **Request file:line references** in every response.
-5. **Spawn multiple agents in parallel** when they search for independent things.
-6. **Wait for ALL agents** before synthesizing.
+5. **Delegate only when useful** for independent questions within the current phase; narrow work may stay with the parent.
+6. **Resolve all required results** before final synthesis; missing results are coverage gaps.
 7. **Verify subagent results** — if something seems off, spawn a follow-up.
 
 ---
@@ -75,28 +80,25 @@ This means:
 
 ### Quick Reference
 
-All subagent roles mapped to Claude Code's `Task` tool parameters:
+These are responsibility options, not fixed model instances or native type names:
 
-| Role | `subagent_type` | Phase | Can Write | Purpose |
-|------|-----------------|-------|-----------|---------|
-| Codebase Locator | `Explore` | Research | No | Find WHERE files live |
-| Codebase Analyzer | `Explore` | Research | No | Understand HOW code works |
-| Pattern Finder | `Explore` | Research | No | Find EXAMPLES of similar patterns |
-| Docs Locator | `Explore` | Research | No | Find relevant historical docs |
-| Docs Analyzer | `Explore` or `general-purpose` | Research | No | Extract INSIGHTS from docs |
-| Web Researcher | `general-purpose` | Research | No | Find external documentation |
-| Implementer | `general-purpose` | Implement | Yes | Write code per plan |
-| Reviewer | `general-purpose` | Implement | Yes (tests/plan only) | Review plan compliance |
-| Specialist (audit) | `general-purpose` | Pre-launch | No | Domain-specific audit (security, performance, etc.) |
-| Teammate | Agent Teams (native) | Any | Yes | Independent parallel worker with own context |
-| `/simplify` (native) | Anthropic skill | Implement, Validate, Pre-launch | Yes | 3 parallel agents: code reuse, code quality, efficiency |
-| `/batch` (native) | Anthropic skill | Implement, Standalone | Yes | Decompose work into 5-30 units, parallel worktree execution |
+| Role | Phase | Permitted output | Purpose |
+|------|-------|------------------|---------|
+| Codebase Locator | Research | Read-only findings | Find WHERE files live |
+| Codebase Analyzer | Research | Read-only findings | Understand HOW code works |
+| Pattern Finder | Research | Read-only findings | Find similar implementations |
+| Docs Locator / Analyzer | Research | Read-only findings | Locate and interpret historical evidence |
+| Web Researcher | Research / Assess | Sourced findings | Verify current primary sources and label inferences |
+| Implementer | Implement | Assigned files and tests | Execute the current phase contract |
+| Reviewer | Implement | Findings and assigned test evidence | Independently verify plan compliance |
+| Audit specialist | Pre-launch | Domain findings | Cover the assigned required audit domains |
 
-**Key distinctions:**
-- `Explore` agents are fast, read-only, and optimized for codebase navigation. Use for all research tasks.
-- `general-purpose` agents have full tool access including web search. Use when the task needs writing, shell commands, or web access.
-- `Bash` agents are command-execution specialists. Use for CI monitoring, build scripts, and shell-heavy tasks.
-- **Teammates** (via Agent Teams) are full independent Claude Code sessions, not subagents. They don't inherit conversation history and communicate via mailbox.
+Every assignment states objective, permitted actions, owned files, evidence/output,
+resource budget and terminal condition. The parent may cover a narrow task;
+otherwise use only useful independent assignments. At most three simultaneous
+implementers are allowed, with lower native/resource limits taking precedence.
+Inherit the owner session's model and effort by omitting native overrides unless
+an explicit owner selection applies. Optional Agent Teams require existing opt-in.
 
 ### Anthropic-Native Commands
 
@@ -106,7 +108,11 @@ These are bundled slash commands maintained by Anthropic. They improve automatic
 
 **Purpose:** Review changed code for reuse, quality, and efficiency, then fix issues found.
 
-**Mechanics:** Spawns 3 parallel review agents — one for code reuse, one for code quality, one for efficiency. Aggregates findings and applies fixes automatically. Optional focus text: `/simplify focus on memory efficiency`.
+**Contract:** Review reuse, quality and efficiency independently, aggregate
+findings and apply behavior-preserving fixes. Native staffing is version-specific;
+the three lenses do not require three instances. Codex uses `codex-simplify`.
+Standalone cleanup reruns invalidated checks; parent-owned cleanup returns exact
+changed scope and invalidated evidence to the parent acceptance gate.
 
 **Where it runs in RPI:**
 - **Implement (Phase 3)** — after the reviewer subagent approves plan compliance, before automated verification. This separates concerns: reviewer checks "does the code match the plan?", `/simplify` checks "is the code good?"
@@ -120,7 +126,11 @@ These are bundled slash commands maintained by Anthropic. They improve automatic
 
 **Purpose:** Orchestrate large-scale parallel changes across a codebase.
 
-**Mechanics:** Takes an instruction, researches the codebase, decomposes work into 5-30 independent units, presents a plan for approval. Once approved, spawns one background agent per unit in an isolated git worktree. Each agent implements its unit, runs tests, and produces local commits. Disable automatic push/PR behavior; if the native tool cannot do so, orchestrate local worktrees directly. Requires a git repository.
+**Contract:** Bound independent assignments to the current approved phase,
+distinct files/worktrees and available resources, with at most three implementers.
+One owner integrates local results. Native batch behavior must honor these limits
+and disable automatic push/PR behavior; otherwise use local worktrees directly.
+Existing scope approval is sufficient; no fixed unit count or repeated gate.
 
 **Where it runs in RPI:**
 - **Implement (Phase 3)** — when the plan marks phases as `[batch-eligible]` (independent, no file overlap, no dependency on another phase's output), `/batch` executes them all in parallel instead of sequential phase-by-phase
@@ -136,7 +146,7 @@ These are bundled slash commands maintained by Anthropic. They improve automatic
 
 **Purpose:** Find WHERE files live. A "super find/grep" — given a topic or feature, returns all relevant file paths grouped by purpose.
 
-**Claude Code:** `Task` with `subagent_type: "Explore"`, prompt focused on finding file locations.
+**Native binding:** Choose an available agent/tool using the current harness schema and the role permissions above.
 
 **Output:** Organized list of files by category (implementation, tests, config, types, docs) with full paths and counts.
 
@@ -146,7 +156,7 @@ These are bundled slash commands maintained by Anthropic. They improve automatic
 
 **Purpose:** Understand HOW code works. Traces data flow, explains implementation, maps component interactions.
 
-**Claude Code:** `Task` with `subagent_type: "Explore"`, prompt focused on reading and explaining specific files/components.
+**Native binding:** Choose an available agent/tool using the current harness schema and the role permissions above.
 
 **Output:** Structured analysis with entry points, core implementation breakdown, data flow trace, patterns, configuration, and error handling — all with `file:line` references.
 
@@ -161,7 +171,7 @@ These are bundled slash commands maintained by Anthropic. They improve automatic
 
 **Purpose:** Find EXAMPLES of similar implementations. Shows concrete code snippets that can serve as templates.
 
-**Claude Code:** `Task` with `subagent_type: "Explore"`, prompt focused on finding similar patterns with code examples.
+**Native binding:** Choose an available agent/tool using the current harness schema and the role permissions above.
 
 **Output:** Code snippets with file:line references, usage context, variations, and testing examples.
 
@@ -177,7 +187,7 @@ These are bundled slash commands maintained by Anthropic. They improve automatic
 
 **Purpose:** Find relevant historical documents (plans, research, tickets, decisions).
 
-**Claude Code:** `Task` with `subagent_type: "Explore"`, prompt focused on finding markdown docs by topic.
+**Native binding:** Choose an available agent/tool using the current harness schema and the role permissions above.
 
 **Output:** Categorized list of document paths with one-line descriptions.
 
@@ -187,7 +197,7 @@ These are bundled slash commands maintained by Anthropic. They improve automatic
 
 **Purpose:** Extract HIGH-VALUE insights from historical documents. Aggressive filtering — only returns what's actionable and current.
 
-**Claude Code:** `Task` with `subagent_type: "Explore"` or `subagent_type: "general-purpose"`.
+**Native binding:** Choose an available agent/tool using the current harness schema and the role permissions above.
 
 **Output:** Document context, key decisions (with rationale), critical constraints, technical specs, actionable insights, open questions, relevance assessment.
 
@@ -209,7 +219,7 @@ These are bundled slash commands maintained by Anthropic. They improve automatic
 
 **Purpose:** Find external documentation, best practices, and solutions from the web.
 
-**Claude Code:** `Task` with `subagent_type: "general-purpose"` using WebSearch and WebFetch tools.
+**Native binding:** Choose an available agent/tool using the current harness schema and the role permissions above.
 
 **Search strategies by query type:**
 - **API/Library docs:** Official docs first, then changelogs and release notes.
@@ -227,13 +237,15 @@ When multiple agents operate in parallel (sub-agents, teammates, or `/batch` uni
 
 ### Central Commit Rule
 
-**Only the orchestrating agent (main session or team lead) handles git commit and push.** Sub-agents and teammates write code but do not commit.
+**One integration owner handles shared-worktree commits and publication.**
+Other agents write only their assigned files. An explicitly assigned isolated
+worktree agent may create local commits; it never pushes its working branch.
 
 | Agent Role | Can Edit Files | Can git commit | Can git push |
 |------------|:-:|:-:|:-:|
 | Main session / Team lead | Yes | Yes | Completed integration branch once, when authorized |
 | Sub-agent (Task tool) | Yes | No | No |
-| Worktree agent (`isolation: "worktree"`) | Yes | Yes (local only) | No |
+| Isolated worktree agent | Yes | Yes (local only) | No |
 | Teammate (Agent Teams) | Yes | No — write to task output | No |
 | `/batch` unit | Yes (in worktree) | Yes (local isolated branch) | No |
 
@@ -271,7 +283,7 @@ For complex multi-agent work beyond `/batch`:
 2. Each agent completes work with passing tests on its branch
 3. The orchestrator merges agent branches into the target branch sequentially
 4. After each merge, run the full test suite — if it breaks, fix before proceeding
-5. Delete agent branches after successful merge
+5. Remove only task-owned branches/worktrees after verifying integration and preserving plans, handoffs, ignored evidence and untracked work; retain anything uncertain
 
 This pattern is more complex than central commit but necessary when agents need full git access (e.g., agents running in separate worktrees).
 
@@ -303,8 +315,8 @@ Three orchestrator obligations prevent it:
 
 | Obligation | Rule |
 |------------|------|
-| **Scoped spawn** | Every agent gets a single-sentence task and an explicit terminal condition ("stop the moment X is true"). Never spawn with open-ended verbs like "look into" or "investigate" — they have no natural stopping point. |
-| **Watchdog budget** | Assign a wall-clock budget (~15–20 min for a focused fix). If an agent is still running past it, kill it and inspect rather than assuming progress. Require periodic status checkpoints on long fan-outs so a stuck agent is visible. |
+| **Scoped assignment** | State objective, permitted actions, owned files, evidence/output, resource budget and an explicit terminal condition. Investigations need a question and coverage boundary. |
+| **Progress budget** | Choose checkpoints and resource limits from the task. At a missed checkpoint, inspect progress and coordinate ownership before interrupting; preserve partial work and unresolved evidence. No universal timeout proves an agent is stuck. |
 | **Dedup gate** | Before an agent does or continues work, it checks real repo state (`git log`, `git status`, `grep` for the artifact). If the work already landed on the branch, it stops and reports instead of producing a duplicate. |
 
 This pairs with the central-commit pattern: the main agent owns the watchdog
@@ -381,8 +393,8 @@ Three constraints are mechanical, not stylistic — cc-rpi enforces them in CI v
 | Constraint | Why |
 |---|---|
 | `name` must match `^[a-z0-9-]{1,64}$` **and equal its directory name** | The name is the identifier the harness dispatches on, and the directory is how the skill is referenced from docs. A display-cased `"Git Workflow"` is not an identifier. |
-| `description` under 1024 characters | Descriptions are the only part of a skill loaded in *every* session, for every skill. Over the cap they truncate, so trailing triggers silently stop matching. |
-| `SKILL.md` body under 500 lines | The body loads whole on every match. Long-tail detail belongs in a `references/` sibling that loads only when the model reaches for it. |
+| `description` under 1024 characters | This repository validates the declared adapter limit. Describe the capability and precise invocation triggers; do not add promotional wording or mandatory negative triggers. |
+| `SKILL.md` body under 500 lines | This repository authoring budget is not a universal quality law. Split independent sub-workflows or useful detailed references, keep fragile constraints visible at invocation, and manifest every reachable dependency. |
 
 A `references/` file that no `SKILL.md` names is also a failure: level-3 files load only when the model is told they exist and when to read them, so an unnamed sibling is dead weight.
 
@@ -482,25 +494,28 @@ Beyond individual subagents, teams of parallel agents can tackle complex multi-d
 
 | Scenario | Team Shape | Example |
 |----------|-----------|---------|
-| **Debugging** | 3-5 parallel investigators, each testing a different hypothesis | API, cache, rendering, config, dependencies |
-| **Pre-launch audit** | 8 parallel specialists, each auditing one domain, plus a conditional ninth for agent-facing surfaces | Principal Architect, Staff FE, Staff BE, Performance, DevOps/SRE, Security, QA/Reliability, UX Cohesion, (Agent Surface Engineer) |
+| **Debugging** | Bounded independent investigations of distinct hypotheses | API, cache, rendering, config, dependencies |
+| **Pre-launch audit** | 8 core audit domains, plus the conditional agent-facing domain; staff by independent coverage | Principal Architect, Staff FE, Staff BE, Performance, DevOps/SRE, Security, QA/Reliability, UX Cohesion, (Agent Surface Engineer) |
 | **Self-healing pipeline** | Audit phase (parallel) → fix phase (parallel) → verify phase | Lint, tests, a11y, security, bundle size |
-| **Health check** | 4 parallel checkers with optional auto-fix | Tests, code quality, CI health, dependency health |
+| **Health check** | Bounded checks across required health areas | Tests, code quality, CI health, dependency health |
 | **Feature implementation** | Sequential workflow with parallel sub-steps | Read issue → TDD → implement → docs (parallel) → CI verify |
-| **Code review** | 2-3 parallel reviewers with different lenses | Correctness, security, performance |
+| **Code review** | Independent required review lenses with useful staffing | Correctness, security, performance |
 
 ### Team Design Principles
 
 1. **Read-only auditors.** Audit/investigation agents should never modify files — they report findings. A separate fix step (human or agent) acts on the report.
-2. **Parallel by default.** If agents don't need each other's output, run them simultaneously. Time savings compound.
+2. **Conditional staffing.** Parallelize independent work only when it helps and resources permit. Keep at most three implementers in the current phase; one reviewer may cover compatible audit domains.
 3. **Synthesize before acting.** Collect all agent findings into a single report before deciding what to fix. Prevents conflicting changes.
 4. **Self-healing fallback.** If a sub-agent fails due to permissions or tool errors, the parent agent takes over manually using its own tools.
-5. **Retry budget.** Failed agents get one retry with modified instructions. After that, report the failure and move on.
+5. **Coverage survives failure.** Inspect failed assignments and complete required evidence locally or reassign with a justified correction. Never mark missing output as passed or abandon a required domain after a fixed retry quota.
 6. **Cross-agent recommendations.** Each agent should note findings that affect another agent's domain (e.g., security reviewer flagging a performance concern).
 
 ### Pre-Launch Audit Template
 
-The most common team pattern. Spawn 8 parallel specialists before any production release, plus a conditional ninth when the project exposes tools to an agent:
+Cover 8 core audit domains before any production release, plus the conditional
+agent-facing domain when applicable. Assign domains independently of agent count;
+one reviewer may cover compatible domains, and stricter project charters remain
+mandatory. Missing coverage blocks acceptance:
 
 | Specialist | Focus |
 |------------|-------|
@@ -518,13 +533,13 @@ Each produces findings carrying a 5-tier severity (launch-blocker / high /
 medium / low / strategic), a 3-tier time horizon (Before launch / After
 launch / Later), an evidence-or-inference label, a stable finding ID, and
 file:line refs. Results synthesize into a 16-section report with a verdict:
-READY, CONDITIONAL, or NOT READY. `/remediate` processes findings in 3
-waves: Wave 1 (Before launch) before release, Wave 2 (After launch)
-post-release, Wave 3 (Later / strategic) filed as backlog issues without
-auto-fixing (requires human judgment — the one documented exception to
-Rule #58's 100% auto-fix coverage).
+READY, CONDITIONAL, or NOT READY. `rpi-remediate` preserves every finding ID
+and resolves confirmed actionable findings through review, repair, simplification
+and verification. Severity/time horizon order the work, not automatic deferral.
+False positives need evidence; a genuine new architectural decision receives an
+explicit local disposition and owner review. External issues require authorization.
 
-See [templates/commands/pre-launch.md](../templates/commands/pre-launch.md) for the slash command that triggers this team.
+See the canonical [rpi-pre-launch skill](../templates/skills/rpi-pre-launch/SKILL.md) for the full audit contract.
 
 ---
 
@@ -565,8 +580,8 @@ Claude Code has a native Agent Teams feature that implements the patterns above 
 
 1. **Include full context in spawn prompts** — teammates don't inherit the lead's conversation history. They do read `CLAUDE.md`, skills, and MCP servers from the project.
 2. **Break work by file ownership** — each teammate should own a distinct set of files to avoid merge conflicts.
-3. **Size tasks appropriately** — aim for 5-6 tasks per teammate. Too small = coordination overhead exceeds benefit. Too large = risk of wasted effort.
-4. **Pre-approve common operations** in `.claude/settings.json` permissions to reduce prompt interruptions for teammates.
+3. **Size bounded assignments** around coherent ownership, evidence and terminal conditions. No fixed task count is required.
+4. **Preserve native permissions** and existing owner authorization. Optional capability setup is a separate explicit choice; never add broad allows merely to suppress prompts.
 5. **Start with research/review before implementation** — parallel review first, then parallel implementation.
 6. **Monitor and steer** — check in on teammate progress, redirect approaches that aren't working.
 
@@ -618,8 +633,8 @@ Classify every action by its risk level to determine autonomy:
 | **Read-only** | Searching code, reading files, running tests, `git status`, `git log` | Fully autonomous |
 | **Low** | Writing code per approved plan, creating branches, committing to feature branches | Fully autonomous |
 | **Medium** | Publishing completed non-production integration, installing dependencies | Follow authorization and remote-budget boundaries |
-| **High** | Merging PRs, pushing to `main`/production, deploying, modifying external services | Human-gated — always ask first |
-| **Critical** | Deleting branches, force-pushing, dropping databases, modifying CI/CD pipelines | Human-gated — explain consequences before asking |
+| **High** | Merging PRs, pushing to `main`/production, deploying, modifying external services | Requires explicit authorization; reuse existing authorization within scope |
+| **Critical** | Deleting branches, force-pushing, dropping databases, modifying CI/CD pipelines | Assess the concrete action and existing authority; destructive new scope needs an explicit decision |
 
 #### Precise Boundaries
 
@@ -633,11 +648,11 @@ Classify every action by its risk level to determine autonomy:
 | Pushing completed non-production integration | When authorized, after full local gates and trigger inspection | One completed push, no Preview deployments |
 | Creating working-branch PRs | No | Working branches remain local |
 | Adding external PR descriptions | When explicitly authorized | External communication |
-| Merging PRs to a shared integration branch | Ask first | Affects a shared branch |
-| Merging PRs to `main`/production | Always ask | Affects production |
+| Merging PRs to a shared integration branch | Only when explicitly authorized | Shared remote mutation |
+| Merging PRs to `main`/production | Requires explicit authorization | Affects production |
 | Deploying production | Requires explicit authorization | Production side effects |
 | Creating Vercel Previews | No | Owner remote budget |
-| Modifying CI/CD workflows | Always ask | Affects all contributors |
+| Modifying CI/CD workflows | Within the approved local scope | Verify locally; remote execution has a separate budget boundary |
 | Deleting owned local branches/worktrees | After integration and preservation checks | Preserve unknown, unmerged and foreign work |
 
 #### The Quality Cascade Principle
@@ -652,7 +667,10 @@ Invest review time at the top of the cascade, not the bottom. Once a plan is app
 
 #### Time-Bounded Autonomy
 
-For scheduled or background agents, use time limits as a safety boundary. An agent running for 15 minutes autonomously is reasonable; an agent running for 6 hours without check-in risks "overbaking" — producing increasingly bizarre emergent behaviors as it goes further off-track.
+For scheduled or background agents, choose resource budgets and progress
+checkpoints from the actual task. Stop at the assignment terminal condition;
+inspect missing progress, preserve partial work and resolve ownership before
+reassignment. Duration alone is not proof of correctness or failure.
 
 See [push-accountability.md](push-accountability.md) for the post-push verification protocol and [scheduled-agents.md](scheduled-agents.md) for recurring agent patterns.
 
@@ -662,6 +680,6 @@ When an agent encounters an error:
 1. **Diagnose** — read the error, understand the root cause
 2. **Fix** — attempt the fix using available tools
 3. **Verify** — run the relevant checks to confirm the fix works
-4. **Escalate only if stuck** — after 3 failed attempts, report the issue clearly and ask for guidance
+4. **Change the approach when evidence warrants** — do not repeat unchanged failures. Escalate when progress requires a new decision or unavailable authority, preserving concrete evidence and local state
 
 Don't ask "should I fix this?" — just fix it. Don't suggest the user run a command you could run yourself.

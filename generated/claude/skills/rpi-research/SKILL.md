@@ -18,15 +18,21 @@ or recommendations, use `rpi-assess` as a separate evaluative workflow.
    directly mentioned file completely before decomposing the question.
 2. Identify the research areas needed: locate relevant files, trace behavior and
    data flow, find comparable patterns, and inspect relevant historical documents.
-3. Choose bounded independent read-only assignments when they reduce uncertainty.
-   Assign explicit scope, output evidence and a completion condition. Work locally
-   when delegation adds no value; wait for all delegated results before synthesis.
-4. Verify claims against the actual code. Distinguish repository evidence from
-   historical descriptions and external facts. Record gaps rather than inventing
-   behavior or creating unnecessary open questions.
+3. Keep a narrow investigation with the parent. Delegate useful independent
+   read-only work within this research scope, naming each assignment's objective,
+   permitted actions/files, required evidence/output, resource limits and completion
+   condition. Use only available slots and inspect every required result; a missing
+   or failed result is a coverage gap, not an implied finding-free review.
+4. Verify claims against installed code/tools first. Inspect implementation to
+   the depth needed for the question; reuse still-valid prior reads. Follow the
+   research contract for volatile external claims, source provenance and untrusted
+   retrieved content. Record material gaps and distinguish observations from
+   inference; search completeness follows evidence quality, not a query quota.
 5. Write `docs/research/YYYY-MM-DD-description.md` with the actual date, topic,
    repository, branch and commit; summarize the answer, detailed findings,
-   `file:line` evidence, relevant context and unresolved questions.
+   `file:line` evidence, source versions/retrieval dates, relevant context and
+   unresolved questions. Use the [durable handoff](references/handoff.md) contract
+   in this artifact so the next phase can revalidate its baseline and scope.
 6. Preserve the research artifact as curated project knowledge under the project's
    tracking policy. Keep raw machine inventories and transient evidence local.
 7. Present a concise summary, artifact path and outstanding uncertainty. **Stop at

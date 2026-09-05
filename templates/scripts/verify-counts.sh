@@ -44,16 +44,10 @@ MANIFEST_COUNTS=$(python3 templates/scripts/rpi-distribution.py counts --json)
 COUNT_VALUES=$(python3 -c 'import json,sys; c=json.loads(sys.argv[1]); print(c["workflow"], c["domain"], c["helper"], c["rule"])' "$MANIFEST_COUNTS")
 read -r WORKFLOW_COUNT SKILL_COUNT HELPER_COUNT RULE_TEMPLATE_COUNT <<< "$COUNT_VALUES"
 
-# Specialist count -- guards the "8 core specialists" prose in pre-launch.md
-# and its downstream mentions. Specialist 9 (Agent Surface Engineer) is
-# conditional, spawned only when a project exposes tools to an agent, so it
-# is described in prose rather than counted: the guarded number stays the
-# CORE count, computed as every roster header minus every header marked
-# "-- conditional". Adding a tenth core specialist later still resolves
-# correctly; adding a second conditional one does too.
-SPECIALIST_TOTAL=$(grep -cE '^\*\*Specialist [0-9]+ ' templates/skills/rpi-pre-launch/SKILL.md || true)
-SPECIALIST_CONDITIONAL=$(grep -cE '^\*\*Specialist [0-9]+ .*-- conditional' templates/skills/rpi-pre-launch/SKILL.md || true)
-SPECIALIST_COUNT=$((SPECIALIST_TOTAL - SPECIALIST_CONDITIONAL))
+# Audit coverage counts domains, independently of staffing or model instances.
+DOMAIN_TOTAL=$(grep -cE '^\*\*.* domain ' templates/skills/rpi-pre-launch/SKILL.md || true)
+DOMAIN_CONDITIONAL=$(grep -cE '^\*\*.* domain .*-- conditional' templates/skills/rpi-pre-launch/SKILL.md || true)
+DOMAIN_COUNT=$((DOMAIN_TOTAL - DOMAIN_CONDITIONAL))
 
 # --- check_count <file> <pattern> <expected> <label> -----------------------
 # Extracts the first number matched by <pattern> in <file> and compares it
@@ -109,25 +103,12 @@ check_count "$ERRORS_FILE" '^[0-9]+ documented error patterns' "$ERROR_COUNT" "E
 check_count "templates/skills/error-patterns/SKILL.md" 'all [0-9]+ errors' "$ERROR_COUNT" "Error count (error-patterns skill)"
 check_count "templates/skills/error-patterns/references/error-catalog.md" 'All [0-9]+ documented error patterns' "$ERROR_COUNT" "Error count (error-patterns level-3 catalog)"
 
-# Skill count -- adding a skill directory without updating the prose is the
-# same drift class as the rule and error counts.
-check_count "GUIDE.md" 'The [0-9]+ blueprint-provided skills' "$SKILL_COUNT" "Skill count (progressive disclosure section)"
-check_count "GUIDE.md" '[0-9]+ blueprint-provided skills for progressive disclosure' "$SKILL_COUNT" "Skill count (Where to Go Deeper)"
-
-# Rule-template count -- the one count location that was unguarded until now.
-check_count "GUIDE.md" 'The [0-9]+ rule templates' "$RULE_TEMPLATE_COUNT" "Rule-template count (progressive disclosure section)"
-
-# Bonus location found by a whole-repo sweep, not in the original nine —
-# kept here so it can't silently drift again.
-
-# Specialist count -- adding a 9th (conditional) specialist made "8
-# specialists" wrong in ten unguarded prose sites; guard the ones that state
-# a number rather than describe the ninth conditionally.
-check_count "GUIDE.md" 'to spawn [0-9]+ core specialist agents' "$SPECIALIST_COUNT" "Specialist count (Pre-Launch Audit section)"
-check_count "GUIDE.md" 'Spawns [0-9]+ core specialist agents' "$SPECIALIST_COUNT" "Specialist count (Supporting Commands table)"
-check_count "methodology/agent-design.md" '[0-9]+ parallel specialists, each auditing one domain' "$SPECIALIST_COUNT" "Specialist count (Team Design Principles table)"
-check_count "methodology/agent-design.md" 'Spawn [0-9]+ parallel specialists before any production release' "$SPECIALIST_COUNT" "Specialist count (Pre-Launch Audit Template intro)"
-check_count "methodology/cost-monitoring.md" 'pre-launch` \([0-9]+ specialists' "$SPECIALIST_COUNT" "Specialist count (fan-out cost gating)"
+# Component inventories are checked by the manifest/native renderer; GUIDE links
+# that source instead of duplicating resource totals in prose.
+check_count "GUIDE.md" 'Covers [0-9]+ core audit domains' "$DOMAIN_COUNT" "Audit domain count (workflow table)"
+check_count "GUIDE.md" 'covers [0-9]+ core audit domains' "$DOMAIN_COUNT" "Audit domain count (audit introduction)"
+check_count "methodology/agent-design.md" '[0-9]+ core audit domains' "$DOMAIN_COUNT" "Audit domain count (team design)"
+check_count "methodology/cost-monitoring.md" '[0-9]+ core audit domains' "$DOMAIN_COUNT" "Audit domain count (cost guidance)"
 
 # --- No duplicate rule numbers ----------------------------------------------
 DUPES=$(grep -oE '^[0-9]+\.' "$RULES_FILE" | tr -d '.' | sort -n | uniq -d || true)
@@ -200,6 +181,6 @@ if [[ "$FAILED" -ne 0 ]]; then
 fi
 
 echo "PASS: $ERROR_COUNT errors, $RULE_COUNT rules, $WORKFLOW_COUNT workflows, $SKILL_COUNT domain skills, $HELPER_COUNT Codex helper, $RULE_TEMPLATE_COUNT rule templates,"
-echo "      $SPECIALIST_COUNT core specialists (+ 1 conditional),"
+echo "      $DOMAIN_COUNT core audit domains (+ $DOMAIN_CONDITIONAL conditional),"
 echo "      all hardcoded locations agree, all index destinations resolve."
 exit 0

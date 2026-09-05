@@ -11,7 +11,10 @@ The request is supplied as literal arguments: $ARGUMENTS
 
 Use the version and release scope already supplied in the request. Ask for a
 version only if absent; never guess or auto-increment. Prepare a concrete,
-fully verified candidate before any still-required publication approval.
+fully verified candidate before any still-required publication approval. Read the
+[durable handoff](references/handoff.md) contract and revalidate actual worktree,
+release version and candidate evidence when resuming; a prior summary is not a
+new release authorization.
 
 ## Orientation and preparation
 
@@ -53,8 +56,10 @@ fully verified candidate before any still-required publication approval.
    run resource-intensive checks sequentially. Reuse valid evidence only for the
    same candidate inputs and check selection. Do not invent application checks
    for a documentation project or skip the project's own invariant scripts.
-4. Review and repair all confirmed actionable findings, simplify changed content,
-   and verify changed inputs. Commit the complete preparation on its task-owned
+4. Obtain independent review, inspect every required reviewer result and repair
+   all confirmed actionable findings. A missing result is an acceptance gap.
+   Preserve evidence-backed false-positive rejections and explicit architectural
+   exceptions. Simplify changed content and verify changed inputs. Commit the complete preparation on its task-owned
    local branch, integrate locally, and bind final evidence to that integrated
    candidate. If the integration tip moved, reconcile and revalidate locally.
 5. Preserve the plan, findings, notes and handoff outside disposable worktree-only
@@ -96,7 +101,8 @@ fully verified candidate before any still-required publication approval.
    ```bash
    git tag -a <requested-tag> <published-sha> -m <requested-tag>
    git push origin <requested-tag>
-   gh release create <requested-tag> --notes-file <reviewed-release-notes-path>
+   gh release create <requested-tag> --verify-tag --title <requested-tag> \
+     --notes-file <reviewed-release-notes-path>
    ```
 
    Use safely quoted discovered values or structured tool arguments. Never use
@@ -107,7 +113,8 @@ fully verified candidate before any still-required publication approval.
 
 ## Completion
 
-Report the version, exact commit/tag, release link, local gate evidence and actual
-remote outcomes. Distinguish prepared, published, pending and blocked states.
+Update the durable handoff and report the version, exact commit/tag, release link,
+local gate evidence and actual remote outcomes. Distinguish prepared, published,
+pending and blocked states.
 Retain unresolved diagnostics and recovery artifacts; a locally repaired failure
 does not retroactively make a failed remote run green.

@@ -16,8 +16,11 @@ and the named tag/release, after trigger inspection. No fleet rollout is include
 - Phase 1 accepted in local commit `e9dad45`; full local gate passed.
 - Phase 2 accepted in local commit `54b2fa8`: shared skills/adapters and native route gate passed.
 - Phase 3 accepted in local commit `9fe3da7`: full 10-check gate and 121 tests passed.
-- Phase 4 implementation and independent cleanup reviews complete; final gate
-  evidence is recorded before the phase commit and Phase 5 entry.
+- Phase 4 accepted in local commit `f8c4e22`: all ten gates and 297 tests passed;
+  measured overall coverage was 88.79% lines and 84.37% branches.
+- Phase 5 workflow refinement is in progress. Root owns triage, shared handoff,
+  component registration, generation and integration; bounded assignments own
+  workflow bodies, audit/dispatch contracts and conservative rule refinement.
 - Actual clients available: Claude Code 2.1.261; Codex CLI 0.153.4.
 - Local verification prerequisites: Python 3.13.15, PyYAML 6.0.3,
   coverage.py 7.16.0, ShellCheck 0.11.0. Local Docker is available.
@@ -189,3 +192,27 @@ and the named tag/release, after trigger inspection. No fleet rollout is include
 - Native core versions remain Claude 2.1.261 and Codex 0.153.4. Python 3.11.2
   compilation also passed in the pinned local Linux container; complete 3.11/3.13
   cross-platform execution and actual harness acceptance remain Phase 6.
+
+## Phase 5 implementation handoff
+
+- Shared handoff and bounded dispatch contracts preserve phase scope, independent
+  review, TDD, complete findings and resource limits. Audit coverage counts the
+  eight core domains plus conditional AS, without requiring eight model instances.
+- Triage records scan-start time, hashes and per-report dispositions. Partial
+  scans and failed queries preserve the global marker; old retries and late
+  arrivals remain eligible. Independent review found an unreadable-directory
+  gap; a failing regression reproduced it and the traversal now records it.
+- No additional rule/error IDs are retired. Historical harness claims were
+  narrowed with evidence limitations and sibling-project follow-ups recorded.
+- Managed root content is 6,573 bytes, below the 8 KiB product budget; that is
+  separate from native complete instruction-chain limits.
+- Reuse, quality and efficiency were reviewed independently. New helpers reuse
+  the existing finding parser; full hashing and locked state revalidation remain
+  necessary for backdated reports and concurrent checkpoints. No cost savings
+  or actual native enforcement are inferred from these structural checks.
+- Whole local gate and resulting commit are recorded at acceptance; native
+  behavior and cross-platform final rehearsals remain Phase 6 work.
+- The first Phase 5 full gate passed ten checks and 332 tests. Final independent
+  review then reproduced loss of previously explicit nonstandard report names;
+  scan inventory now includes existing registered paths, with a RED/GREEN
+  regression. This invalidates that first gate; the final full rerun follows.

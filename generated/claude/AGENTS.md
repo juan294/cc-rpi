@@ -50,6 +50,10 @@ A new remote action needs authorization after the complete local gates pass.
   continuation; a continuation instruction does not remove verification.
 - Use `/clear` between unrelated tasks.
   Use `/compact` when context is heavy but the task continues.
+- Handoffs record objective, approved scope, base/current commit and worktree,
+  findings, decisions, check evidence and tested identity, deviations, risks and
+  next phase. On resume, verify actual files, refs and evidence validity before
+  relying on the handoff; compaction never grants new authority.
 - Subagents are context control mechanisms --
   they search/read in their window and return only distilled results.
 - Research and planning happen against the integration branch.
@@ -63,7 +67,9 @@ A new remote action needs authorization after the complete local gates pass.
   Use the separate `rpi-assess` workflow for evaluative research and alternatives.
 - Every code reference must include file:line.
 - Delegate only useful bounded independent assignments within this phase.
-  A narrow task may stay with the parent. Wait for all required results.
+  A narrow task may stay with the parent. State objective, permitted actions,
+  owned files, evidence/output, resource budget and terminal condition for each
+  assignment. Missing required results remain coverage gaps until resolved.
 - Never write documents with placeholder values.
 - Exhaust all tools before suggesting manual steps --
   check CLI tools, shell commands, MCP servers, and file tools
@@ -89,9 +95,10 @@ A new remote action needs authorization after the complete local gates pass.
 
 `rpi-pre-launch` -> `rpi-remediate` -> `rpi-update-docs` -> `rpi-release`
 
-After `rpi-pre-launch`, run a simplify pass first -- it fixes dead code,
-duplicates, and inefficiencies in one pass. Then address security
-and infrastructure findings manually.
+After `rpi-pre-launch`, include a simplify pass for reuse, quality and
+efficiency. Track its findings with the other audit results; resolve security
+and infrastructure findings through the same review, repair and verification
+loop. Preserve all required audit domains regardless of staffing.
 
 Resolve every confirmed actionable finding before acceptance. Reject false
 positives with evidence. Strategic findings needing a new architectural decision

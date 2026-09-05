@@ -5,10 +5,12 @@ description: "Validate and resolve every actionable pre-launch finding in ordere
 
 # Remediate Pre-Launch Findings
 
-Resolve all findings from the pre-launch audit. Record every finding locally;
-orchestrates parallel TDD agents in worktrees, merges sequentially per
-wave, verifies locally, and reports. External issue publication requires authorization;
-otherwise retain the same finding records in a local backlog.
+Resolve every confirmed actionable finding within the authorized remediation
+scope. Record every finding locally, group related causes and ownership, complete
+TDD repairs and independent review, integrate sequentially per wave, and verify
+locally. Keep narrow work with the parent; delegate only useful independent work.
+External issue publication requires authorization; local records preserve the
+same evidence and dispositions.
 
 ## Input
 
@@ -18,7 +20,14 @@ at `docs/agents/pre-launch-report.md`. If no report exists, suggest
 running `rpi-pre-launch` first and **STOP.**
 
 If `wave=N` is provided, load the prior approved plan/handoff and verify its
-state before resuming Wave N. A selector alone is not evidence of prior approval.
+state before resuming Wave N. Apply the [durable handoff](references/handoff.md)
+contract and revalidate actual worktree/base/current state and candidate/check
+identity. A selector alone is not evidence of prior approval.
+
+When a parent uses a machine-readable assignment/acceptance record, follow the
+[dispatch contract](references/dispatch.md) and validate it before claiming
+complete coverage. The record is optional for a small parent-only task; required
+review, TDD and phase acceptance still apply.
 
 ## Step 1: Parse & Plan
 
@@ -30,10 +39,11 @@ Gather context before making any changes.
 
    The report uses a 16-section format. Findings live in sections 4-11
    (Frontend, Backend, Performance, DevOps/SRE, Security, Architecture,
-   QA, UX), plus §11a (Agent-Facing Surface) when Specialist 9 ran —
-   §11a is omitted entirely otherwise. Section 14 (Before/After/Later)
-   is the wave-ordering index. Section 15 (Open Questions) is NOT
-   findings — skip it.
+   QA, UX), plus §11a (Agent-Facing Surface) when that domain applies.
+   Domain coverage is independent of how many investigators supplied it; a failed
+   or absent investigator does not make a required domain inapplicable.
+   Section 14 (Before/After/Later) is the wave-ordering index. Section 15
+   (Open Questions) is not findings; preserve its unresolved decisions separately.
 
    **Validate the report contract first** (deterministic gate, before any
    parsing):
@@ -70,16 +80,15 @@ Gather context before making any changes.
    Grouping hierarchy:
 
    1. By time horizon first (Before → After → Later) using Section 14.
-   2. Within each horizon: by file ownership (conflict avoidance).
-   3. Within each file group: by severity descending.
+   2. Within each horizon: by likely root cause and overlapping file ownership.
+   3. Within each work unit: by severity descending.
 
-   Wave 3 exception: findings in the "Later / strategic" wave (low and
-   strategic severity) do NOT get grouped into work units. They use a
-   "file-only" path — record a local follow-up, do not spawn a fix agent. This
-   is the only exception to Rule #58: low and strategic items require
-   human architectural judgment that AI agents cannot reliably provide.
-   This exception is documented explicitly here and in the pre-launch
-   spec.
+   One root cause may explain several findings or failing tests; retain every
+   ID and regression obligation in that work unit. Severity and a "Later" horizon
+   do not automatically exempt an actionable fix. Complete authorized work in
+   order. Keep explicitly deferred waves and findings requiring a new architecture
+   or scope decision as open local dispositions with rationale and next action;
+   never describe a recorded follow-up as fixed.
 
 4. **Detect the integration branch:**
    - Check shared AGENTS.md or git config for the documented integration branch.
@@ -97,19 +106,19 @@ Gather context before making any changes.
    | # | Work Unit           | Domain   | Severity | Files Owned | Agent   |
    |---|---------------------|----------|----------|-------------|---------|
 
-   **Wave 3: Later / strategic (issues only — no fix agents)**
+   **Wave 3: Later / strategic (fixes or explicit open dispositions)**
 
    | # | Finding ID | Title | Severity | Rationale       |
    |---|------------|-------|----------|-----------------|
 
    Total: N work units covering M findings across K files.
-   Wave 1: X work units. Wave 2: Y work units. Wave 3: Z issues-only.
+   Wave 1: X work units. Wave 2: Y work units. Wave 3: Z fixes/open dispositions.
    Integration branch: `<branch>`.
 
 Present the concrete decomposition and proceed within the approved request.
 Ask only for missing authorization or an unresolved architecture/scope decision.
 
-## Step 2: Create Issues & Launch Agents
+## Step 2: Record Findings & Assign Work
 
 Within the authorized remediation scope:
 
@@ -118,17 +127,21 @@ Within the authorized remediation scope:
    horizon and effort. Record external issue URLs only if issue publication is
    explicitly authorized. Use structured text or a body file when publishing;
    inspect existing labels and avoid duplicates. Verify the Wave 3 backlog count
-   matches its plan rows before launching any fix work.
+   matches its plan rows before launching any fix work. Every assignment stays
+   within the current authorized wave; no finding disappears during grouping.
 
-2. **Assign Wave 1 work** to bounded local worktree assignments with distinct
-   file ownership, up to three concurrent implementers. Use fewer when appropriate.
+2. **Assign current-wave work** locally, keeping a narrow repair with the parent.
+   Useful independent assignments have distinct file ownership and specify
+   objective, permitted actions/files, evidence/output, resource constraints and
+   completion condition. Use at most three simultaneous implementers; available
+   slots and contention may require fewer. One integration owner accounts for every
+   assignment and result. Complete the current wave before starting another.
 
-   Wave 1 only — do NOT start Wave 2 agents yet.
+   Each implementer follows these instructions:
 
-   Each agent receives these instructions:
-
-   a. Read the local finding record (and authorized external issue if present)
-      and all source files in your ownership set.
+   a. Read controlling instructions/contracts and the local finding records
+      completely (and an authorized external issue when present). Inspect relevant
+      source/test paths to the depth needed; reuse valid prior reads.
 
    b. **Verify the recommendation before implementing it.** The finding's
       Recommendation is a hypothesis, not an order. Before writing any code:
@@ -145,9 +158,11 @@ Within the authorized remediation scope:
         cookie user still sees an English body," not only "ISR is
         restored.")
       - If verification shows the recommendation is incomplete, wrong, or
-        trades away an invariant: **STOP. Do not implement.** Return to the
-        orchestrator with what you found and the unresolved trade. Halting
-        one finding beats shipping a regression.
+        trades away an invariant, stop that dependent change and return evidence
+        to the integration owner. Evaluate a safe alternative within the approved
+        scope; ask the user only if it needs a new architecture/scope decision.
+        Preserve the open finding until a verified repair or explicit disposition
+        resolves it.
 
    c. **TDD: Write a failing test FIRST** that captures the finding AND
       guards the invariant identified in step (b). For non-behavioral
@@ -162,27 +177,31 @@ Within the authorized remediation scope:
       Discover and run the project's applicable targeted tests, typechecks and
       lint sequentially, preserving every command's status.
 
-   f. Run the harness-native simplify pass (or the Codex simplify helper), reviewing reuse, quality and efficiency on changed files.
+   f. Obtain independent review of finding coverage, invariants and changes.
+      Inspect every required reviewer result; missing/failed review blocks
+      acceptance. Repair confirmed findings and record evidence when rejecting a
+      false positive. The implementer cannot supply its only independent review.
 
-   g. Rerun affected verification if the simplify pass introduced changes.
+   g. Run the native simplify pass or Codex simplify helper for reuse, quality and
+      efficiency. Rerun checks invalidated by its changes; a parent-owned pass
+      reports exact changed scope and invalidated evidence to the gate owner.
 
    h. Commit locally with a factual conventional message referencing finding
       IDs; include issue numbers only when an actual issue exists.
 
    i. Do NOT push. The orchestrator handles all pushes.
 
-3. **Monitor Wave 1 agent progress.** As agents complete, log their
-   status (pass/fail, tests added, files modified). If an agent **halted**
-   under step (b) — the recommendation failed verification or trades away
-   an invariant — do NOT auto-implement an alternative and do NOT silently
-   drop it. Collect every halted finding and surface it to the human with
-   the unresolved trade. The finding stays open; the finding is reported as
-   "halted — recommendation unsafe, needs human re-scope," not as resolved
-   (Rule #58 coverage is satisfied by the open finding).
+3. **Inspect every current-wave result.** Record pass/fail, tests, changed files
+   and finding dispositions. Missing or failed assignments and reviewers are
+   explicit coverage gaps. Reassign useful unfinished work or report the concrete
+   blocker; silence never counts as approval. A rejected recommendation stays open
+   until its safe alternative is verified or the unresolved architecture/scope
+   decision receives an explicit disposition.
 
-4. **Wave 3 — file-only.** Local records were created in step 1. No worktree
-   agents are spawned for Wave 3. Report these as "filed, not fixed"
-   in Step 5.
+4. **Preserve later work.** Record unstarted waves and architectural decisions as
+   open, with reasons and next actions. They are not fixed merely because they
+   have local records. Run authorized actionable Wave 3 repairs through the same
+   review and verification loop as earlier waves.
 
 ## Step 3: Integration & Verification
 
@@ -191,7 +210,9 @@ Wave 1 before starting Wave 2. All working branches remain local.
 
 ### Wave 1 Integration
 
-1. Review each worktree's changes, commits, finding coverage and test evidence.
+1. Inspect independent review results for every work unit, then review changes,
+   commits, finding coverage and test evidence. Missing review blocks integration
+   acceptance; resolve every confirmed actionable finding in the current scope.
 2. Integrate each completed local branch sequentially into the documented local
    integration branch. Run applicable checks after each integration and repair
    failures locally before the next merge. Record commit IDs against findings.
@@ -214,15 +235,17 @@ record how to resume with `rpi-remediate` and the `wave=2` selector.
 
 When Wave 2 continuation is authorized:
 
-1. **Spawn worktree agents for Wave 2** (same pattern as Wave 1
-   step 2).
+1. **Assign Wave 2 work** using the bounded current-wave contract from Step 2;
+   keep it with the parent when delegation adds no value.
 2. **Monitor Wave 2 agent progress** (same pattern as Wave 1 step 3).
-3. **Complete local integration cycle for Wave 2** (same steps as Wave 1).
-4. **Run the harness-native simplify pass (or the Codex simplify helper), reviewing reuse, quality and efficiency** on the full integrated Wave 2 result.
-5. **Run Wave 2 final verification** (same commands as Wave 1).
+3. **Complete the same local integration cycle as Wave 1**, including independent
+   review, repair, simplify and the complete Wave 2 verification gate.
 
-Present Wave 2 completion and confirm all Wave 3 local follow-ups are preserved.
-Document explicitly deferred waves and their rationale; stop after authorized work.
+Present Wave 2 completion and preserve all Wave 3 findings. If Wave 3 actionable
+work is authorized, use the same bounded implementation, independent review,
+simplify and complete local verification cycle before its acceptance report.
+Document explicitly deferred waves and unresolved architectural decisions with
+rationale; stop after all authorized work.
 
 ## Step 4: Cleanup
 
@@ -241,7 +264,7 @@ git worktree remove /absolute/path/to/worktree && git branch -d remediate/<slug>
 
 If any check fails or cleanup refuses, retain the branch/worktree and record why.
 Other tasks' worktrees and branches must survive. No remote deletion is needed
-because remediation branches were never published. Wave 3 has no worktrees.
+because remediation branches were never published. Deferred work needs no worktree.
 
 ## Step 5: Report
 
@@ -256,9 +279,9 @@ Generate a remediation report at `docs/agents/remediation-report.md`:
 ## Summary
 - Findings processed: [N] (Wave 1: X, Wave 2: Y, Wave 3: Z)
 - Local findings recorded: [N]
-- Findings resolved (integrated): [N] (Wave 1: X, Wave 2: Y)
-- Strategic follow-ups (not fixed): [Z] (Wave 3)
-- Halted (recommendation unsafe — needs human re-scope): [N]
+- Findings resolved (integrated): [N] (Wave 1: X, Wave 2: Y, Wave 3: Z)
+- Open follow-ups (not fixed): [Z] (explicit deferral or new decision required)
+- Halted (recommendation unsafe, alternative or decision pending): [N]
 - Tests added: [N]
 - Files modified: [N]
 - Local gate status: PASSING / FAILING
@@ -272,14 +295,14 @@ Generate a remediation report at `docs/agents/remediation-report.md`:
 | # | Finding ID | Title | Severity | Tests Added | Commit | Status |
 |---|------------|-------|----------|-------------|----|--------|
 
-## Wave 3: Later / strategic (filed, not fixed)
-| # | Finding ID | Title | Severity | Record | Rationale       |
-|---|------------|-------|----------|-------|-----------------|
+## Wave 3: Later / strategic (resolved or explicitly open)
+| # | Finding ID | Title | Severity | Status | Evidence/Record | Rationale |
+|---|------------|-------|----------|--------|-----------------|-----------|
 
 ## Final Verification
 - [ ] Wave 1 integrated locally, full local gate green
 - [ ] Wave 2 integrated locally, full local gate green (or explicitly deferred)
-- [ ] Wave 3 local follow-ups recorded in backlog
+- [ ] Wave 3 authorized fixes verified; explicit open dispositions preserved
 - [ ] simplify final pass complete for waves that ran
 - [ ] Owned worktrees safely removed or retention reasons recorded
 
@@ -287,14 +310,16 @@ Generate a remediation report at `docs/agents/remediation-report.md`:
 [Waves the user chose to defer with timeline]
 ```
 
-Present the report summary to the user.
+Apply the durable handoff contract in the report, including base/current state,
+check/candidate identity, every finding's disposition, deviations, risks and next
+entry conditions. Present the summary to the user.
 
 ## Rules
 
-- **100% coverage.** Process EVERY finding — all 5 severity tiers.
-  Wave 3 low and strategic items get local follow-up records but no fix agents (requires
-  human architectural judgment — the one documented exception to Rule
-  #58's 100% auto-fix coverage). Every finding still gets a disposition.
+- **Complete finding coverage.** Process every finding in all five severity tiers.
+  Resolve every confirmed actionable fix within authorized scope. Record evidence
+  for false positives and explicit reasons/next actions for deferred waves or new
+  architectural decisions. No severity tier is an automatic exemption.
 - **Wave ordering.** Process Waves in order: 1 → 2 → 3. Never
   interleave waves.
 - **Per-wave verification.** Each wave goes through the full merge →
@@ -309,8 +334,9 @@ Present the report summary to the user.
   real code before implementing (worktree step b). The guard test asserts
   the invariant the fix could break, not just the finding's symptom. A
   recommendation that fails verification or trades away a correctness,
-  security, or UX invariant **halts** — escalate to the human, never
-  auto-implement it literally.
+  security, or UX invariant halts its dependent edit. Return evidence to the
+  integration owner; a safe in-scope correction needs no repeated approval, while
+  an unresolved architecture/scope decision does.
 - **Agents do NOT push** (Central Commit Rule). Only the orchestrator
   may publish the completed integration branch once. Worktree agents commit
   locally; the orchestrator integrates and verifies locally.
@@ -319,8 +345,9 @@ Present the report summary to the user.
   file. If findings overlap files, group them into one work unit.
 - **Branch verification before every commit.** Run
   `git branch --show-current` and verify the result (Error #33).
-- **simplify twice.** Once per agent (after their fix), once on the
-  integrated result per wave.
+- **simplify scope.** Review each completed work unit and the integrated result
+  per wave. Reuse unchanged scope's valid evidence; report changed files and
+  invalidated checks to the verification owner.
 - **CI accountability.** Inspect every expected workflow after an authorized
   integration push. Diagnose and repair failures locally; no rerun/re-push loop.
 - **Clean exit.** Preserve every artifact before removing owned worktrees;
@@ -338,3 +365,10 @@ review, repair and applicable verification before its acceptance gate. An explic
 instruction can authorize continuation across phases; otherwise stop at the stated
 phase boundary. Production, publication, destructive actions and new scope retain
 their actual authorization requirements. Preserve durable artifacts before cleanup.
+
+## Bundled contract tools
+
+For a structured handoff, resolve `scripts/rpi-dispatch.py` relative to this
+installed skill; its sibling `scripts/validate-findings.py` checks report IDs
+and references. Follow [dispatch](references/dispatch.md) for invocation and
+[durable handoff](references/handoff.md) for actual-state revalidation.

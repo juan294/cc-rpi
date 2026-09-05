@@ -59,8 +59,8 @@ choice: no Vercel Previews, no working-branch publication, and no hosted CI as a
 experimentation loop. Complete applicable gates locally before the authorized
 integration push. Production publication requires explicit authorization.
 
-The `/pre-launch` (8 specialists, plus a conditional ninth for agent-facing
-surfaces) coverage contract remains intact. Choose bounded independent work only
+The `rpi-pre-launch` contract covers 8 core audit domains plus the conditional
+agent-facing domain. Coverage counts domains, not simultaneous model instances. Choose bounded independent work only
 when its expected result justifies the extra inference and coordination. Existing task authorization remains valid;
 this document creates no new approval gate for ordinary research or local work.
 Report material budget constraints and measured regressions to the owner, and

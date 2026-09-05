@@ -38,16 +38,17 @@ nonportable flags. Use a script for complex parsing.
 
 ## launchd Agent Configuration
 
-Wrong -- run script directly (crashes if dir has .claude/):
+Historical sessions reported a location-dependent Claude CLI failure under
+launchd, with an unrecorded client version. That observation does not establish
+that all direct script launches crash or that current clients need a wrapper.
+For a reproduced failure, capture client/macOS versions, arguments, cwd,
+resource limits and sanitized logs before selecting a workaround.
 
-```xml
-<key>ProgramArguments</key>
-<array>
-  <string>/project/scripts/agent.sh</string>
-</array>
-```
+The following is the historical wrapper recipe; choose limits and environment
+from the actual job requirements rather than treating these numbers as native
+minimums. Installing or starting a scheduled job is an explicit opt-in.
 
-Right -- bash wrapper + resource limits + environment vars:
+Historical wrapper, resource-limit and environment example:
 
 ```xml
 <key>ProgramArguments</key>
@@ -68,27 +69,27 @@ Right -- bash wrapper + resource limits + environment vars:
 </dict>
 ```
 
-launchd runs with no TTY, so an interactive OAuth login hangs forever.
-Generate a non-interactive token first and have the agent script use it:
-
-```bash
-claude setup-token
-```
+Scheduled jobs need authentication that works without interactive prompts.
+Inspect the installed client's supported authentication setup; a previously
+configured session may already work. `claude setup-token` is one supported
+setup route, not proof that every job must create a new token. Never print
+credentials or launch an inference probe without the relevant authorization.
 
 ## launchd Testing
 
-Wrong -- test from terminal (masks launchd-specific failures):
+Terminal execution alone does not verify the scheduler environment:
 
 ```bash
 ./scripts/agent.sh  # works in terminal, fails silently under launchd
 ```
 
-Right -- test with launchctl:
+For an explicitly authorized scheduled-job test, inspect launchctl and logs:
 
 ```bash
 launchctl start com.yourorg.agent
 launchctl list | grep yourorg  # exit code shows 0 even on crash -- check logs, not just this
 ```
 
-The exit code is 0 even when the agent crashed with "Unexpected" -- launchd
-testing must inspect log output, not just `launchctl list`'s status column.
+A historical failure returned zero despite an error. Check job logs and the
+expected output as well as status; a successful launch request is not evidence
+that the agent task completed.

@@ -1,6 +1,6 @@
 ---
 name: "codex-simplify"
-description: "Review recently changed files for code reuse, quality, and efficiency issues, then fix them. Use when implementation is already complete and you want a final cleanup pass that mirrors Claude Code's `/simplify` behavior as closely as Codex can, without overriding Claude's native `/simplify`."
+description: "Review and simplify recently changed code after implementation, covering reuse, quality and efficiency while preserving behavior and verification evidence."
 ---
 
 # Codex Simplify
@@ -75,9 +75,11 @@ Run three independent review passes over the same target file set:
    Look for avoidable work, redundant allocations, repeated I/O,
    wasteful data transformations, and obvious performance footguns.
 
-If Codex subagents are explicitly available and appropriate, run these
-as three parallel subagents. Otherwise, perform the three passes locally
-but keep them logically separate until aggregation.
+Choose staffing from the changed scope and available resources. The parent
+may perform all three passes locally, keeping their findings independent until
+aggregation. Delegate only useful bounded assignments with objective, permitted
+actions, files, evidence/output and terminal condition. Three review lenses do
+not require three agent instances; respect the project concurrency limit.
 
 Each pass should:
 
@@ -106,7 +108,9 @@ and more local to the changed code.
 
 ## Applying fixes
 
-Apply the agreed changes directly.
+Apply behavior-preserving corrections within the existing authorized scope.
+A read-only review assignment returns findings without edits. Ask only when a
+necessary change introduces a decision or authority the user has not supplied.
 
 Default priorities:
 
@@ -134,8 +138,14 @@ At the end:
 - summarize what changed
 - group the rationale under reuse, quality, and efficiency
 - mention any fallback used to determine the target file set
-- explicitly state that verification should be rerun after the pass
+- report exact changed files and behavior areas, plus any rejected findings
+  and their evidence
+- identify which checks or receipts the edits invalidated
 
-If the invoking workflow already owns verification, stop after the
-cleanup pass and hand back the changed files plus the rerun-verification
-reminder.
+In a standalone invocation, rerun all invalidated applicable checks before
+claiming completion and report results against the resulting candidate. Reuse
+prior passing evidence only when its tested inputs remain unchanged.
+
+When a parent workflow owns verification, hand back the exact changed scope,
+invalidated evidence and required reruns for its acceptance gate. Do not claim
+the parent gate passed or finish with an unspecified verification reminder.

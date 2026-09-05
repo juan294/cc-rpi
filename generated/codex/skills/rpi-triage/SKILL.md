@@ -16,36 +16,23 @@ inventories are all accounted for in Step 1.
 
 Find EVERY report, agent failure, and GitHub security/quality alert. No assumptions about which agents ran, how many reports exist, or whether GitHub has alerts. Discovery uses file timestamps, not git status (Rule #71).
 
-1. **Timestamp-based scan:**
+1. **Capture a durable scan before reading reports:**
 
-   a. Capture the scan-start timestamp before reading any report inventory.
-      Preserve that boundary in the run's durable handoff. Load any prior
-      failed/unprocessed report records, including path and last-seen content
-      hash; these remain discovery inputs regardless of modification time.
+   Resolve `scripts/rpi-triage-state.py` relative to this installed skill. Run
+   its `scan --root <absolute-project-root>` command and save the JSON output to
+   a task-owned local handoff file. For explicit scope, add one `--report` per
+   path relative to `docs/agents/`. Read the [checkpoint contract](references/triage-state.md).
 
-   b. Check for the `.last-triage` marker:
+   The helper captures scan-start time, inventories every `*-report.md`, and
+   combines modification timestamps with prior content hashes/dispositions.
+   Process every `selected` report and account for every `issues`/`missing_retry`
+   entry. Unknown backdated reports and old failed/unprocessed reports remain
+   eligible. An unchanged report is skipped only with a matching processed
+   record. Explicit partial scans never advance the global marker.
 
-      ```bash
-      ls -la docs/agents/.last-triage 2>/dev/null
-      ```
-
-   c. If marker exists -- find reports modified since last triage:
-
-      ```bash
-      find docs/agents/ -name "*-report.md" -newer docs/agents/.last-triage
-      ```
-
-   d. If NO marker exists (first run) -- process ALL reports:
-
-      ```
-      Glob docs/agents/*-report.md
-      ```
-
-   e. Full inventory (for cross-reference and completeness):
-
-      ```
-      Glob docs/agents/*.md
-      ```
+   Cross-reference other Markdown files in `docs/agents/` and the prior
+   [durable handoff](references/handoff.md); `shared-context.md` is context,
+   not a report. `.last-triage` alone cannot prove that a report was processed.
 
 2. **Check for agent failures:**
 
@@ -107,7 +94,7 @@ Find EVERY report, agent failure, and GitHub security/quality alert. No assumpti
      enabled, include a discovery failure in the briefing and action plan.
 
 5. **Classify files:**
-   - New/modified reports (newer than `.last-triage`): primary triage targets.
+   - New/modified reports and all helper-selected retries: primary triage targets.
    - `shared-context.md`: read for cross-agent intelligence, not a report itself.
    - Unchanged reports (older than `.last-triage`): skip only when their prior
      disposition proves they were processed; always retry failed/unprocessed
@@ -137,7 +124,7 @@ Find EVERY report, agent failure, and GitHub security/quality alert. No assumpti
 
    Total: N reports to process, M agent failures detected, G GitHub security/quality alerts found, K Dependabot PRs (local batch: A, attempt-fix: F, defer: D).
 
-   Do NOT stop here -- proceed directly to analysis unless there are ZERO reports, ZERO failures, ZERO GitHub security/quality alerts, ZERO GitHub alert query failures, AND ZERO Dependabot PRs (in which case report "all clear" and **STOP**).
+   Proceed directly to analysis unless all six inventories completed and there are zero selected reports, discovery gaps, agent failures, open alerts and dependency PRs. In that case report "all clear", record completed reporting, and run the same final checkpoint procedure before stopping.
 
 ## Step 2: Analyze
 
@@ -242,14 +229,23 @@ Implement all action items within the authorized triage scope.
      pure refactors when sufficient, and add or update tests when behavior,
      public API, or compatibility could change.
 
-2. **Run verification sequentially:**
+2. **Obtain independent review and repair:**
+
+   Have a reviewer other than the implementation author inspect the actual diff,
+   findings and applicable tests. Missing or failed review remains an acceptance
+   gap. Verify recommendations against evidence, repair confirmed actionable
+   defects, and record false-positive rejections with supporting evidence. A new
+   architectural decision needs an explicit disposition and owner decision;
+   never silently discard it or create external issues without authorization.
+
+3. **Run verification sequentially:**
 
    Discover and run the applicable tests, typechecks and lint sequentially,
    preserving each status. Complete all applicable local gates before acceptance.
 
-3. **Run the harness-native simplify pass (or the Codex simplify helper), reviewing reuse, quality and efficiency** on all changed files.
+4. **Run the harness-native simplify pass (or the Codex simplify helper), reviewing reuse, quality and efficiency** on all changed files.
 
-4. **Rerun affected verification** if the simplify pass introduced changes.
+5. **Rerun affected verification** if the simplify pass introduced changes.
 
 ## Step 4: Commit Locally
 
@@ -371,7 +367,13 @@ Generate a triage report at `docs/agents/triage-report.md`:
 [Items that persist across multiple triage cycles -- track for escalation]
 ```
 
-Present the report summary to the user.
+Present the report summary to the user. Then run the bundled helper's `checkpoint`
+with the original scan JSON and a completion JSON recording every report outcome,
+all six inventory statuses and `reported: true`. Follow the
+[checkpoint contract](references/triage-state.md); missing outcomes remain
+unprocessed, failures remain retryable, and incomplete or partial discovery leaves
+the global marker unchanged. Inspect the helper result before claiming a successful
+checkpoint. A stale-scan rejection requires a fresh scan, never overwriting state.
 
 ## Rules
 
@@ -384,7 +386,7 @@ Present the report summary to the user.
   scan-start time. Never use a completion-time touch. Retain failed/unprocessed
   report records independently of timestamps so no report is silently skipped.
 - **Check for agent failures.** Scan `logs/` BEFORE analyzing reports. A missing report might mean a failed agent, not "nothing to report."
-- **Fix everything (Rule #58).** Categorize findings by severity, but implement 100% of action items. No deferring. No "nothing urgent." `leanness-report.md` is actionable: extract and implement every concrete recommendation within the authorized triage scope.
+- **Fix everything (Rule #58).** Categorize findings by severity and resolve every confirmed actionable item within scope before acceptance. Record evidence-backed false positives and explicit architectural decisions; do not use severity as a blanket deferral. `leanness-report.md` is actionable: extract and implement every concrete recommendation within the authorized triage scope.
 - **Leanness safety.** Leanness recommendations are not bulk-applied as an undifferentiated cleanup. Review each item individually, keep edits scoped to the files named by the report, preserve behavior, verify importer/public API impact before deleting exports, and rely on or add tests according to the risk.
 - **Read every report completely.** No skimming, no summaries-of-summaries. Extract ALL action items from every report, including `leanness-report.md`.
 - **shared-context.md integration.** Read before analysis, append triage entry after completion.

@@ -93,18 +93,24 @@ def is_finding_candidate(block):
 def validate_text(text):
     """Return a list of (finding-label, reason) violations."""
     errors = []
+    seen = set()
     for block in parse_blocks(text):
         if not is_finding_candidate(block):
             continue
         label = block.first_token or block.heading.strip()
+        if block.first_token in seen:
+            errors.append((label, "duplicate Finding-ID"))
+        seen.add(block.first_token)
         if not ID_VALID.match(block.first_token):
             errors.append(
                 (label, "invalid or missing Finding-ID "
                         "(want <AR|FE|BE|PE|DO|SE|QA|UX|AS>-<B|H|M|L|S><n>)")
             )
         for field in REQUIRED_FIELDS:
-            if f"**{field}:**" not in block.body:
+            if block.field_value(field) is None:
                 errors.append((label, f"missing required field: {field}"))
+            elif not block.field_value(field):
+                errors.append((label, f"empty required field: {field}"))
         files = block.field_value("Files")
         if files is not None and not FILELINE.search(files):
             errors.append(

@@ -1,6 +1,6 @@
 ---
 name: "shell-tools"
-description: "Shell and tool-call environment facts: escaping inside single-quoted zsh/jq/Python strings, complex regex in zsh, absolute paths and cwd resets between Bash calls, linter invocation, curl and JSON output handling, and choosing a built-in tool over a shell one-liner."
+description: "Shell and tool-call environment facts: escaping inside single-quoted zsh/jq/Python strings, complex regex in zsh, explicit paths and per-call working directories, linter invocation, curl and JSON output handling, and choosing a built-in tool over a shell one-liner."
 ---
 
 # Shell & Tools
@@ -30,7 +30,9 @@ exit "$result"
 
 A bare `first; second` returns only the second command's status. A passing
 last command must not hide an earlier failure. Sibling cancellation is a
-harness-specific behavior, not a universal shell property.
+harness-specific behavior, not a universal shell property. When supported,
+collect independent tool results with `Promise.allSettled` and inspect every
+result. Do not infer that one failure cancelled or completed its siblings.
 
 ## Quoting and Escaping
 
@@ -69,27 +71,20 @@ nonportable flags. Use a script for complex parsing.
 
 ## Paths
 
-The file tools do not expand `~`, and the shell's working directory resets
-between Bash calls.
+Resolve paths against the actual tool contract. The current Codex
+`exec_command` schema defaults `workdir` to the turn cwd; an explicit `workdir`
+selects that call's directory. A `cd` inside one process is not authority to
+assume another call targets the same worktree. Current Claude cwd persistence
+has not been verified here; inspect its native contract before relying on it.
 
-Wrong -- tilde in a file tool, relative path across calls:
-
-```text
-Read("~/code/project/src/index.ts")     # no such file
-```
-
-```bash
-cd ../other-project && pnpm test        # cwd already reset; ../ is wrong
-```
-
-Right -- absolute paths everywhere, and `cd` inside the same call:
-
-```text
-Read("/Users/you/code/project/src/index.ts")
-```
+Use an observed absolute path for cross-project operations, an explicit tool
+working directory, or `git -C`. Check the actual branch before mutations.
+File APIs need not perform shell expansion: resolve `~` yourself unless that
+specific API documents expansion. Shell quoting can also suppress expansion.
 
 ```bash
-cd /absolute/path/to/other-project && pnpm test
+git -C /absolute/path/to/worktree status --short
+cd /absolute/path/to/project && pnpm test
 ```
 
 ### Do Not Fabricate Paths
@@ -182,11 +177,14 @@ reason. It does not prove every URL on the domain is blocked. Avoid blind
 retries; retry only after a relevant correction or use an authorized alternate
 source. See [HTTP semantics](https://www.rfc-editor.org/rfc/rfc9110.html#name-403-forbidden).
 
-### Create Boilerplate Files Sequentially
+### Recover from Blocked Boilerplate Writes
 
-API content filters can block certain filenames (`CODE_OF_CONDUCT.md`,
-`SECURITY.md`) mid-batch. Creating them one at a time with a fallback keeps a
-single block from wasting the whole turn.
+Historical sessions reported blocked boilerplate writes, but did not establish
+a universal filename restriction or current client reproduction. If a batch
+fails, inspect each result and isolate the affected write with a legitimate
+minimal template or reference. Preserve completed files and record unresolved
+failures; do not repeat unchanged attempts or claim a platform cause without
+evidence. Independent ordinary writes need no blanket sequential rule.
 
 ## JSON and HTTP Output
 

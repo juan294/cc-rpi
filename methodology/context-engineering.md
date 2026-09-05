@@ -1,14 +1,12 @@
 # Context Engineering
 
-> "The contents of your context window are the ONLY lever you have to affect the quality of your output."
+## Context and Persistent State
 
-## The Stateless Function Mental Model
-
-At every turn, a coding agent is a stateless function call: the full context window goes in, the next action comes out. There is no hidden memory, no persistent state beyond what's in the window. This means:
-
-- Everything the agent needs to make a good decision must be IN the context window
-- Everything that ISN'T needed is noise that degrades decision quality
-- The entire RPI workflow is, at its core, a **context management strategy**
+Good decisions need current, relevant evidence in the active context or in
+artifacts the agent can retrieve. Repositories, tool sessions, native memory
+and configuration can persist outside the conversation. Their existence does
+not guarantee that a later turn has loaded or verified them. RPI uses explicit
+handoffs and state checks to make that boundary visible.
 
 ## Context Quality Hierarchy
 
@@ -21,7 +19,7 @@ Optimize your context window for these properties, in priority order:
 | 3 | **Size / Noise** | Too much irrelevant content drowns the signal |
 | 4 | **Trajectory** | Poor trajectory (conversation going off-track) compounds with each turn |
 
-**The equation:** Quality is proportional to (Correctness x Completeness) / Noise.
+This hierarchy is a working heuristic, not a quantitative quality equation.
 
 ## What Eats Context
 
@@ -60,7 +58,9 @@ Each phase produces a compact artifact:
 - Implement -> committed code + updated plan checkboxes
 - Validate -> validation report
 
-Each phase starts with a fresh context window that reads only the compact artifact from the previous phase, not the raw exploration that produced it.
+Prefer separate phase conversations using the handoff plus controlling contracts
+and targeted current-state verification. Reuse valid prior reads; do not reload
+all raw exploration or assume the handoff alone proves current state.
 
 **The ideal compacted output includes:**
 - What we're trying to accomplish (goal)
@@ -69,6 +69,12 @@ Each phase starts with a fresh context window that reads only the compact artifa
 - What's been done (completed steps)
 - What's next (remaining work)
 - What's currently blocking (if anything)
+- Approved scope, base/current commit, worktree path and dirty/untracked state
+- Check receipts and tested identity, deviations, retained risks and next phase
+
+On resume, compare the actual state with this record before relying on any
+completion claim. Invalidated check evidence must be rerun. Existing owner
+authorization persists within its scope; a handoff cannot grant native trust.
 
 ### Good vs Bad Compaction
 
@@ -119,15 +125,17 @@ This prevents test suites from consuming thousands of tokens on success while pr
 
 Git commit messages are another compaction surface. Well-written commits serve as a compressed log of what changed and why, which future research agents can use to quickly understand project history without reading every file.
 
-## Context Utilization Target
+## When to Compact
 
-Aim to keep context utilization at **40-60%** of the window. Above 60%, output quality degrades noticeably. If you're approaching this threshold:
+There is no universal utilization percentage or context-slot budget. Use actual
+native warnings, missed constraints, retrieval noise and task progress to decide
+when context needs attention. Use native compaction within a long phase and a
+durable handoff between conversations. A new conversation does not erase the
+approved objective or remove its acceptance gates.
 
-1. Compact current progress to a markdown file
-2. Start a fresh conversation
-3. Point the new conversation at the compacted artifact
-
-This is why the RPI phases are separate conversations, not one long session.
+Instruction budgets are separate: cc-rpi checks its managed root bytes, while
+read-only diagnostics report the full effective chain and any unverified native
+limit. Never truncate owner instructions or raise a native limit automatically.
 
 ## Research on the Integration Branch, Implement in Worktrees
 
@@ -170,9 +178,9 @@ Not all context is needed at all times. CLAUDE.md is loaded every session, so it
 
 | Layer | When Loaded | What Goes Here |
 |-------|-------------|----------------|
-| **CLAUDE.md** | Every session | Build/test commands, git workflow, operational rules, stack overview |
+| **Shared root instructions** | Native root discovery | Build/test commands, workflow, stack and the essential conditional-rule map; Claude imports the shared AGENTS.md block |
 | **Skills** (`.claude/skills/`) | On demand, when relevant | Domain knowledge, reusable workflows, API conventions |
-| **`.claude/rules/`** | Conditionally, when working with matching files | Domain rules scoped to a file pattern (deployment rules, test rules) |
+| **Conditional domain rules** | Claude native matching; Codex explicit root map and selected skills | Domain rules scoped to relevant files; do not assume Claude globs are native Codex instructions |
 | **Supplementary docs** (`docs/`, `agent_docs/`) | When agent decides to read | Architecture details, database schemas, service patterns |
 | **Research artifacts** (`docs/research/`) | When starting a related task | Previous investigation results, codebase maps |
 
@@ -237,20 +245,27 @@ Context doesn't have to be managed only through RPI phases. Claude Code provides
 - **`/rewind` or `Esc+Esc`** — Restore conversation, code, or both to any previous checkpoint. Every Claude action creates a checkpoint.
 - **`--continue`** — Resume the most recent conversation across terminal sessions.
 - **`--resume`** — Select from recent conversations. Use `/rename` to give sessions descriptive names.
-- **`claude doctor` vs `/doctor`** — two tools with overlapping names and different scope. `claude doctor` is a CLI subcommand, run outside a session, that checks the installation itself. `/doctor` is an in-session slash command that runs a full project checkup and can fix what it finds, including rightsizing an oversized CLAUDE.md or skill. Verified on Claude Code 2.1.220; `/doctor` is interactive and must not be scripted or run headlessly.
+- **Native diagnostics** — inspect the installed client's help and documented scope
+  before invoking a diagnostic. Prefer cc-rpi read-only `rpi-status` diagnostics
+  for installation and instruction-chain evidence. A diagnostic observation does
+  not authorize repairs, profile changes or external services.
 
 **When to clear vs compact:**
 - Switching to an unrelated task → `/clear`
 - Same task but context is heavy → `/compact`
 - Tried an approach that failed → `/rewind` to before the failed attempt
-- After two failed corrections on the same issue → `/clear` and write a better initial prompt
+- When repeated corrections stop producing new evidence → record state, revisit
+  the hypothesis and compact if needed; no fixed retry count determines failure
 
 ## Headless Mode and Fan-out
 
 For CI pipelines, batch operations, and scaling beyond a single session:
 
 - **`claude -p "prompt"`** — Run Claude headlessly without an interactive session. Use `--output-format json` for structured output.
-- **Fan-out pattern** — Generate a task list, then loop: `for file in $(cat files.txt); do claude -p "Migrate $file" --allowedTools "Edit,Bash(git commit *)"; done`
+- **Bounded assignments** — Identify independent work within the current phase,
+  bind each assignment to owned files and explicit outputs, and use at most three
+  implementers. Keep native permissions narrow and all worktrees local; do not
+  create an unrestricted shell loop or implicit background service.
 - **Writer/Reviewer pattern** — Run two sessions: one implements, another reviews the implementation in fresh context (unbiased by having written it).
 
 ## Claude Settings & Permissions

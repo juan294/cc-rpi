@@ -1,5 +1,10 @@
 # Scheduled Agents
 
+Scheduled agents are an explicit opt-in; ordinary RPI does not install schedulers
+or start background services. Review scope, resources, native permissions and
+paid inference authority before enabling one. Native goals, advisors or docs
+features likewise require an explicit use case and verified client support.
+
 Scheduled agents run outside of interactive sessions on a recurring schedule. They perform maintenance, audits, and health checks automatically — catching issues before humans or interactive agents encounter them.
 
 ## Architecture
@@ -111,7 +116,9 @@ launchctl start com.project-name.my-agent
 bash scripts/agents/install-agents.sh --unload
 ```
 
-The installer handles all four launchd gotchas automatically (fd limits, env vars, ProgramArguments wrapper, log paths). No manual plist authoring needed.
+The installer supplies the historical launchd recipe. Inspect its rendered job
+configuration and actual requirements before opting in; it does not prove that
+every installed client needs each workaround or that an agent ran successfully.
 
 ### macOS (launchd) — Manual Plist
 
@@ -166,17 +173,25 @@ If you need custom plist configuration beyond what the installer generates:
 
 #### macOS launchd Gotchas
 
-launchd provides a minimal execution environment that breaks Claude CLI in four ways. All four must be fixed together — any single missing fix causes silent failure. See [Error #37](../patterns/agent-errors.md#error-37-scheduled-agent-silently-fails-under-macos-launchd) and [Error #38](../patterns/agent-errors.md#error-38-claude-cli-crashes-with-unexpected-when-plist-runs-script-directly) for full details.
+The scheduler environment can differ from a terminal. The historical reports in
+[Error #37](../patterns/agent-errors.md#error-37-scheduled-agent-silently-fails-under-macos-launchd)
+and [Error #38](../patterns/agent-errors.md#error-38-claude-cli-crashes-with-unexpected-when-plist-runs-script-directly)
+lack a recorded original client version. Keep the diagnostic checklist, without
+claiming every current client needs four fixes:
 
-**1. File descriptor limit (hard cap 256).** launchd sets a hard limit of 256 open files. Claude CLI needs 100K+ for Node.js. `ulimit -n` in the script cannot raise above the hard limit — the fix must be in the plist via `HardResourceLimits` and `SoftResourceLimits` (shown in the plist template above).
+1. Inspect actual soft/hard descriptor limits. The template value is a historical
+   recipe, not a proven universal Claude minimum; soft limits cannot exceed hard.
+2. Verify executable paths, cwd and necessary environment without sourcing
+   interactive profiles or exposing credentials.
+3. Verify supported non-interactive authentication setup. Existing credentials
+   may suffice; `claude setup-token` is one route, not a mandatory new token.
+4. For a reproduced location-dependent failure, compare direct and wrapper
+   execution with identical inputs and record client/macOS versions and logs.
+   Do not infer the internal project-context cause from the workaround alone.
 
-**2. Missing environment variables.** launchd doesn't source shell profiles (`~/.zshrc`, `~/.bash_profile`). PATH is minimal (`/usr/bin:/bin:/usr/sbin:/sbin`), HOME may be unset, TERM is absent. The fix is `EnvironmentVariables` in the plist (shown above), supplemented by fallback exports in the script.
-
-**3. No interactive authentication.** Claude CLI's default OAuth flow opens a browser. Under launchd there's no TTY and no browser. Fix: run `claude setup-token` once from an interactive terminal to create a persistent API token. The script should verify auth works before attempting the main task.
-
-**4. ProgramArguments must use `/bin/bash -c exec`.** When launchd directly executes a script located inside a project directory (via shebang), Claude CLI crashes with "An unknown error occurred (Unexpected)". The fix is to use `/bin/bash -c "exec /bin/bash /path/to/script.sh"` in ProgramArguments (shown in the plist template above). This changes the process context so Claude doesn't misidentify the project root from the initial process arguments.
-
-**Testing:** Always test with `launchctl start <label>`, never by running the script from a terminal. Terminal execution has full env vars, high fd limits, and interactive auth — it masks all four problems.
+An explicitly authorized `launchctl start` tests the scheduler path; terminal
+success alone does not. Check output and logs as well as status. An inference
+probe consumes model resources and is not an implicit diagnostic prerequisite.
 
 ### Linux (cron)
 
@@ -307,8 +322,8 @@ Perform these checks:
 1. Pull this period's Claude Code / Anthropic API usage export (usage or billing
    export). If no export is reachable, write a YELLOW report saying so and stop --
    do not guess numbers.
-2. Attribute spend to workflows where possible: map runs to /research, /plan,
-   /implement, /triage, /fix-ci, etc. (e.g. by branch, session label, or commit trailer).
+2. Attribute spend to workflows where possible: map runs to rpi-research, rpi-plan,
+   rpi-implement, rpi-triage, rpi-fix-ci, etc. (e.g. by branch, session label, or commit trailer).
 3. Compute cost-per-outcome: total spend / completed verified changes this period, and average
    cost per run for each recurring workflow.
 4. Record requested model/effort and source, observed values where available,
@@ -354,29 +369,17 @@ fi
 
 ### Checkpoint and Resume
 
-Multi-step headless runs (nightly triage, blueprint sync, release agents) die
-mid-flight on transient `Not logged in`, API 500, or 529 overload errors. Without
-a checkpoint, the next attempt restarts from scratch — re-doing committed work and
-sometimes never finishing. Write a step marker after each major phase so a retry
-resumes where it left off:
+Multi-step headless runs need durable state that binds completion to actual
+inputs, not a bare step-name marker in `/tmp`. Record objective and approved
+scope, base/current commit, worktree, completed and partial files, findings,
+decisions, check receipts with tested identity, deviations, risks and next step.
+Use the lifecycle engine's journal for installation transactions; a workflow
+handoff must not replace its ownership or rollback checks.
 
-```bash
-CKPT="${TMPDIR:-/tmp}/${AGENT_NAME}.checkpoint"
-done_step() { grep -qxF "$1" "$CKPT" 2>/dev/null; }
-mark_step() { echo "$1" >> "$CKPT"; }
-
-# Each phase is guarded by its checkpoint, so a resumed run skips finished work.
-done_step "discover" || { run_discovery && mark_step "discover"; }
-done_step "fix"      || { run_fixes     && mark_step "fix"; }
-done_step "merge"    || { run_merges    && mark_step "merge"; }
-
-# Clear the checkpoint only on a fully successful run.
-rm -f "$CKPT"
-```
-
-Pair this with the retry loop above: the retry handles a flaky single call;
-the checkpoint handles a session that dies between phases. Commands that already
-support phase resume (for example `/remediate wave=N`) follow this same shape.
+On resume, verify refs, files and receipt validity before skipping a step. Retain
+failed/unprocessed work regardless of timestamps. Retry only with a justified
+change or recoverable transient condition; a checkpoint cannot manufacture a
+successful result, native permission or new authorization.
 
 ### WIP Limits
 
@@ -474,7 +477,7 @@ For private repos, omit these entries — the directories are tracked normally.
 
 ## Morning Triage
 
-After scheduled agents finish their overnight runs, use `/triage` to process all reports and the Dependabot PR queue:
+After scheduled agents finish their overnight runs, use `rpi-triage` to process all reports and the Dependabot PR queue:
 
 1. Checks the `.last-triage` marker to discover reports modified since the last triage run
 2. If no marker exists (first run), processes ALL reports in `docs/agents/`
@@ -485,16 +488,16 @@ After scheduled agents finish their overnight runs, use `/triage` to process all
 7. Implements all fixes (fix everything — Rule #58)
 8. Commits code fixes (and reports too, on private repos — Rule #70)
 9. Updates shared-context.md with triage results
-10. Touches `docs/agents/.last-triage` to mark reports as processed
+10. Advances the checkpoint no later than the captured discovery-start boundary, preserving failed/unprocessed reports; discovery failure never advances it
 11. Processes Dependabot inputs locally (Rule #84): batches applicable updates, reproduces failures locally, and records unresolved compatibility decisions. No remote rebase, auto-merge or working-branch push; full local integration precedes one authorized integration push.
 
-For multi-project orchestration, the `morning-triage.sh` script template (in `templates/scripts/`) runs `/triage` across all configured projects sequentially, producing a cross-project summary.
+For multi-project orchestration, the `morning-triage.sh` script template (in `templates/scripts/`) runs `rpi-triage` across all configured projects sequentially, producing a cross-project summary.
 
 ## Prerequisites
 
 - Claude CLI installed and authenticated (`claude --version`)
-- Non-interactive auth configured: run `claude setup-token` from an interactive terminal (required for launchd/cron — OAuth won't work without a browser)
-- macOS launchd: use `install-agents.sh` (handles all four gotchas automatically), or ensure plist includes `HardResourceLimits`/`SoftResourceLimits` with `NumberOfFiles: 122880`, `EnvironmentVariables` with HOME, TERM, PATH, and `ProgramArguments` using `/bin/bash -c "exec /bin/bash <script>"` format (see [Error #37](../patterns/agent-errors.md#error-37-scheduled-agent-silently-fails-under-macos-launchd) and [Error #38](../patterns/agent-errors.md#error-38-claude-cli-crashes-with-unexpected-when-plist-runs-script-directly))
+- Supported non-interactive authentication configured for the installed client; preserve working credentials and never expose them
+- macOS launchd: explicitly review and opt into the job configuration; verify actual limits, environment and any required wrapper using the diagnostics above
 - `lib/agent-utils.sh` copied to `scripts/agents/lib/` (provides env setup, logging, shared context utilities)
 - Project dependencies installed (agents may run test/build commands)
 - `docs/agents/` and `logs/` directories exist (created automatically by `agent-utils.sh`)

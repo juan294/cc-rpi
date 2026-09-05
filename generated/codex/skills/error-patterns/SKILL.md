@@ -5,17 +5,17 @@ description: "Known agent error patterns -- debugging reference for tool failure
 
 # Error Patterns -- Top 20
 
-**#1: Parallel verification kills siblings** --
+**#1: Lost parallel verification results** --
 Use `&&` or aggregate each exit status; bare `;` hides early failures.
 
-**#2: Worktree cwd resets to main repo** --
-Prefix EVERY command with `cd /absolute/path &&`.
+**#2: Wrong worktree cwd** --
+Bind each call to an observed worktree path or explicit workdir; verify branch.
 
 **#3: Pre-commit hook rejection** --
 Run typecheck/lint BEFORE committing. Fix first.
 
 **#8: Tilde in file paths** --
-Never use `~` in Read/Write/Edit paths. Full absolute.
+Resolve an absolute path unless that specific file API promises expansion.
 
 **#9: Push rejected (non-fast-forward)** --
 Reconcile remote integration history locally, then rerun affected gates.

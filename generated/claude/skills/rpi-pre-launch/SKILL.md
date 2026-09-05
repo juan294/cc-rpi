@@ -39,7 +39,7 @@ before implementing anything.
 ## Input
 
 The request may provide a focus area hint (e.g., "focus on backend"). Biases
-synthesis emphasis — does not disable any specialist.
+synthesis emphasis — does not disable any required domain.
 
 ## Step 1: Domain Coverage and Assignments
 
@@ -53,18 +53,26 @@ produce `AS` findings in a code-as-written audit.
 Cover the eight core domains listed below. Choose bounded read-only assignments
 based on uncertainty, file ownership, domain overlap, available tools and CPU/API
 contention. One agent can cover multiple domains; no fixed agent count is required.
-Record assignment coverage and N/A reasons so omitted domains cannot disappear.
+Record assignment coverage and evidence of absent implementation within a domain;
+all eight core domains remain required. AS alone is conditional.
 Delegate independent work concurrently when useful, then await all results before
 synthesis. Keep one owner for the full test selection; all other checks are scoped.
 
-Each specialist opens with the **system-map-first preamble**:
+Every assignment states its objective, allowed actions/files, evidence/output
+contract, resource constraints and completion condition. Use the
+[bounded dispatch contract](references/dispatch.md) for the audit coverage artifact.
+Failed or missing results remain explicit gaps; they cannot count as reviewed
+domains or justify a READY verdict. Independent implementation review remains a
+separate requirement when findings are later remediated.
+
+Each domain investigation opens with the **system-map-first preamble**:
 
 > Before judging details in your domain, build a mental model: identify
 > entry points, map data/control flow within your scope, and note the
 > major boundaries. Report this model in your finding set under a
 > `## Domain Model` subsection.
 
-**Specialist 1 — Principal Architect** (`architect`, AR)
+**Architecture domain — Principal Architect** (`architect`, AR)
 
 Scope: system-wide architecture, module boundaries, coupling, dependency
 health, circular deps, dead code detection, typecheck.
@@ -72,14 +80,14 @@ Commands: the documented typecheck command, the package manager’s outdated-pac
 Excludes: FE-specific and BE-specific code concerns (delegated to
 Staff FE and Staff BE).
 
-**Specialist 2 — Staff Frontend Engineer** (`staff-frontend`, FE)
+**Frontend domain — Staff Frontend Engineer** (`staff-frontend`, FE)
 
 Scope: component structure, state management, routing, client-side perf,
 hydration, bundle composition, FE-specific patterns.
 Commands: read FE source tree, bundle analyzer output if available.
 Excludes: visual design and a11y (UX Lead), backend API shape (Staff BE).
 
-**Specialist 3 — Staff Backend Engineer** (`staff-backend`, BE)
+**Backend domain — Staff Backend Engineer** (`staff-backend`, BE)
 
 Scope: API design, validation, error handling, retry/idempotency, DB
 access patterns, transactions, queues, background jobs, service
@@ -88,14 +96,14 @@ Commands: read BE source tree, schema files, migration directory.
 Excludes: deployment/CI (DevOps/SRE Lead), latency profiling
 (Performance Engineer).
 
-**Specialist 4 — Performance Engineer** (`performance-eng`, PE)
+**Performance domain — Performance Engineer** (`performance-eng`, PE)
 
 Scope: bundle sizes, unused exports, code splitting, p95/p99 latency
 risks, cache strategy, hot-path identification, startup cost,
 CPU/memory/IO/network inefficiencies.
 Commands: the documented build command (parse output for sizes and signals).
 
-**Specialist 5 — DevOps / SRE Lead** (`devops-sre`, DO)
+**Operations domain — DevOps / SRE Lead** (`devops-sre`, DO)
 
 Scope: deployment safety, rollback strategy, env config, secrets
 handling, migrations, CI/CD, health checks, observability, tracing,
@@ -104,7 +112,7 @@ Commands: `gh run list --branch <integration-branch> --limit 5`, audit
 env var docs vs actual usage, verify error pages exist, check git state
 clean.
 
-**Specialist 6 — Security Reviewer** (`security-reviewer`, SE)
+**Security domain — Security Reviewer** (`security-reviewer`, SE)
 
 Scope: the documented dependency audit, hardcoded secrets, auth/authz gaps,
 sensitive-data handling, injection (SQL/XSS/SSRF/CSRF), unsafe defaults,
@@ -113,7 +121,7 @@ Commands: the documented dependency audit, grep for secret patterns.
 Note: A dedicated security review is still required before launch. This
 audit catches obvious issues only.
 
-**Specialist 7 — QA / Reliability Lead** (`qa-reliability`, QA)
+**QA domain — QA / Reliability Lead** (`qa-reliability`, QA)
 
 Scope: the documented test selection + the documented typecheck command + the documented lint command; coverage of
 critical workflows; graceful degradation; failure modes;
@@ -122,7 +130,7 @@ Commands: the documented test selection (full suite — the ONE specialist autho
 Rule #73).
 Rule #73: the other specialists MUST NOT run the documented test selection in parallel.
 
-**Specialist 8 — Product Designer / UX Lead** (`ux-lead`, UX)
+**UX domain — Product Designer / UX Lead** (`ux-lead`, UX)
 
 Scope: visual hierarchy, screen-to-screen consistency, component reuse,
 design-system signals, spacing/typography/control consistency,
@@ -132,7 +140,7 @@ responsiveness, accessibility (ARIA, focus, keyboard nav,
 conversion blockers.
 Commands: read UI source tree, component library, design tokens.
 
-**Specialist 9 — Agent Surface Engineer** (`agent-surface`, AS) -- conditional: applies when inspection finds an implemented agent-facing surface
+**Agent-surface domain — Agent Surface Engineer** (`agent-surface`, AS) -- conditional: applies when inspection finds an implemented agent-facing surface
 
 This domain applies only when the inspected implementation exposes tools to an
 agent. Record the detection evidence or concrete reason it is not applicable.
@@ -209,8 +217,8 @@ Rules:
 
 This contract is machine-checkable: `rpi-remediate` runs
 the bundled [finding validator](scripts/validate-findings.py) against the report before parsing and
-rejects any finding with a malformed Finding-ID, a missing required field, or
-no `file:line` ref. Emit findings in exactly this format.
+rejects any finding with a malformed or duplicate Finding-ID, a missing or empty
+required field, or no `file:line` ref. Emit findings in exactly this format.
 
 ### Cross-Domain Notes (optional)
 
@@ -303,6 +311,13 @@ write `docs/agents/pre-launch-report.md` with this structure:
       - Next 5 actions (ordered)
 ```
 
+Save assignment/results coverage in `docs/agents/pre-launch-coverage.json` using
+the dispatch schema. Resolve the bundled [dispatch validator](scripts/rpi-dispatch.py)
+from this installed skill and run it against that artifact with
+`--report docs/agents/pre-launch-report.md`. Do not hand an incomplete report to
+remediation as a completed audit. Inspect every required result and resolve each
+coverage gap first; no finding in a domain does not mean that domain was skipped.
+
 ## Step 4: After the Audit
 
 The following describes what `rpi-remediate` will do — do not execute
@@ -314,16 +329,18 @@ Run `rpi-remediate` to process findings in 3 waves, driven by Section 14:
   Section 14. Typically launch-blockers + high severity. Must pass
   before release.
 - **Wave 2 (After launch)** — all findings marked `After launch` in
-  Section 14. Typically medium severity. Post-release sprint; user may
-  defer to a separate `rpi-remediate` run.
+  Section 14. Typically medium severity. Complete authorized actionable fixes;
+  a separate run requires an explicit deferral of that scope.
 - **Wave 3 (Later / strategic)** — all findings marked `Later` in
-  Section 14. Typically low + strategic. Local strategic follow-ups recorded; no
-  worktree fix agents. Requires human architectural judgment.
+  Section 14. Typically low + strategic. Complete authorized actionable fixes.
+  Findings that require a new architectural or scope decision receive a local
+  disposition and owner review before dependent work.
 
-Rule #58 preserves 100% finding disposition in the local backlog. External
-issues or comments require explicit authorization.
-Wave 3 items are filed but not auto-fixed — the one documented exception
-to Rule #58.
+Severity and time horizon order work; they do not automatically exempt a finding
+from resolution. Rule #58 requires every confirmed actionable finding within the
+authorized scope to be resolved, false positives rejected with evidence, and
+architectural exceptions or explicitly deferred scope recorded locally for owner
+review. External issues or comments require explicit authorization.
 
 ## Rules
 
@@ -338,7 +355,7 @@ doubt.
   No modifications during the audit.
 - Run bounded independent assignments concurrently when useful; do not require
   a minimum team size or omit any applicable domain.
-- Only QA / Reliability Lead runs the full the documented test selection. The other
+- Only the assignment owning QA runs the full documented test selection. The other
   specialists use scoped reads and non-test commands. (Rule #73)
 - Commands run sequentially within each specialist, never as parallel
   Bash calls. (Error #63)
@@ -371,3 +388,10 @@ review, repair and applicable verification before its acceptance gate. An explic
 instruction can authorize continuation across phases; otherwise stop at the stated
 phase boundary. Production, publication, destructive actions and new scope retain
 their actual authorization requirements. Preserve durable artifacts before cleanup.
+
+## Bundled contract tools
+
+For a structured handoff, resolve `scripts/rpi-dispatch.py` relative to this
+installed skill; its sibling `scripts/validate-findings.py` checks report IDs
+and references. Follow [dispatch](references/dispatch.md) for invocation and
+[durable handoff](references/handoff.md) for actual-state revalidation.

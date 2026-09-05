@@ -5,18 +5,23 @@ description: "Refresh documentation, diagrams, version references and existing i
 
 # Update All Documentation
 
-Research all changes since the last release and update every document, diagram, version reference,
-and inline code comment in the project.
+Use the requested change range, or the last release when no range is supplied,
+to update affected documents, diagrams, version references and existing inline
+documentation. Read controlling project instructions/contracts completely and
+revalidate the actual worktree before reusing a prior update plan.
 
 ## Step 1: Discovery
 
-Cover the four read-only discovery lenses below. Use bounded independent
-assignments when useful, combining lenses when a single reviewer is sufficient.
-No product files are modified during discovery.
+Cover the applicable discovery lenses below, recording when a lens has no
+relevant surface. A narrow docs update can stay with the parent; a broad update
+can group compatible lenses into independent read-only assignments. Each names
+its objective, permitted actions/files, evidence/output, resource limits and
+completion condition. Stay within available slots and report missing or failed
+results as coverage gaps. No product files are modified during discovery.
 
-### The Team
+### Discovery lenses
 
-Assign all four lenses; staffing and concurrency follow scope and resource limits:
+These are coverage areas, not a fixed number of agents:
 
 1. **change-analyst** -- Find the last release tag (or first commit if no tags). Get the full
    diff and commit log since then. Categorize all changes by area: new features, bug fixes,
@@ -50,7 +55,8 @@ Assign all four lenses; staffing and concurrency follow scope and resource limit
 
 ### Synthesis
 
-After all assigned discovery work completes, synthesize their findings into an update plan:
+Inspect each required discovery result and resolve any coverage gap, then
+synthesize the findings into an update plan using actual values:
 
 ```markdown
 ## Documentation Update Plan
@@ -88,16 +94,15 @@ Update documents one at a time within the authorized documentation request.
 
 For each document in the update plan:
 
-1. Read the full document.
+1. Read the document in full unless an unchanged complete prior read is available.
 2. Apply content updates: document new features, changed behavior, removed items.
 3. Update Mermaid diagrams to match the current code structure.
 4. Update version references and counts. Run the project's invariant scripts
-   rather than grepping by hand -- hardcoded values drift in places a manual
-   sweep misses. In cc-rpi, run `bash scripts/verify-local.sh` for the unified
-   local gate, including counts, versions, skills and generated distribution
-   drift. In an adopting project, discover its actual configured local gate
-   from repository instructions and CI rather than assuming cc-rpi paths.
-   Fix every location the applicable checks report.
+   to catch references a manual sweep misses. Discover the complete local gate
+   from repository instructions and CI; do not run it once per document. In cc-rpi,
+   finalization uses `bash scripts/verify-local.sh`, including counts, versions,
+   skills and generated distribution drift. Adopters use their actual gate.
+   Fix every stale location the applicable checks report.
 5. Preserve existing document structure, voice, and formatting.
 6. For inline docs (JSDoc, docstrings, doc comments):
    - Update `@param`, `@returns`, `@example` to match current signatures.
@@ -116,6 +121,13 @@ Present the resulting change summary and complete final verification before
 requesting any still-required publication approval.
 
 ## Step 3: Finalization
+
+Obtain independent review of the changed documentation against actual behavior
+and the update plan. Inspect every required reviewer result; missing review stays
+an acceptance gap. Repair confirmed findings, preserve evidence for rejected false
+positives, and run the native simplify pass or Codex helper on the changed scope
+before final verification. An implementation parent may own this review/gate;
+return exact changed files and invalidated evidence rather than claiming its pass.
 
 1. Run verification commands sequentially (chain with `&&` or aggregate failures explicitly, never parallel Bash calls):
 
@@ -144,7 +156,8 @@ requesting any still-required publication approval.
    [List of [NEEDS REVIEW] items with context]
    ```
 
-4. Save a durable update handoff and commit the reviewed local changes when
+4. Apply the [durable handoff](references/handoff.md) contract in the update report,
+   then commit the reviewed local changes when
    included in the request; otherwise present the complete diff for review.
    - Recommend running `rpi-release` next if a new version is being prepared.
    - If any items are flagged `[NEEDS REVIEW]`, advise the user to review those diagrams

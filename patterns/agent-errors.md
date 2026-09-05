@@ -37,30 +37,25 @@ sibling cancellation to all tools and harnesses.
 
 ## Error #2: Shell cwd resets to main repo when working in a worktree
 
-**Symptom:** Agent is working in a git worktree (e.g., `/project-e2e-fix/`). After a Bash command, the shell cwd silently resets to the main repo (e.g., `/project/`). All subsequent commands run in the wrong directory without any warning. The message `Shell cwd was reset to /path/to/main/repo` appears in output.
+**Symptom:** A historical session reported a worktree command returning to
+another directory. The original Claude client version was not recorded.
 
-**Root cause:** Claude Code's shell state doesn't persist between calls. The working directory resets to the primary working directory, not the worktree.
+**Root cause:** The agent assumed a prior call established the next call's cwd.
+Current Codex `exec_command` explicitly defaults to the turn cwd and accepts
+per-call `workdir`; this is the verified tool contract, not a claim about every
+shell or Claude client. Current Claude cwd behavior remains unverified.
 
-**Correct approach — always do this when working in a worktree:**
+**Correct approach — always do this:** Use the observed absolute worktree path,
+`git -C`, or explicit tool working directory. Verify actual branch and status
+before mutations; preserve every verification exit status (Error #1).
+
 ```bash
-# ALWAYS prefix every command with cd to the worktree using absolute path:
-cd /absolute/path/to/worktree && pnpm run typecheck 2>&1
-
-# ALWAYS use absolute paths for git operations in worktrees:
-cd /absolute/path/to/worktree && git status
-
-# For multi-command chains:
-cd /absolute/path/to/worktree && pnpm run typecheck 2>&1; cd /absolute/path/to/worktree && pnpm run lint 2>&1
+git -C /absolute/path/to/worktree status --short
+cd /absolute/path/to/worktree && pnpm run typecheck
 ```
 
-**Never do this:**
-```bash
-# Don't rely on cwd being in the worktree from a previous command:
-git status  # ← this runs in main repo, not worktree!
-pnpm run test  # ← also wrong directory
-```
-
-**Applies to:** Any work done outside the primary working directory — worktrees, monorepo subdirectories, temporary clones.
+**Never do this:** Infer a worktree or branch from an earlier `cd` or handoff
+without checking current state. Path and branch safety remain active.
 
 ---
 
@@ -203,28 +198,19 @@ const output = execSync('some command').trim();  // ← TypeError
 
 ## Error #8: Write/Read/Edit fail with `~` (tilde) in file paths
 
-**Symptom:** Multiple Write tool calls fail with "Error writing file" when paths use `~/Documents/...`. Agent may misdiagnose and retry (e.g., "these are new files so they don't need to be read first") — but the retry also fails because the path is still wrong.
+**Symptom:** A file operation receives a literal `~` path and fails to find the file.
 
-**Root cause:** The Write, Read, and Edit tools require **truly absolute paths** starting with `/`. The `~` tilde is a shell shorthand that only Bash expands — file tools don't perform tilde expansion.
+**Root cause:** Shell expansion is not a universal file-API feature. Whether an
+API expands tilde depends on its documented contract; quoting can also suppress
+shell expansion.
 
-**Correct approach — always do this:**
-```
-# Use full absolute paths for ALL file tool operations:
-Write(/Users/<user>/path/to/project/src/file.ts)
-Read(/Users/<user>/path/to/project/src/file.ts)
-Edit(/Users/<user>/path/to/project/src/file.ts)
-```
+**Correct approach — always do this:** Resolve the user's home and the actual
+path using the available environment, then pass an observed absolute path when
+the tool does not explicitly support expansion. Preserve ownership and branch
+checks before mutations.
 
-**Never do this:**
-```
-# Tilde paths fail silently or with "Error writing file":
-Write(~/path/to/project/src/file.ts)  # ← FAILS
-Read(~/path/to/project/src/file.ts)   # ← FAILS
-```
-
-**Extra danger with parallel writes:** If you attempt multiple Write calls in parallel and they all use `~` paths, ALL of them fail — wasting an entire turn. Always double-check paths before batching file operations.
-
-**Applies to:** All file tools (Write, Read, Edit, Glob). Always use full absolute paths starting with `/`.
+**Never do this:** Assume every file API expands `~`, or that one tool's failure
+proves every current native tool lacks expansion. This safeguard is retained.
 
 ---
 
@@ -492,32 +478,24 @@ git diff HEAD          # ← also fails
 
 ## Error #19: API content filter blocks file creation in parallel
 
-**Symptom:** When creating multiple boilerplate files in parallel (LICENSE, CODE_OF_CONDUCT.md, SECURITY.md, CONTRIBUTING.md), one or more Write tool calls fail with "API Error: 400 — Output blocked by content filtering policy". The blocked calls waste the entire turn.
+**Symptom:** Historical parallel boilerplate writes reported an API content
+filter error. The original client/model version and a controlled reproduction
+were not recorded.
 
-**Root cause:** The Anthropic API content filter sometimes blocks generation of certain standard open-source files (especially CODE_OF_CONDUCT.md and SECURITY.md) due to their policy/legal language triggering safety filters. When these are created in parallel, the entire batch is affected.
+**Root cause:** The cause was not established. A failed content generation does
+not prove a universal filename restriction or that all sibling calls failed.
 
-**Correct approach — always do this:**
-```
-# Create boilerplate files one at a time, not in parallel:
-1. Create LICENSE
-2. Create CONTRIBUTING.md
-3. Create CODE_OF_CONDUCT.md
-4. Create SECURITY.md
+**Correct approach — always do this:** Inspect each write result, preserve
+successful files, and isolate the affected write with a legitimate minimal
+template or external reference when appropriate. Record client/version and
+reproduction evidence before attributing the failure to the harness. Ordinary
+independent writes do not require a blanket sequential rule.
 
-# If a content filter blocks a file:
-# - Simplify the content (use minimal templates)
-# - Reference an external URL instead of inline content
-# - Ask the user to create that specific file manually
-```
+**Never do this:** Repeat unchanged blocked attempts, silently abandon a
+required file, or assert that CODE_OF_CONDUCT.md/SECURITY.md filenames cause
+filtering. Report an unresolved block and its evidence if no valid route remains.
 
-**Never do this:**
-```
-# Don't create all boilerplate files in one parallel batch:
-Parallel Write: LICENSE, CODE_OF_CONDUCT.md, SECURITY.md, CONTRIBUTING.md
-# ← one blocked file wastes the whole turn
-```
-
-**Key detail:** This is a platform limitation, not a code error. The workaround is sequential creation with graceful fallback. If a file gets blocked, move on and note it for the user rather than retrying the same content.
+**Disposition:** Retained and narrowed, not retired as harness-fixed.
 
 ---
 
@@ -635,31 +613,24 @@ git checkout origin/assumed-branch            # ← branch might not exist
 
 ## Error #24: Cross-project `../` relative paths fail in Bash commands
 
-**Symptom:** `rm ../other-project/scripts/agent.sh ../other-project/docs/agents/report.md` fails with "No such file or directory". The agent uses `../` relative paths to reference files in sibling projects, but the shell's working directory is not what the agent expects.
+**Symptom:** A cross-project relative path resolves from an unexpected cwd.
 
-**Root cause:** The Bash tool's working directory resets to the primary working directory between calls (see Error #2). Even within a single call, `../` relative paths are fragile — they depend on the exact cwd, which may differ from what the agent assumes. This is an extension of the worktree cwd problem applied to cross-project file operations.
+**Root cause:** The agent did not bind the operation to an observed directory.
+See Error #2 for the Codex per-call contract and the unverified Claude case.
+`cd destination && command` does not execute command when `cd` fails; the
+historical claim of a silent fall-through was incorrect.
 
-**Correct approach — always do this:**
+**Correct approach — always do this:** Discover the sibling project's actual
+path, use an explicit working directory or absolute paths, and verify ownership
+and preservation before any deletion. Read-only inspection is a useful preflight:
+
 ```bash
-# Always use absolute paths for cross-project operations:
-rm -f /Users/username/projects/other-project/scripts/agent.sh
-rm -f /Users/username/projects/other-project/docs/agents/report.md
-
-# For multiple files across projects, use absolute paths with ; (not &&):
-rm -f /absolute/path/project-a/file1; rm -f /absolute/path/project-b/file2
+git -C /absolute/path/to/other-project status --short
 ```
 
-**Never do this:**
-```bash
-# Don't use relative paths for cross-project operations:
-rm ../other-project/scripts/agent.sh    # ← cwd may not be where you think
-rm ../../shared/config.json             # ← breaks when cwd resets
-
-# Don't assume cwd is in a specific project:
-cd ../other-project && rm scripts/agent.sh  # ← cd may fail silently, rm runs in wrong dir
-```
-
-**Applies to:** Any Bash command that references files outside the current project. Always use full absolute paths starting with `/`. This is Error #2's principle (absolute paths in worktrees) generalized to all cross-directory operations.
+**Never do this:** Guess `../` from stale context, use broad removal lists, or
+replace ownership inspection with `rm -f`. Separate cross-project authorization
+from path discovery; seeing a sibling project does not authorize modifying it.
 
 ---
 
@@ -978,143 +949,62 @@ awk '... ≠ ...'    # ← zsh can't parse ≠ inline
 
 ## Error #37: Scheduled agent silently fails under macOS launchd
 
-**Symptom:** A scheduled agent script works perfectly when run from a terminal (`./scripts/agents/my-agent.sh`) but silently fails, crashes, or exits immediately when launched by `launchctl start`. The log file is empty or contains cryptic errors like "Too many open files", "claude: command not found", or an OAuth login URL that nobody sees.
+**Symptom:** A scheduled agent works in a terminal but fails under launchd,
+with missing executables, descriptor-limit errors or authentication failures.
 
-**Root cause:** Three independent issues compound under launchd's minimal execution environment (plus a fourth — see [Error #38](#error-38-claude-cli-crashes-with-unexpected-when-plist-runs-script-directly) for the ProgramArguments wrapper requirement):
+**Root cause:** The scheduler environment can differ from the terminal. The
+historical report did not record client/macOS versions or prove universal
+limits of 256 descriptors or a Claude requirement for 100K+ descriptors.
 
-1. **File descriptor limit (hard cap 256):** launchd enforces a hard limit of 256 open files per process. Claude CLI needs 100K+ file descriptors for its Node.js runtime and network connections. `ulimit -n` inside the script has no effect because the hard limit is 256 — you can't raise soft above hard.
+**Correct approach — always do this:** For an explicitly opted-in scheduled
+job, inspect actual executable paths, cwd, environment, soft/hard limits,
+non-interactive authentication support and sanitized logs. Select resource
+limits from measured requirements; a shell cannot raise its soft limit beyond
+its hard limit. Configure only necessary environment values and never publish
+credentials. See the example in the macOS skill and scheduled-agent methodology.
 
-2. **Missing environment variables:** launchd doesn't source `~/.zshrc`, `~/.bash_profile`, or any shell profile. PATH is minimal (`/usr/bin:/bin:/usr/sbin:/sbin`), HOME may be unset, and TERM is absent. Claude CLI and its dependencies aren't on PATH.
+**Never do this:** Treat every job as requiring four identical fixes, require a
+new token when existing authentication works, or use successful terminal
+execution as proof of scheduler success. Scheduler tests can invoke paid model
+work and require the appropriate authorization.
 
-3. **No interactive authentication:** Claude CLI's default OAuth flow opens a browser for login. Under launchd, there's no TTY, no browser, and no user to click "Authorize." The CLI either hangs waiting for auth or exits with an error. `claude setup-token` creates a persistent API token that works in non-interactive environments.
-
-**Correct approach — always do this:**
-
-```xml
-<!-- In the .plist file — resource limits MUST be in the plist, not the script -->
-<key>HardResourceLimits</key>
-<dict>
-  <key>NumberOfFiles</key>
-  <integer>122880</integer>
-</dict>
-<key>SoftResourceLimits</key>
-<dict>
-  <key>NumberOfFiles</key>
-  <integer>122880</integer>
-</dict>
-<!-- Environment variables — plist is the only reliable place -->
-<key>EnvironmentVariables</key>
-<dict>
-  <key>HOME</key>
-  <string>/Users/YOUR_USERNAME</string>
-  <key>TERM</key>
-  <string>xterm-256color</string>
-  <key>PATH</key>
-  <string>/usr/local/bin:/opt/homebrew/bin:/Users/YOUR_USERNAME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
-</dict>
-```
-
-```bash
-# In the agent script — defense-in-depth (supplements the plist)
-
-# 1. Ensure critical env vars exist (fallback if plist vars missing)
-export HOME="${HOME:-$(eval echo ~"$(whoami)")}"
-export TERM="${TERM:-xterm-256color}"
-export PATH="/usr/local/bin:/opt/homebrew/bin:$HOME/.local/bin:$PATH"
-
-# 2. Verify file descriptor limit (plist should have set this)
-ulimit -n 122880 2>/dev/null
-FD_LIMIT=$(ulimit -n)
-if [ "$FD_LIMIT" -lt 10000 ]; then
-  echo "[$(date)] FATAL: File descriptor limit too low ($FD_LIMIT)."
-  echo "  Fix: Add HardResourceLimits/SoftResourceLimits to your .plist"
-  exit 1
-fi
-
-# 3. Verify non-interactive auth works
-if ! "$CLAUDE_BIN" -p "echo ok" --output-format text >/dev/null 2>&1; then
-  echo "[$(date)] FATAL: Claude CLI auth failed in non-interactive mode."
-  echo "  Fix: Run 'claude setup-token' from an interactive terminal."
-  exit 1
-fi
-```
-
-```bash
-# One-time setup — run interactively before scheduling:
-claude setup-token
-# Then test the plist:
-launchctl start com.project.agent.my-agent
-# Check logs — don't trust terminal execution as proof it works
-```
-
-**Never do this:**
-```bash
-# Don't rely on ulimit alone — launchd hard limit is 256, can't raise above it:
-ulimit -n 122880  # ← fails silently, stays at 256
-
-# Don't source shell profiles — fragile and may have interactive-only code:
-source ~/.zshrc   # ← may fail or produce side effects under launchd
-
-# Don't rely on interactive OAuth — no browser, no TTY under launchd:
-# Claude will try to open a browser URL that nobody will see
-
-# Don't test by running the script from a terminal:
-./scripts/agents/my-agent.sh  # ← works! (terminal has high fd limit + full env)
-# This proves nothing about launchd execution
-```
-
-**Key detail:** All three fixes must be applied together — any single missing fix causes silent failure. The plist resource limits are the only way to raise file descriptors under launchd (`ulimit` can't exceed the hard limit). The plist environment variables are the only reliable way to set PATH (scripts can supplement but not replace). And `claude setup-token` is the only way to authenticate without a browser. Always test with `launchctl start`, never from a terminal — terminal execution masks all three problems.
+**Disposition:** Retain the diagnostic checklist. A current-version native
+reproduction is required before declaring a harness fix.
 
 ---
 
 ## Error #38: Claude CLI crashes with "Unexpected" when plist runs script directly
 
-**Symptom:** Agent plist with correct resource limits, env vars, and auth still fails. Claude CLI returns `error: An unknown error occurred (Unexpected)` even for `claude --version`. The error is instant (< 1 second). Exit code is 0 despite the error.
+**Symptom:** A historical launchd job returned `Unexpected` even for
+`claude --version`, with zero exit status and location-dependent behavior.
+The original client version was not recorded.
 
-**Root cause:** When launchd directly executes a script located inside a project directory that has a `.claude/` folder, the Claude CLI misidentifies the project context from the initial process arguments. This causes an internal crash before any real work begins. The same script works fine when located outside the project tree (e.g., `/tmp`), or when the plist uses `/bin/bash -c "exec /bin/bash <script>"` instead of running the script directly.
+**Root cause:** Unknown. The report observed that a `/bin/bash -c` exec wrapper
+avoided the failure; it did not establish the proposed internal project-context
+cause or that all direct script execution is invalid.
 
-**Diagnostic clue:** The failure is **location-dependent**, not content-dependent. The same script at `/tmp/my-agent.sh` works, but at `/project/scripts/agents/my-agent.sh` fails. Removing `.claude/settings.json` doesn't fix it. The error is a CLI bug in how it resolves project context under launchd's process model.
-
-**Correct approach from the start:**
-
-Use `/bin/bash -c "exec /bin/bash <script>"` in ProgramArguments instead of the script path directly:
+**Correct approach — always do this:** Record current client/macOS version,
+arguments, cwd and sanitized logs. Reproduce the direct and wrapper cases under
+the same authorized scheduler environment before recommending the workaround:
 
 ```xml
-<!-- WRONG — direct script execution, causes crash: -->
-<key>ProgramArguments</key>
-<array>
-  <string>/path/to/project/scripts/agents/my-agent.sh</string>
-</array>
-
-<!-- ALSO WRONG — /bin/bash without -c exec, same crash: -->
-<key>ProgramArguments</key>
-<array>
-  <string>/bin/bash</string>
-  <string>/path/to/project/scripts/agents/my-agent.sh</string>
-</array>
-
-<!-- CORRECT — bash -c with exec wrapper: -->
 <key>ProgramArguments</key>
 <array>
   <string>/bin/bash</string>
   <string>-c</string>
-  <string>exec /bin/bash /path/to/project/scripts/agents/my-agent.sh</string>
+  <string>exec /bin/bash /absolute/path/to/project/scripts/agent.sh</string>
 </array>
 ```
 
-The `exec` replaces the initial shell process, so the agent script still runs as PID 1 of the launchd job (clean process tree, correct signal handling). The `-c` wrapper changes the initial process context so Claude CLI doesn't misidentify the project root from the launchd process arguments.
+Quote an actual script path safely if it contains spaces. Check expected output
+and logs as well as exit status. `exec` replaces the shell; it does not make the
+job system PID 1.
 
-**Never do this:**
-```xml
-<!-- Don't run scripts directly — even with /bin/bash prefix: -->
-<array>
-  <string>/bin/bash</string>
-  <string>/project/scripts/agents/my-agent.sh</string>
-</array>
-<!-- Claude CLI will crash with "Unexpected" if the script is inside a .claude/ project -->
-```
+**Never do this:** Claim current Claude crashes merely because `.claude/` exists,
+or install a scheduler/wrapper as an implicit prerequisite for normal RPI work.
 
-**Key detail:** This error has zero debug output — `--debug-file` is never written because the CLI crashes before reaching the debug initialization. The exit code is 0 despite the error, which means auth preflight checks (`if ! claude -p "echo ok" >/dev/null 2>&1`) silently pass, masking the problem. Combined with [Error #37](#error-37-scheduled-agent-silently-fails-under-macos-launchd), a working launchd agent plist requires four fixes: resource limits, env vars, setup-token auth, and the `-c exec` ProgramArguments wrapper.
+**Disposition:** Retained historical workaround with unverified applicability;
+no harness-fixed retirement without version-bound reproduction evidence.
 
 ---
 
@@ -1827,7 +1717,7 @@ Real example: An agent implementing 10 independent features launched 10 worktree
 pnpm vitest run src/features/my-feature/  # scoped to changed directory
 pytest tests/test_my_module.py            # specific test file only
 
-# 2. Limit concurrent agents to 3-4 at a time (waves)
+# 2. Keep at most three implementers in the current phase; fewer if resources require
 # Launch wave 1 (3 agents), wait for completion, then wave 2
 
 # 3. Defer full test suite to the integration step
@@ -1852,7 +1742,10 @@ pytest -x --numprocesses=2
 # 10 agents x full suite = resource starvation, not speed
 ```
 
-**Key detail:** This compounds with Error #1 — if any agent's test run fails, sibling tool calls are killed, but the underlying test processes (spawned via Bash) continue running. The agent loses the ability to manage or cancel them. Prevention is the only fix: scope tests narrowly and limit concurrency.
+**Key detail:** Cancellation and process lifetime depend on the harness and
+tool contract (Error #1). Inspect every returned result and track owned process
+handles; do not infer that a sibling failure killed or completed all work.
+Scope tests and concurrency, and preserve ownership before stopping processes.
 
 ---
 

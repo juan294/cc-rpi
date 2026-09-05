@@ -51,7 +51,12 @@
       "scope": "project",
       "selection": "default",
       "dependencies": [],
-      "resources": [],
+      "resources": [
+        {
+          "source": "templates/references/handoff.md",
+          "destination": "references/handoff.md"
+        }
+      ],
       "former_paths": [],
       "aliases": [],
       "explicit_only": false,
@@ -131,7 +136,12 @@
       "scope": "project",
       "selection": "default",
       "dependencies": [],
-      "resources": [],
+      "resources": [
+        {
+          "source": "templates/references/handoff.md",
+          "destination": "references/handoff.md"
+        }
+      ],
       "former_paths": [
         ".claude/commands/describe-pr.md"
       ],
@@ -219,7 +229,12 @@
       "scope": "project",
       "selection": "default",
       "dependencies": [],
-      "resources": [],
+      "resources": [
+        {
+          "source": "templates/references/handoff.md",
+          "destination": "references/handoff.md"
+        }
+      ],
       "former_paths": [
         ".claude/commands/fix-ci.md"
       ],
@@ -245,7 +260,24 @@
       "scope": "project",
       "selection": "default",
       "dependencies": [],
-      "resources": [],
+      "resources": [
+        {
+          "source": "templates/references/handoff.md",
+          "destination": "references/handoff.md"
+        },
+        {
+          "source": "templates/references/dispatch.md",
+          "destination": "references/dispatch.md"
+        },
+        {
+          "source": "templates/scripts/rpi-dispatch.py",
+          "destination": "scripts/rpi-dispatch.py"
+        },
+        {
+          "source": "templates/scripts/validate-findings.py",
+          "destination": "scripts/validate-findings.py"
+        }
+      ],
       "former_paths": [
         ".claude/commands/implement.md"
       ],
@@ -275,6 +307,10 @@
         {
           "source": "methodology/pseudocode-notation.md",
           "destination": "references/pseudocode-notation.md"
+        },
+        {
+          "source": "templates/references/handoff.md",
+          "destination": "references/handoff.md"
         }
       ],
       "former_paths": [
@@ -306,6 +342,18 @@
         {
           "source": "templates/scripts/validate-findings.py",
           "destination": "scripts/validate-findings.py"
+        },
+        {
+          "source": "templates/references/handoff.md",
+          "destination": "references/handoff.md"
+        },
+        {
+          "source": "templates/references/dispatch.md",
+          "destination": "references/dispatch.md"
+        },
+        {
+          "source": "templates/scripts/rpi-dispatch.py",
+          "destination": "scripts/rpi-dispatch.py"
         }
       ],
       "former_paths": [
@@ -337,6 +385,10 @@
         {
           "source": "templates/e2e-pro-playbook-template.md",
           "destination": "references/e2e-pro-playbook.md"
+        },
+        {
+          "source": "templates/references/handoff.md",
+          "destination": "references/handoff.md"
         }
       ],
       "former_paths": [
@@ -368,6 +420,18 @@
         {
           "source": "templates/scripts/validate-findings.py",
           "destination": "scripts/validate-findings.py"
+        },
+        {
+          "source": "templates/references/handoff.md",
+          "destination": "references/handoff.md"
+        },
+        {
+          "source": "templates/references/dispatch.md",
+          "destination": "references/dispatch.md"
+        },
+        {
+          "source": "templates/scripts/rpi-dispatch.py",
+          "destination": "scripts/rpi-dispatch.py"
         }
       ],
       "former_paths": [
@@ -396,7 +460,11 @@
       "selection": "default",
       "dependencies": [],
       "resources": [
-        "references/research-contract.md"
+        "references/research-contract.md",
+        {
+          "source": "templates/references/handoff.md",
+          "destination": "references/handoff.md"
+        }
       ],
       "former_paths": [
         ".claude/commands/research.md"
@@ -484,7 +552,20 @@
       "scope": "project",
       "selection": "default",
       "dependencies": [],
-      "resources": [],
+      "resources": [
+        {
+          "source": "templates/references/handoff.md",
+          "destination": "references/handoff.md"
+        },
+        {
+          "source": "templates/references/triage-state.md",
+          "destination": "references/triage-state.md"
+        },
+        {
+          "source": "templates/scripts/rpi-triage-state.py",
+          "destination": "scripts/rpi-triage-state.py"
+        }
+      ],
       "former_paths": [
         ".claude/commands/triage.md"
       ],
@@ -541,7 +622,12 @@
       "scope": "project",
       "selection": "default",
       "dependencies": [],
-      "resources": [],
+      "resources": [
+        {
+          "source": "templates/references/handoff.md",
+          "destination": "references/handoff.md"
+        }
+      ],
       "former_paths": [
         ".claude/commands/update-docs.md"
       ],
@@ -567,7 +653,24 @@
       "scope": "project",
       "selection": "default",
       "dependencies": [],
-      "resources": [],
+      "resources": [
+        {
+          "source": "templates/references/handoff.md",
+          "destination": "references/handoff.md"
+        },
+        {
+          "source": "templates/references/dispatch.md",
+          "destination": "references/dispatch.md"
+        },
+        {
+          "source": "templates/scripts/rpi-dispatch.py",
+          "destination": "scripts/rpi-dispatch.py"
+        },
+        {
+          "source": "templates/scripts/validate-findings.py",
+          "destination": "scripts/validate-findings.py"
+        }
+      ],
       "former_paths": [
         ".claude/commands/validate.md"
       ],
