@@ -114,3 +114,15 @@ describe what exists; do not suggest improvements unless asked.
 - Preserve the project's branch topology exactly as documented in
   `CLAUDE.md`, and keep implementation work in isolated worktrees or
   temporary branches
+
+## Remote compute and durable artifacts
+
+Keep working branches and worktrees local. Complete every applicable local gate
+before local integration and one explicitly authorized integration push. Inspect
+hosted triggers first; never create Vercel Previews or debug through remote CI.
+Production and publication require their actual authorization. Worktree cleanup
+preserves user files, unintegrated changes, plans and handoffs.
+
+Version curated research, approved plans, phase files, decisions and handoffs.
+Keep raw machine inventories, telemetry and transient recovery data local;
+operational report tracking follows repository visibility (Rule #70).

@@ -31,25 +31,19 @@ document.modelContext.registerTool(
 controller.abort();
 ```
 
-`execute` always resolves to `{ content: [{ type: "text", text }] }` --
-there is no separate structured-error channel, so failure and guidance both
-travel as text (see "Errors Are Recovery Instructions" below). An agent
-discovers what is currently available via `getTools()` and invokes a tool
-with `executeTool()`; the registry fires a `toolchange` event whenever tools
-are added or removed, which is how an agent host stays in sync with a
-dynamic page. A declarative alternative exists for simple forms: annotating
-elements with `toolname` / `tooldescription` attributes instead of calling
-`registerTool` directly.
+The handler's result must be JSON-serializable. The current draft defines
+`ToolExecuteCallback` as `Promise<any>`; an MCP `content` envelope is an
+application convention, not the required browser return type. `executeTool()`
+resolves to the serialized result. Rejections and serialization failures can
+reject execution; expected domain errors can use a documented JSON object
+with a recovery message. An agent discovers tools with `getTools()` and tracks
+`toolchange` events. Registration should last only as long as the view state
+that makes the tool usable.
 
-A WebMCP tool is scoped to the current page -- it vanishes when the tab
-closes or its controller aborts. If a capability needs to exist
-independent of any page being open, that's a server-side MCP tool, not a
-WebMCP one; the two aren't interchangeable.
-
-The spec is under active development -- verified 2026-09-01, this reflects
-an origin trial in Chrome 149, with local testing available behind
-`chrome://flags/#enable-webmcp-testing`. Re-check the current spec state
-before relying on details here in a future session.
+Verified against the [WebMCP draft dated 4 September 2026](https://webmachinelearning.github.io/webmcp/).
+This is an evolving community draft, not a W3C standard. Feature-detect the
+actual browser API and keep it behind an adapter; do not infer availability
+from a version number alone. The global examples here belong in that adapter.
 
 ## One Tool, One Function
 

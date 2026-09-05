@@ -17,7 +17,8 @@ This project follows Research-Plan-Implement (RPI).
 3. /implement -- Execute one phase at a time with review gates
 4. /validate -- Verify implementation against the plan
 
-Each phase is its own conversation. STOP after each phase.
+Each phase is its own conversation. Stop after each phase unless the user
+explicitly authorizes continuation.
 Use /clear between tasks, /compact when context is heavy.
 
 ## Key Commands
@@ -43,14 +44,14 @@ Document the actual branch topology for this repo:
 Conventional commits:
 `feat|fix|test|refactor|chore|docs(scope): description`
 
-```bash
-# Push -- commit before pulling (hook enforced)
-git add <files> && git commit -m "msg"
-git pull --rebase && git push
-```
+Working branches/worktrees stay local. Complete applicable local gates and
+integrate locally into the documented integration branch. Inspect hosted
+triggers, then push completed integration once only with explicit authorization.
+Never create Vercel Previews or use remote CI as a debugging loop. Production
+remains a separate authorized release. Preserve worktree changes and artifacts
+before removing only clean, integrated, task-owned worktrees.
 
-Run verification sequentially with `;` or `&&`,
-never as parallel Bash calls.
+Run verification sequentially, preserving every required command exit.
 
 ## Deployment
 

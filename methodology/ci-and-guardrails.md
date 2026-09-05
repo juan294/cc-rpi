@@ -209,7 +209,7 @@ echo "pnpm run typecheck && pnpm run lint" > .husky/pre-commit
 | **Unit tests** | Catches regressions immediately | Fast-Medium |
 | **Format check** | Ensures consistent formatting | Fast |
 
-**Don't include in pre-commit:** E2E tests (too slow), full builds (too slow), dependency audits (too slow for every commit). Save these for CI.
+**Don't include in pre-commit:** E2E tests (too slow), full builds (too slow), dependency audits (too slow for every commit). Run these in the full local CI-equivalent gate before integration/publication.
 
 ### Agent Interaction
 
@@ -217,20 +217,22 @@ Agents must run the same checks pre-commit hooks run **before** attempting to co
 
 ```bash
 # Agent workflow before committing:
-pnpm run typecheck 2>&1; pnpm run lint 2>&1  # Run checks first
+pnpm run typecheck 2>&1 && pnpm run lint 2>&1  # Run checks first
 # Fix any errors
 git add <files> && git commit -m "..."         # Then commit (hook will pass)
 ```
 
 ## CI Workflows
 
-CI workflows run on every push and PR. They are the authoritative verification — if CI is green, the code is shippable.
+Inspect the actual workflow triggers. Run the complete applicable selection locally before the single authorized integration push. A green CI result is evidence for its checked commit and selection; it does not prove untested runtime behavior. Never use remote CI as an experimentation loop.
 
 ### Recommended CI Pipeline
 
 ```yaml
 # Conceptual workflow (adapt to your CI system):
-on: [push, pull_request]
+on:
+  push:
+    branches: [develop]  # use the documented integration branch
 
 jobs:
   quality:
@@ -277,8 +279,8 @@ Beyond automated checks, guardrails include process rules that prevent common mi
   Protected or semi-protected depending on topology. This is the shared
   branch that receives reviewed work and whose CI must stay green.
 - **Implementation branches/worktrees** — Temporary, isolated branches
-  where agents do the actual coding before opening a PR or merging to
-  the integration branch.
+  where agents implement and verify before local integration. They remain
+  local; do not open feature PRs or publish them.
 
 ### Environment Safety
 
@@ -292,27 +294,25 @@ Beyond automated checks, guardrails include process rules that prevent common mi
 - **Regular audits** — `pnpm audit` / `npm audit` in CI catches known vulnerabilities.
 - **License compliance** — No copyleft dependencies in proprietary projects.
 
-### Code Scanning Requires GHAS
+### Code Scanning Availability
 
-A CodeQL / code-scanning workflow only runs if GitHub Advanced Security
-(GHAS) is enabled for the repo. Adding the workflow without GHAS makes it
-**fail CI on every push** — a self-inflicted red that has cost more than one
-triage cycle to discover and remove.
+Before adding a scanner, inspect repository visibility, enabled security product,
+and caller permissions. A successful alerts query proves endpoint access for
+that caller. An HTTP 403 can mean permissions, policy, rate limits or disabled
+code security; a 404 can hide a private resource. Neither establishes product
+availability on its own.
 
-- **Never add a CodeQL/code-scanning workflow speculatively.** Confirm GHAS
-  first:
+```bash
+gh api repos/{owner}/{repo} --jq '{visibility, security_and_analysis}'
+gh api --include repos/{owner}/{repo}/code-scanning/alerts
+```
 
-  ```bash
-  # Non-403 means code scanning is available; 403 means GHAS is off.
-  gh api repos/{owner}/{repo}/code-scanning/alerts >/dev/null 2>&1 && echo "GHAS on" || echo "GHAS off"
-  ```
-
-- GHAS is free on public repos but a **paid add-on on private repos**. On a
-  private repo, treat "enable GHAS" as a human decision (it has a cost), not
-  an autonomous fix.
-- `/triage` still *queries* existing code-scanning alerts (that query failing
-  is itself a YELLOW finding) — but querying alerts and *creating the
-  scanner* are different acts. Only the first is always safe.
+Inspect response status/message and permissions together. Code scanning is
+available to public repositories and eligible private/internal repositories with
+GitHub Code Security enabled. Do not enable a paid product or trigger scanning
+without authorization. Read-only inspection of existing alerts remains allowed.
+See [GitHub's code-scanning API](https://docs.github.com/en/rest/code-scanning/code-scanning)
+and the github-cli skill for status interpretation.
 
 ## Guardrails and Agent Autonomy
 

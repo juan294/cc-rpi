@@ -16,6 +16,9 @@ docs/research/
 # DIRECTORY is excluded, so the contents must be excluded instead.
 docs/plans/*
 !docs/plans/*-notes.md
+!docs/plans/2026-09-05-cc-rpi-v2.md
+!docs/plans/2026-09-05-cc-rpi-v2-phases/
+!docs/plans/2026-09-05-cc-rpi-v2-phases/**
 docs/decisions/
 docs/reports/
 
@@ -39,3 +42,8 @@ Thumbs.db
 # Python bytecode (py_compile in CI/local verification)
 __pycache__/
 *.py[cod]
+
+# Owned lifecycle recovery and local verification evidence
+.rpi/local/
+.coverage
+coverage.json

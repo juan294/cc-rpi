@@ -11,108 +11,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-
-      # --- Internal markdown link validation ---
-      - name: Check internal markdown links
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Install verification prerequisites
         run: |
-          errfile=$(mktemp)
-          echo 0 > "$errfile"
-          repo_root=$(realpath .)
-
-          while IFS= read -r file; do
-            dir=$(dirname "$file")
-            # Extract markdown links: [text](path) — skip images (![...]) and code blocks
-            awk '/^```/{skip=!skip; next} !skip{print}' "$file" | grep -oP '(?<!\!)\[[^\]]*\]\(\K[^)]+' 2>/dev/null | while IFS= read -r link; do
-              # Strip anchor fragments
-              target="${link%%#*}"
-              # Skip external URLs, empty targets (pure anchors), and mailto
-              if [[ "$target" =~ ^https?:// ]] || [[ -z "$target" ]] || [[ "$target" =~ ^mailto: ]]; then
-                continue
-              fi
-              # Resolve relative to the file's directory
-              resolved=$(realpath -m "$dir/$target")
-              # Skip GitHub-relative links that resolve outside the repo
-              if [[ "$resolved" != "$repo_root"* ]]; then
-                continue
-              fi
-              if [[ ! -e "$resolved" ]]; then
-                echo "::error file=${file#./}::Broken link: $link -> $resolved"
-                echo 1 > "$errfile"
-              fi
-            done
-          done < <(find . -name '*.md' -not -path './.git/*')
-
-          if [[ "$(cat "$errfile")" == "1" ]]; then
-            echo "::error::Broken internal links found"
-            rm "$errfile"
-            exit 1
-          fi
-          rm "$errfile"
-          echo "All internal markdown links valid"
-
-      # --- ShellCheck on script + hook templates ---
-      - name: Lint shell scripts
-        run: |
-          shellcheck --severity=warning \
-            scripts/install.sh \
-            templates/scripts/cc-rpi-update-agent.sh \
-            templates/scripts/agents/contract-metrics-agent.sh \
-            templates/scripts/verify-counts.sh \
-            templates/scripts/verify-skills.sh \
-            templates/scripts/verify-version.sh \
-            templates/scripts/check-tree-drift.sh \
-            templates/hooks/guard-bash.sh \
-            templates/hooks/verify-edit.sh
-
-      # --- Catalog counts agree everywhere they are stated ---
-      - name: Verify error/rule/skill counts
-        run: bash templates/scripts/verify-counts.sh
-
-      # --- Version strings agree with CHANGELOG ---
-      - name: Verify version strings
-        run: bash templates/scripts/verify-version.sh
-
-      # --- Agent Skills authoring contract ---
-      - name: Verify skill frontmatter and size
-        run: bash templates/scripts/verify-skills.sh
-
-      # --- templates/ vs .claude/ drift ---
-      - name: Check tree drift
-        run: bash templates/scripts/check-tree-drift.sh
-
-      # --- Findings-contract validator self-test ---
-      - name: Validate findings-contract validator
-        run: |
-          python3 -m py_compile templates/scripts/validate-findings.py
-          python3 templates/scripts/validate-findings.py --self-test
-
-      # --- Contract-metrics aggregator self-test ---
-      - name: Validate contract-metrics aggregator
-        run: |
-          python3 -m py_compile templates/scripts/contract-metrics.py
-          python3 templates/scripts/contract-metrics.py --self-test
-
-      # --- JSON syntax validation ---
-      - name: Validate JSON files
-        run: |
-          ok=true
-          for f in templates/settings.json.template; do
-            if ! python3 -c "import json, sys; json.load(open(sys.argv[1]))" "$f"; then
-              echo "::error file=$f::Invalid JSON"
-              ok=false
-            fi
-          done
-          $ok && echo "All JSON files valid"
-
-      # --- YAML syntax validation ---
-      - name: Validate YAML files
-        run: |
-          pip install --quiet pyyaml
-          ok=true
-          for f in .github/ISSUE_TEMPLATE/config.yml; do
-            if ! python3 -c "import yaml, sys; yaml.safe_load(open(sys.argv[1]))" "$f"; then
-              echo "::error file=$f::Invalid YAML"
-              ok=false
-            fi
-          done
-          $ok && echo "All YAML files valid"
+          python3 -m pip install --quiet PyYAML==6.0.3 uv==0.12.10
+          command -v shellcheck
+          node --version
+          gh --version
+          uv --version
+      - name: Run complete local-equivalent verification
+        run: bash scripts/verify-local.sh
+      - name: Preserve verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-verification
+          path: .rpi/local/verification.json
+          include-hidden-files: true
+          if-no-files-found: error

@@ -12,7 +12,7 @@ If you've encountered a recurring Claude Code agent error that isn't in the cata
 2. Include: the symptom, root cause, correct approach, and what to avoid.
 3. Keep it generic — no project-specific references.
 
-Or submit a PR directly:
+For the owner workflow, prepare the change locally:
 1. Add the detailed entry to `patterns/agent-errors.md` following the existing format.
 2. Add a one-line pointer to `patterns/quick-reference.md`. That file is an
    **index**, not a catalog: the rule body itself goes in the skill, rule file,
@@ -29,7 +29,7 @@ If you've discovered a better workflow, a new best practice, or a refinement to 
 1. Open an issue using the **Methodology Improvement** template.
 2. Describe what you learned, how you validated it, and where it fits in the methodology.
 
-Or submit a PR:
+For the owner workflow, prepare the change locally:
 1. Add or modify the appropriate file under `methodology/`.
 2. If it's a new topic, create a new file and update `methodology/README.md`.
 
@@ -71,7 +71,7 @@ sweep misses.
 
 If the CLAUDE.md template, setup checklist, or slash commands could be better:
 
-1. Submit a PR with your changes to files under `templates/`.
+1. Prepare changes to files under `templates/` in a local worktree.
 2. Explain what problem the change addresses.
 
 ### `templates/` vs `.claude/`, and symlinks
@@ -89,7 +89,15 @@ checkout materializes them as regular copies. The drift check reports that as a
 failure with a fix rather than passing silently, so you get a clear error instead
 of an invisible fork. Enable developer mode, or clone in WSL.
 
-## Pull Request Guidelines
+## Local Integration and Contribution Guidelines
+
+Owner working branches/worktrees stay local. Run the complete local gate with
+`bash scripts/verify-local.sh`, integrate locally, inspect hosted triggers, and
+push completed integration once only within explicit authorization. Never use
+Vercel Previews or hosted CI as a debugging loop. External contributors may use
+GitHub contribution channels; agents do not publish working branches or open
+issues/PRs without the applicable authorization. Production is a separate release.
+
 
 - **Keep PRs focused.** One pattern, one improvement, one fix per PR.
 - **Keep entries generic.** No project-specific references, company names, or proprietary details.
@@ -116,4 +124,4 @@ This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md). By particip
 
 ## Questions?
 
-Open a [GitHub Discussion](../../discussions) or an issue if something is unclear.
+Open a [GitHub Discussion](https://github.com/juan294/cc-rpi/discussions) or an issue if something is unclear.

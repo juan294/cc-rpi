@@ -102,7 +102,8 @@ For each document in the approved plan:
    - Update Rust `///` and Go `//` doc comments.
    - Do NOT add new docstrings to functions that do not already have them.
      Scope is refresh, not expansion.
-7. Verify markdown lint passes on each changed markdown file.
+7. Run the project's configured Markdown checks; do not invent markdownlint
+   defaults where no configuration exists.
 
 For diagrams that cannot be confidently updated, add a comment:
 `<!-- [NEEDS REVIEW] Diagram may not reflect recent changes to [component]. -->`
@@ -112,10 +113,11 @@ and include it in the final report.
 
 ## Step 3: Finalization
 
-1. Run verification commands sequentially (chain with `&&` or `;`, never parallel Bash calls):
+1. Run verification commands sequentially (chain with `&&` or aggregate failures explicitly, never parallel Bash calls):
 
    ```bash
-   $LINT_CMD; npx markdownlint '**/*.md' --ignore node_modules --ignore .claude 2>&1
+   $LOCAL_VERIFY_CMD  # the project's complete applicable local gate
+   # Run configured Markdown/link checks as part of that gate.
    ```
 
 2. Present the full diff of all changed files.

@@ -11,7 +11,7 @@ Generate draw.io diagrams as native `.drawio` files. Optionally export to PNG, S
 
 1. **Generate draw.io XML** in mxGraphModel format for the requested diagram
 2. **Write the XML** to a `.drawio` file in the current working directory using the Write tool
-3. **If the user requested an export format** (png, svg, pdf), locate the draw.io CLI (see below), export with `--embed-diagram`, then delete the source `.drawio` file. If the CLI is not found, keep the `.drawio` file and tell the user they can install the draw.io desktop app to enable export, or open the `.drawio` file directly
+3. **If the user requested an export format** (png, svg, pdf), locate the draw.io CLI (see below), export with `--embed-diagram`, retain the source `.drawio` file alongside the export. If the CLI is not found, keep the `.drawio` file and tell the user they can install the draw.io desktop app to enable export, or open the `.drawio` file directly
 4. **Open the result** — the exported file if exported, or the `.drawio` file otherwise. If the open command fails, print the file path so the user can open it manually
 
 ## Choosing the output format
@@ -55,19 +55,20 @@ grep -qi microsoft /proc/version 2>/dev/null && echo "WSL2"
 On WSL2, use the Windows draw.io Desktop executable via `/mnt/c/...`:
 
 ```bash
-DRAWIO_CMD=`/mnt/c/Program Files/draw.io/draw.io.exe`
+DRAWIO_CMD="/mnt/c/Program Files/draw.io/draw.io.exe"
 ```
 
-The backtick quoting is required to handle the space in `Program Files` in bash.
+Double quotes preserve spaces. Backticks execute command substitution; they
+are not path quoting. Invoke the stored executable as `"$DRAWIO_CMD"`.
 
 If draw.io is installed in a non-default location, check common alternatives:
 
 ```bash
 # Default install path
-`/mnt/c/Program Files/draw.io/draw.io.exe`
+"/mnt/c/Program Files/draw.io/draw.io.exe"
 
 # Per-user install (if the above does not exist)
-`/mnt/c/Users/$WIN_USER/AppData/Local/Programs/draw.io/draw.io.exe`
+"/mnt/c/Users/$WIN_USER/AppData/Local/Programs/draw.io/draw.io.exe"
 ```
 
 #### macOS
@@ -99,7 +100,7 @@ drawio -x -f <format> -e -b 10 -o <output> <input.drawio>
 **WSL2 example:**
 
 ```bash
-`/mnt/c/Program Files/draw.io/draw.io.exe` -x -f png -e -b 10 -o diagram.drawio.png diagram.drawio
+"/mnt/c/Program Files/draw.io/draw.io.exe" -x -f png -e -b 10 -o diagram.drawio.png diagram.drawio
 ```
 
 Key flags:
@@ -140,7 +141,8 @@ cmd.exe /c start "" "$(wslpath -w diagram.drawio)"
 - Use a descriptive filename based on the diagram content (e.g., `login-flow`, `database-schema`)
 - Use lowercase with hyphens for multi-word names
 - For export, use double extensions: `name.drawio.png`, `name.drawio.svg`, `name.drawio.pdf` — this signals the file contains embedded diagram XML
-- After a successful export, delete the intermediate `.drawio` file — the exported file contains the full diagram
+- Retain the editable `.drawio` source after export; verify the export opens
+  and preserves its embedded diagram before describing it as editable.
 
 ## XML format
 
@@ -155,7 +157,6 @@ Every diagram must have this structure:
   <root>
     <mxCell id="0"/>
     <mxCell id="1" parent="0"/>
-    <!-- Diagram cells go here with parent="1" -->
   </root>
 </mxGraphModel>
 ```

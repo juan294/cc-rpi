@@ -22,18 +22,19 @@ pipx install some-python-app
 
 ## zsh Regex and Special Characters
 
-Wrong -- complex regex in zsh triggers parse errors:
+Shell quoting and executable capabilities are separate. Single-quoted
+patterns pass literally to bash and zsh. macOS BSD grep does not support
+`-P`; wrapping it in `bash -c` does not add PCRE support.
+
+For JSON, parse JSON:
 
 ```bash
-grep -oP '(?<=version":")[^"]+' package.json
-# zsh: event not found
+python3 -c 'import json; print(json.load(open("package.json"))["version"])'
 ```
 
-Right -- use built-in Grep tool, or wrap in bash:
-
-```bash
-bash -c 'grep -oP '"'"'(?<=version":")[^"]+'"'"' package.json'
-```
+For plain text use `rg`, a supported `grep -E` pattern, or Python `re`.
+Discover which executable is installed and check its help before using
+nonportable flags. Use a script for complex parsing.
 
 ## launchd Agent Configuration
 

@@ -8,6 +8,18 @@ This document codifies the lessons from a real production incident where an agen
 
 ---
 
+## Remote Budget
+
+Keep working branches and worktrees local. Finish applicable tests, coverage,
+typechecks, lint, build and deployment preflight locally, resolve failures,
+and integrate completed work locally into the documented integration branch.
+Inspect workflow and deployment triggers before the single authorized push of
+that completed branch. Never create Vercel Preview deployments or publish
+working branches/PRs for experimentation. If an integration push would create a
+Preview, stop before pushing and use only a documented, non-destructive bypass.
+Production publication remains separately and explicitly authorized. Read-only
+inspection of existing runs and deployments is allowed.
+
 ## Core Principle: Understand the Deployment Topology
 
 Before touching any branch, the agent must understand what happens when code lands on that branch:
@@ -15,22 +27,22 @@ Before touching any branch, the agent must understand what happens when code lan
 - **Which branches trigger deployments?** (`main` almost always deploys to production)
 - **Which branches trigger CI?** (most branches trigger CI on push)
 - **What platform hosts the deployments?** (Vercel, AWS, Netlify, etc.)
-- **Is there a staging/preview environment?** (Vercel preview URLs, staging servers)
+- **Would a push create a Vercel Preview?** If so, stop before the push; use only a documented, non-destructive bypass.
 - **What does the CI matrix look like?** (how many workflows run per push?)
 
 If the agent doesn't know the answers, it must check before merging, pushing, or triggering any pipeline.
 
 ---
 
-## Rule: Merging to `main` IS Deploying to Production
+## Rule: Production Branch Actions Require Release Authorization
 
-In any project with CI/CD connected to `main`, a merge to `main` is a production deployment. There is no distinction between "merging a PR" and "deploying to production." They are the same action.
+When the documented topology deploys production from `main`, a merge/push to it is a production action. Some main-only repositories use it only as canonical source; inspect the actual triggers rather than assuming topology.
 
 This means:
 
 - **Dependabot PRs target `main` by default.** Merging them deploys to production immediately.
 - **"Clean up the PRs" means close or retarget them** — not merge them to production.
-- **The correct workflow for Dependabot:** cherry-pick updates to `develop`, close the Dependabot PR, release via the normal `develop` -> `main` process.
+- **The correct workflow for Dependabot:** apply reviewed updates to a local working branch, verify and integrate the combined result locally, then use the authorized release path. Closing/commenting on PRs requires authorization.
 - **"Merge the PRs" is never authorization to deploy to production** unless the user explicitly says "deploy to production" or "merge to main."
 
 ---
@@ -51,7 +63,7 @@ Before starting any task that involves CI or deployments:
 
 - [ ] How many CI runs will this trigger? If more than 2-3, find a more efficient approach.
 - [ ] How many deployments will this trigger? If more than 1-2, find a more efficient approach.
-- [ ] Can I batch these changes into a single PR instead of multiple?
+- [ ] Can I batch these changes into a single locally integrated change?
 - [ ] Can I test this locally before pushing?
 - [ ] Am I about to push partial or experimental work to a branch that triggers CI?
 
@@ -73,8 +85,8 @@ For 7 PRs with 9 workflows each, that's ~189 unnecessary workflow runs.
 
 1. Create a single branch (e.g., `chore/dependency-updates`)
 2. Cherry-pick or apply all dependency updates to that branch
-3. Run CI once on the combined result
-4. Merge the single PR
+3. Run the complete applicable local CI-equivalent selection on the combined result
+4. Integrate locally; inspect triggers before the single authorized integration push
 
 ### Assess Risk Before Merging
 
@@ -82,22 +94,23 @@ Not all dependency updates are equal:
 
 | Risk Level | Examples | Verification Required |
 |------------|----------|----------------------|
-| **Low** | Dev dependency patches (eslint, prettier) | CI passing is sufficient |
-| **Medium** | Runtime library patches/minors (lodash, axios) | CI + local smoke test |
-| **High** | Framework upgrades (Next.js, React, Vue) | CI + platform preview deployment + manual verification |
-| **Critical** | Major version bumps of core frameworks | Full QA cycle, staged rollout |
+| **Low** | Dev dependency patches (eslint, prettier) | Complete applicable local gates |
+| **Medium** | Runtime library patches/minors (lodash, axios) | Local gates + runtime smoke tests |
+| **High** | Framework upgrades (Next.js, React, Vue) | Local gates + runtime/packaging tests + deployment preflight |
+| **Critical** | Major version bumps of core frameworks | Full local QA, compatibility review, explicitly authorized release |
 
-**Framework upgrades (Next.js, React, etc.) must never be merged without testing on the actual deployment platform.** CI passing is necessary but NOT sufficient. Build success does not equal runtime success. Local success does not equal production success.
+**Framework upgrades need runtime evidence as well as build evidence.** Run
+local packaging, server startup and request smoke tests plus available deployment
+preflight. Existing platform logs/configuration can inform the review. A local
+pass cannot prove an unexercised hosted runtime is compatible.
 
-### Vercel-Specific: Preview Before Production
+### Vercel: No Preview Deployments
 
-For Vercel-hosted projects:
-
-1. Deploy the dependency update to a preview URL (push to a non-main branch)
-2. Verify the preview deployment: site loads, API routes respond, health checks pass
-3. Only after preview verification succeeds, merge to `main`
-
-A production-only bug (like a missing module that only manifests on Vercel's serverless runtime) will not be caught by local testing or CI. The preview deployment is the only safety net.
+Never create Vercel Previews, including automatic previews from branch pushes.
+Inspect triggers before publication. If a push would create one, stop before
+pushing and use only the project's documented, non-destructive bypass. Resolve
+known failures locally. Record remaining platform-only uncertainty for release
+review instead of creating a paid experiment.
 
 ---
 
@@ -107,7 +120,7 @@ When production is down, follow this exact sequence. Do not improvise.
 
 ### Step 1: Roll Back Immediately
 
-Roll back to the last known good deployment. Do not investigate first. Do not "try one more thing." The priority is restoring service.
+Within the project's explicitly authorized incident procedure, roll back to the last known good deployment before investigating. Rollback is a production action; ordinary implementation authorization does not include it.
 
 ```bash
 # Vercel: use the dashboard or CLI to promote the last working deployment
@@ -124,15 +137,15 @@ Once production is stable on the rollback:
 - Reproduce locally if possible (but remember: local != production)
 - Check the deployment platform's runtime behavior specifically
 
-**Never promote a broken deployment "briefly" to capture logs.** That causes another outage. Use the platform's log retention, or deploy to a preview URL to reproduce the error.
+**Never promote a broken deployment "briefly" to capture logs.** That causes another outage. Use the platform's existing log retention and local reproduction. Never create a Preview.
 
 ### Step 3: Fix Forward on `develop`
 
-1. Create the fix on `develop` (or a feature branch)
-2. Test locally
-3. Deploy to a preview URL and verify
-4. Only after preview verification, create a PR to `main`
-5. Merge and verify the production deployment
+1. Create the fix in a local task-owned branch/worktree
+2. Run all applicable local gates and deployment preflight
+3. Integrate the complete fix locally and inspect remote triggers
+4. Publish only with explicit production authorization
+5. Inspect the resulting production deployment without a repeated deployment loop
 
 ### Step 4: Count the Cost
 
@@ -148,7 +161,7 @@ Always prefer local operations over remote ones:
 
 - Run tests locally before pushing
 - Build locally before deploying
-- Verify changes locally before creating PRs
+- Verify and integrate changes locally; keep working branches and PRs unpublished
 - Use `next build` / `npm run build` locally before trusting CI
 
 ### Minimize Push Events
@@ -156,13 +169,13 @@ Always prefer local operations over remote ones:
 Each push event can trigger N workflows. Minimize pushes:
 
 - Squash fixes locally before pushing (avoid push-fix-push-fix cycles)
-- Use `--amend` and `--force-push` on feature branches (not main) to avoid extra CI runs
+- Keep feature branches local; publish the completed integration branch once
 - Batch multiple changes into single commits when they're related
 
 ### Minimize Deployment Events
 
 - Never push to `main` or production branches for testing
-- Use preview/staging environments for verification
+- Use local runtime/packaging tests and deployment preflight; never create Vercel Previews
 - Don't deploy to diagnose — use logs, local reproduction, or isolated environments
 - Count deployments before starting: "This task should take 1 deployment. If I'm at 3, something is wrong."
 
@@ -172,7 +185,8 @@ When using parallel worktree agents:
 
 - Agents commit locally only — never push or create PRs
 - Main agent reviews all worktrees after completion
-- Main agent batch-pushes all branches in one command
+- Main agent integrates completed branches locally, verifies, and inspects triggers
+- Only the final authorized integration branch is pushed once
 - One background agent monitors all CI runs
 - See Error #51 for the full pattern
 
@@ -184,7 +198,7 @@ When using parallel worktree agents:
 
 Agent merges 7 Dependabot PRs one-by-one. Each merge invalidates checks on remaining PRs. Each remaining PR needs a rebase + full CI re-run. Result: 80+ CI runs, 30 of which were pure waste from rebases.
 
-**Fix:** Batch all updates into a single branch and PR.
+**Fix:** Batch all updates in a local branch, fully verify, and integrate locally.
 
 ### The Accidental Production Deploy
 
@@ -202,7 +216,7 @@ Production is down. Agent promotes the broken deployment "briefly" to capture lo
 
 Agent merges Next.js minor version bump after CI passes. Build succeeds, tests pass, local `next start` works. But on Vercel's serverless runtime, a dev-only module is referenced in production build paths. Every serverless function crashes at startup. The bug only manifests on the deployment platform.
 
-**Fix:** Framework upgrades require preview deployment verification. CI passing != production working.
+**Fix:** Require local runtime and packaging tests plus deployment preflight. Inspect existing platform evidence and disclose remaining platform-only uncertainty; never create a Preview.
 
 ---
 
@@ -211,12 +225,12 @@ Agent merges Next.js minor version bump after CI passes. Build succeeds, tests p
 | Rule | One-liner |
 |------|-----------|
 | Topology first | Understand what each branch deploys before merging |
-| Main = production | Merging to `main` is always a production deployment |
+| Production authorization | Follow the documented topology and explicit release authorization |
 | Justify actions | Every CI run and deployment must be needed, justified, and verifiable |
-| Batch dependencies | Never merge dependency PRs one-by-one — batch into a single PR |
-| Assess risk | Framework upgrades need preview verification; dev patches need CI only |
-| Preview before prod | Deploy to preview URL and verify before merging to `main` |
+| Batch dependencies | Verify a combined local batch before integration |
+| Assess risk | Framework upgrades need runtime/packaging tests and preflight |
+| No Previews | Block Preview-triggering pushes; use a documented non-destructive bypass |
 | Roll back first | When production is down, restore service before investigating |
-| Fix forward | Create fixes on `develop`, verify on preview, then release to `main` |
+| Fix forward | Fix and verify locally, then publish the explicitly authorized release |
 | Count the cost | Track CI runs and deployments — stop if exceeding estimates |
 | Local first | Test locally before pushing; build locally before deploying |

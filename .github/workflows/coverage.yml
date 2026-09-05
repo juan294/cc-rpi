@@ -35,25 +35,7 @@ jobs:
       - name: Run authoritative coverage suite
         id: coverage
         shell: bash
-        run: |
-          set -o pipefail
-          # Braced: without it only the SECOND command's output reaches tee,
-          # and the pass count below would silently miss the first script.
-          {
-            python3 templates/scripts/validate-findings.py --self-test \
-              && python3 templates/scripts/contract-metrics.py --self-test
-          } 2>&1 | tee coverage-output.txt
-          # count_only producer: these suites report pass lines, not coverage.
-          # Fail closed rather than posting a fabricated zero.
-          COUNT=$(grep -c 'SELF-TEST PASS' coverage-output.txt || true)
-          [ "$COUNT" -gt 0 ] || { echo "ERROR: no self-test output to count" >&2; exit 1; }
-          {
-            echo "test_count=$COUNT"
-            echo "test_files=2"
-            echo "tests_passed=$COUNT"
-            echo "tests_failed=0"
-            echo "coverage_percent=null"
-          } >> "$GITHUB_OUTPUT"
+        run: python3 scripts/verification-checks.py coverage --github-output "$GITHUB_OUTPUT"
       - name: Report coverage to Portfolio
         env:
           COVERAGE_SECRET: ${{ secrets.COVERAGE_SECRET }}

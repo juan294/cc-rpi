@@ -9,64 +9,48 @@ Without push accountability, the most common failure mode is "push and forget" �
 
 ## The Protocol
 
-After any push to the branch currently under CI verification, the agent
-must verify that CI passes. In repos with a dedicated integration branch
-such as `develop`, this usually means every push to that branch. In
-`main-only` repos, the same accountability applies to the temporary
-implementation branch or PR branch before asking for merge. This happens
-as a **background task** so the main terminal stays unblocked.
+Keep working branches and worktrees local. Finish applicable tests, coverage,
+typechecks, lint, build and deployment preflight locally, resolve failures,
+and integrate completed work locally into the documented integration branch.
+Inspect workflow and deployment triggers before the single authorized push of
+that completed branch. Never create Vercel Preview deployments or publish
+working branches/PRs for experimentation. If an integration push would create a
+Preview, stop before pushing and use only a documented, non-destructive bypass.
+Production publication remains separately and explicitly authorized. Read-only
+inspection of existing runs and deployments is allowed.
 
 ### Sequence
 
-```
-1. Agent pushes to the branch under test
-   └─> Immediately spawns a background verification agent
-
-2. Background agent polls CI status
-   └─> gh run list --branch <branch-under-test> --limit 5
-   └─> Repeat every 30-60 seconds until the run completes
-
-3a. CI passes
-    └─> Log success, no interruption needed
-
-3b. CI fails
-    └─> Investigate: gh run view <run-id> --log-failed
-    └─> Diagnose the root cause from the logs
-    └─> Fix the issue in the same branch
-    └─> Push the fix
-    └─> Return to step 2 (poll again)
-```
+1. Complete, review, simplify and verify the authorized local work.
+2. Integrate completed local branches and verify the integrated candidate.
+3. Inspect remote workflow/deployment triggers; publish only the authorized
+   completed integration branch once. Production remains separately authorized.
+4. Inspect every expected run for the exact pushed commit. A missing or pending
+   run is not a pass. Read-only background monitoring may keep the main session
+   available without granting the monitor publication rights.
+5. On failure, read existing logs, reproduce and repair locally, and report the
+   failed remote result. Do not rerun hosted jobs or push iterative fixes.
+   Any follow-up publication requires authorization after full local gates.
 
 ### Background Agent Pattern
 
-```bash
-# Spawn as a background Task agent after every push:
-# - Polls CI until completion
-# - On failure: reads logs, fixes, re-pushes
-# - On success: logs and exits
-# - Never touches production branches
-```
-
-In Claude Code, this maps to `Task` with `run_in_background: true`:
-
-```
-Task(
-  subagent_type="Bash",
-  run_in_background=true,
-  prompt="Monitor CI for the latest push to <branch-under-test>. Poll gh run list --branch <branch-under-test> --limit 1 every 30 seconds until it completes. If it fails, run gh run view <id> --log-failed, diagnose the issue, fix it, and push again. If it passes, report success. Never modify the protected production branch from this loop."
-)
+```text
+Monitor expected workflows for <published-sha> on <integration-branch>.
+Read existing statuses/logs only. Report pending, missing, failed and passed
+runs accurately. Diagnose failures locally; do not push, rerun jobs, deploy,
+create PRs or modify remote settings.
 ```
 
 ## Rules
 
-1. **Every push gets a monitor.** No exceptions. Even single-line changes can break CI if they affect types, imports, or test fixtures.
-2. **Background, not blocking.** The main terminal continues working on the next task immediately. The background agent owns the push outcome.
-3. **Fix and re-push.** If CI fails, the background agent fixes the issue and pushes again. It doesn't report back and wait — it acts.
-4. **Never touch production from a fix loop.** Even if a fix seems
-   urgent, background agents operate on the branch under test, not the
-   protected production branch.
-5. **Conflict awareness.** If the background fix requires changes that conflict with the main terminal's current work, notify the user before applying.
-6. **Retry budget.** If CI fails 3 times after 3 fix attempts, the background agent stops and reports the issue clearly.
+1. **Monitor the commit, not just the latest run.** Concurrent remote work can
+   make branch-only `--limit 1` queries report the wrong candidate.
+2. **Local debugging only.** Existing remote logs are evidence; new hosted
+   runs are not an experimentation mechanism.
+3. **Preserve task scope and ownership.** Coordinate repairs that overlap other
+   local work. Never clean up a worktree before preserving all its artifacts.
+4. **Report failures honestly.** A local repair does not retroactively turn
+   the already-failed remote run green.
 
 ## What CI Failure Looks Like
 
@@ -89,7 +73,7 @@ gh run view <run-id> --log-failed 2>&1 | tail -100
 
 ## Self-Healing CI
 
-Push accountability's background fix loop handles simple CI failures — a single failing test, a lint error, a type mismatch. But when CI fails with multiple unrelated failures (common after config changes, dependency updates, or multi-agent work), a more aggressive approach is needed.
+Existing CI failure logs may reveal multiple independent failures. Reproduce them locally and assign bounded fixes with distinct file ownership when useful. All repair and verification iterations remain local.
 
 ### The Pattern
 
@@ -115,7 +99,7 @@ Instead of fixing failures sequentially, spawn parallel fix agents — one per f
 
 5. If new failures → repeat (max 3 cycles)
 
-6. Commit and push when green
+6. Commit and integrate locally when the full local gate is green; report the candidate
 ```
 
 ### Rules
@@ -124,10 +108,8 @@ Instead of fixing failures sequentially, spawn parallel fix agents — one per f
 2. **Fix agents read both the test and the source.** A fix agent that only reads the error message will produce shallow fixes. It must understand the intent of the failing test.
 3. **Run the full suite after combining fixes.** Individual fix agents verify their own changes, but the combined result may introduce new failures. Always run a full verification pass.
 4. **Retry budget: 3 cycles.** If the suite isn't green after 3 fix-and-verify cycles, stop and report what remains broken. Infinite loops are worse than a failing CI.
-5. **Never push to production from a fix loop.** Self-healing operates
-   on the branch under test only. In repos where the production branch
-   is also the long-lived integration branch, do the repair work on a
-   temporary branch or worktree and merge with human approval.
+5. **No hosted fix loop.** Repair in local worktrees, run complete local
+   gates, and integrate locally. Publication is a separate authorized action.
 
 ### Slash Command
 
@@ -139,8 +121,8 @@ The `/fix-ci` command (see `templates/commands/fix-ci.md`) implements this patte
 
 Push accountability sits between the Implement and Validate phases:
 
-1. **Implement** — Write code, run local checks, commit, push
-2. **Push accountability** — Background agent verifies CI (this file)
-3. **Validate** — Human reviews the implementation against the plan
+1. **Implement** — Write code, review, simplify, verify, commit and integrate locally
+2. **Validate** — Review the implementation and complete local gate evidence
+3. **Authorized publication** — Inspect triggers, push once, monitor exact-commit runs
 
-The background agent ensures that by the time the human reviews, CI is already green.
+Remote status is reported independently from local acceptance evidence.

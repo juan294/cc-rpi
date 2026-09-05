@@ -16,11 +16,11 @@ This command removes all blueprint-managed files and configuration while preserv
 
 Scan this project for all cc-rpi artifacts. Categorize each into one of four tiers.
 
-### Tier 1: Blueprint scaffolding (always remove)
+### Tier 1: Candidate blueprint scaffolding (prove ownership before removal)
 
 Check for these files and note which exist:
 
-- `AGENTS.md`
+- Managed blocks within `AGENTS.md` (never the whole file)
 - `.claude/commands/research.md`
 - `.claude/commands/plan.md`
 - `.claude/commands/implement.md`
@@ -34,15 +34,15 @@ Check for these files and note which exist:
 - `.claude/cc-rpi-sync.json`
 - `scripts/agents/cc-rpi-update.sh` (nightly sync agent, if exists)
 
-For each command file that exists, diff it against `<cc-rpi-path>/templates/commands/<name>` to detect customization. Mark as "unmodified" or "customized."
+For each candidate, compare against its recorded installed baseline to establish ownership and customization. A filename or match to today's template is insufficient proof. Missing baseline means retain and report.
 
-For `AGENTS.md`, diff it against `<cc-rpi-path>/templates/AGENTS.md.template` to detect customization. Mark as "unmodified" or "customized."
+For `AGENTS.md`, identify owned blocks from recorded baseline bytes or explicit managed markers. Preserve the file and all user content; unknown ownership is retained and reported.
 
 For `guard-bash.sh`, check if content exists below the `# Project-specific guards below this line` marker. If so, mark as "customized."
 
 ### Tier 2: Blueprint-managed CLAUDE.md sections
 
-Read the project's CLAUDE.md (or AGENTS.md for copilot-rpi projects) and identify these blueprint-managed sections by their `##` or `###` headers:
+Read the project's CLAUDE.md and AGENTS.md. The following headers are inventory hints only, never proof of ownership. Remove only content established as owned by baseline bytes or explicit managed markers:
 
 - `## RPI Workflow` (including all `###` subsections under it)
 - `## Working Patterns` (including `<examples>` blocks under it)
@@ -58,7 +58,7 @@ Note which sections exist. Do NOT touch any other sections -- they are project-s
 
 Read `.claude/settings.json` and identify:
 
-- `hooks.PreToolUse` entries referencing `guard-bash.sh` -- will remove
+- `hooks.PreToolUse` entries referencing `guard-bash.sh` -- remove only proven-owned unchanged registrations
 - `env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` -- will flag for user decision
 - All other entries (permissions, project-specific hooks, other env vars) -- will keep
 
@@ -102,8 +102,7 @@ WILL KEEP (your work):
   [list Tier 4 directories with file counts, or "none found"]
 
 CUSTOMIZED FILES (review recommended):
-  [for each customized file, explain what custom content will be lost
-   and suggest where to move it]
+  [list retained custom/unknown files and blocks with preservation reasons]
 ```
 
 If no customized files exist, omit the CUSTOMIZED FILES section.
@@ -116,14 +115,16 @@ Ask the user three questions:
 2. **"Remove research docs and plans too?"** -- default: no. Only remove Tier 4 if user explicitly says yes.
 3. **"Keep Agent Teams enabled?"** -- if `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` exists. Default: keep.
 
-For any customized files, ask: **"Keep [filename] as a custom command/hook?"** If yes, skip that file.
+Keep customized and unknown files by default. A detach request does not authorize deletion of user-owned content.
 
 Then execute in order:
 
-1. Delete Tier 1 files (skip any the user chose to keep).
-2. Edit CLAUDE.md to remove Tier 2 sections. Remove each section from its `##` header through to the next `##` header (or end of file). For the `### CRITICAL` subsection, remove only that subsection, not the parent `## Key Commands`.
+1. Preserve recovery copies outside disposable state. Delete only proven-owned,
+   unchanged Tier 1 files. Keep AGENTS.md and remove only its proven-owned blocks.
+2. Remove only proven-owned unchanged Tier 2 blocks. Keep custom additions even
+   under familiar headers; retain unresolved blocks instead of deleting by heading.
 3. Clean Tier 3 configuration:
-   - Remove the `PreToolUse` hook entry for guard-bash.sh from `.claude/settings.json`. If no other hooks remain, remove the entire `hooks` key.
+   - Remove only proven-owned unchanged hook registrations for guard-bash.sh from `.claude/settings.json`. If no other hooks remain, remove the entire `hooks` key.
    - Remove `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` from `env` if user chose to remove it. If no other env vars remain, remove the entire `env` key.
 4. Handle Tier 4 per user decision (keep by default).
 5. Clean up empty directories: remove `.claude/commands/` if empty, `.claude/hooks/` if empty. Do NOT remove `.claude/` itself or `.claude/settings.json`.
@@ -131,7 +132,7 @@ Then execute in order:
 
 ## Phase 5: Commit
 
-Stage all changes and create a single atomic commit:
+Stage only the reviewed detach changes and create a single atomic local commit:
 
 ```text
 chore: detach from cc-rpi blueprint
@@ -163,8 +164,8 @@ To re-adopt later: run /adopt
 - **Preview before delete.** Never remove anything without showing the user what will happen first (Phase 3).
 - **Preserve project identity.** Only remove blueprint-managed content. Everything project-specific stays.
 - **Keep user work products by default.** Research docs, plans, and decisions are the user's work. Only remove if explicitly asked.
-- **Flag customizations.** If a command or hook has been modified from the template, warn the user before deleting it.
-- **Flag Codex compatibility customizations.** If `AGENTS.md` diverges from the template, warn before deleting it.
+- **Flag customizations.** If a command or hook has been modified from the template, preserve it and report the customization.
+- **Flag Codex compatibility customizations.** Always preserve `AGENTS.md`; remove only proven-owned blocks.
 - **One atomic commit.** All removals go in a single commit. Don't scatter across multiple commits.
 - **Idempotent.** Running on a project without cc-rpi artifacts reports "nothing to detach" and stops. Running twice produces no changes the second time.
 - **Don't touch Claude Code itself.** `.claude/` directory, `settings.json` (with remaining entries), and `settings.local.json` are Claude Code's own -- they exist independently of cc-rpi.

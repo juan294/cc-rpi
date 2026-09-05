@@ -10,11 +10,12 @@ paths:
 
 ## Migration Rules
 
-- Every migration creating a public-facing table must
-  include explicit grants:
-  `GRANT SELECT ON table_name TO anon, authenticated;`
-- Add `ALTER DEFAULT PRIVILEGES` in initial setup migration
-  so future tables get anon SELECT automatically.
+- Declare the intended access per table. SQL grants permit operations; RLS
+  policies constrain rows. Test both, including expected denials.
+- Preserve deliberate public-data and owner-only contracts. Do not add anon
+  SELECT to private tables or all future tables as a generic fix.
+- Default privileges apply to future objects created by the named owner.
+  Inspect global and per-schema defaults and existing table grants separately.
 
 ## Fallback Observability
 
@@ -26,15 +27,16 @@ paths:
 
 ## Migration Safety
 
-Test migrations locally before pushing to remote:
+Test migrations on a disposable, task-owned local stack:
 
-1. `supabase start` (requires Docker Desktop)
-2. `supabase db reset` (apply all migrations locally)
-3. `docker exec supabase_db_<project> psql -U postgres`
-   `-c "<verification query>"`
-4. Only after local verification: `supabase db push`
+1. `supabase start` (requires a local container runtime)
+2. `supabase db reset --local` (destructive to local data; preserve shared data)
+3. `supabase status` to discover the local database endpoint
+4. Run SQL tests as anon, authenticated owner, nonowner, and service role,
+   including expected denials and future-table exposure
 
-Container name: `supabase_db_<project>` from
-`supabase/config.toml`. Never push without local testing.
+A postgres-only query cannot verify RLS. Local success does not prove remote
+parity. Remote `supabase db push` is a separate authorized action after target
+inspection; do not invoke it from the local test procedure.
 
 For full migration procedures, see the supabase skill.

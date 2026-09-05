@@ -39,21 +39,22 @@ python -m scripts.etl.transform
 
 ## Python Version for uv
 
-Wrong -- uv auto-selects newest Python, packages lack wheels:
+Select the interpreter from the project's `.python-version`, `requires-python`,
+lockfile, and supported CI matrix. `uv` honors version requests and project
+constraints; it does not simply choose the newest installed Python.
 
 ```bash
-uv sync
-# error: No wheel found for numpy on Python 3.14
-```
-
-Right -- specify a stable Python version:
-
-```bash
-# Check project requirements:
 cat .python-version
-# Pin the version:
-uv sync --python 3.13
+rg 'requires-python' pyproject.toml
+uv python find
+uv sync --locked
 ```
+
+If no project pin exists, establish a compatible version from dependency
+support and the project's CI before using `uv python pin <version>` or
+`uv sync --python <version>`. Do not overwrite an existing pin with a generic
+"stable" version or delete `.venv` to hide a mismatch. See [uv's interpreter
+selection rules](https://docs.astral.sh/uv/concepts/python-versions/).
 
 ## pip on macOS
 

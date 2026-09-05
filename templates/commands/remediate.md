@@ -5,7 +5,8 @@ Model tier: **sonnet** — Sonnet 5 (1M context) session. All subagents:
 
 Resolve all findings from the pre-launch audit. Creates GitHub issues,
 orchestrates parallel TDD agents in worktrees, merges sequentially per
-wave, verifies CI, and reports.
+wave, verifies locally, and reports. External issue publication requires authorization;
+otherwise retain the same finding records in a local backlog.
 
 ## Input
 
@@ -172,7 +173,7 @@ After user approval:
    e. Run verification sequentially:
 
       ```bash
-      $TEST_CMD; $TYPECHECK_CMD; $LINT_CMD
+      $TEST_CMD && $TYPECHECK_CMD && $LINT_CMD
       ```
 
    f. Run `/simplify` on changed files.
@@ -198,59 +199,27 @@ After user approval:
 
 ## Step 3: Integration & Verification
 
-Run the full push-PR-merge cycle once per wave. Complete Wave 1 before
-starting Wave 2.
+Run the full local integration and verification cycle once per wave. Complete
+Wave 1 before starting Wave 2. All working branches remain local.
 
 ### Wave 1 Integration
 
-1. **Review each Wave 1 worktree** — verify clean commits, no
-   uncommitted changes.
+1. Review each worktree's changes, commits, finding coverage and test evidence.
+2. Integrate each completed local branch sequentially into the documented local
+   integration branch. Run applicable checks after each integration and repair
+   failures locally before the next merge. Record commit IDs against findings.
+3. Run `/simplify` on the integrated result and the complete applicable local
+   gate, including tests, coverage, typechecks, lint, build and preflight.
+4. Preserve the plan, handoff and evidence. No per-wave push, feature PR,
+   deployment or hosted debugging loop occurs. After all authorized waves are
+   complete, inspect triggers and publish only the completed integration branch
+   once if authorized. Never create Vercel Previews. Production remains a
+   separate explicitly authorized operation.
+5. After an authorized push inspect every expected workflow for that commit;
+   diagnose failures from existing logs and repair locally. Do not rerun or
+   re-push as a debugging loop.
 
-2. **Push all Wave 1 branches in one burst:**
 
-   ```bash
-   git push origin remediate/slug-1 remediate/slug-2 ...
-   ```
-
-3. **Create PRs** for each branch, linking to the corresponding issue.
-   Check for existing PRs first:
-
-   ```bash
-   gh pr list --head remediate/<slug>
-   gh pr create --head remediate/<slug> \
-     --base <integration-branch> \
-     --title "fix: <title>" \
-     --body "Closes #<issue-number>"
-   ```
-
-4. **Merge PRs sequentially** to the integration branch. For each PR:
-
-   a. Merge: `gh pr merge <pr-number> --squash`
-   b. Pull: `git pull`
-   c. Run full verification: `$TEST_CMD; $TYPECHECK_CMD; $LINT_CMD`
-   d. If tests break, fix before proceeding to the next merge.
-   e. Close the corresponding GitHub issue after successful merge.
-
-5. **Run `/simplify`** on the full integrated Wave 1 result.
-
-6. **Run Wave 1 final verification:**
-
-   ```bash
-   $TEST_CMD; $TYPECHECK_CMD; $LINT_CMD; $BUILD_CMD
-   ```
-
-7. **Push to remote. Monitor CI:**
-
-   ```bash
-   gh run list --branch <integration-branch> \
-     --limit 1 --json databaseId,conclusion,status
-   ```
-
-8. **If CI fails:**
-   - Get failure logs:
-     `gh run view <run-id> --log-failed 2>&1 | tail -200`
-   - Diagnose and fix (same logic as `/fix-ci`).
-   - Re-push and re-check (max 3 iterations per wave).
 
 **STOP.** Wave 1 complete. Present Wave 1 integration results to the
 user. Ask: "Proceed to Wave 2 now or defer (run `/remediate wave=2`
@@ -263,7 +232,7 @@ If user proceeds:
 1. **Spawn worktree agents for Wave 2** (same pattern as Wave 1
    step 2).
 2. **Monitor Wave 2 agent progress** (same pattern as Wave 1 step 3).
-3. **Complete push-PR-merge cycle for Wave 2** (same steps as Wave 1).
+3. **Complete local integration cycle for Wave 2** (same steps as Wave 1).
 4. **Run `/simplify`** on the full integrated Wave 2 result.
 5. **Run Wave 2 final verification** (same commands as Wave 1).
 
@@ -272,39 +241,22 @@ backlog. Document any deferred waves with timeline.
 
 ## Step 4: Cleanup
 
-Remove worktrees per wave before starting the next wave.
-
-**After Wave 1:**
-
-1. **Remove all Wave 1 remediate worktrees:**
-
-   ```bash
-   git worktree list
-   # For each Wave 1 remediate worktree:
-   git worktree remove --force <path>
-   ```
-
-2. **Delete all Wave 1 remediate branches** (local and remote):
-
-   ```bash
-   git branch -D remediate/<slug>
-   git push origin --delete remediate/<slug>
-   ```
-
-**After Wave 2:**
-
-Repeat the same cleanup for Wave 2 worktrees and branches.
-
-Wave 3 has no worktrees or branches to clean up.
-
-**After all waves:**
-
-Verify clean state:
+For each wave, confirm ownership, preservation of changes and all artifacts
+(including ignored/untracked plans, handoffs and evidence), and local integration
+before removing its worktree. Use the git-workflow skill's preservation checks.
 
 ```bash
-git worktree list   # Should show only main worktree
-git branch          # Should show only the integration branch
+git worktree list --porcelain
+git -C /absolute/path/to/worktree status --short --untracked-files=all
+git -C /absolute/path/to/worktree ls-files --others --ignored --exclude-standard
+git merge-base --is-ancestor remediate/<slug> <integration-branch>
+# Only after ownership, preservation and integration are established:
+git worktree remove /absolute/path/to/worktree && git branch -d remediate/<slug>
 ```
+
+If any check fails or cleanup refuses, retain the branch/worktree and record why.
+Other tasks' worktrees and branches must survive. No remote deletion is needed
+because remediation branches were never published. Wave 3 has no worktrees.
 
 ## Step 5: Report
 
@@ -324,14 +276,15 @@ Generate a remediation report at `docs/agents/remediation-report.md`:
 - Halted (recommendation unsafe — needs human re-scope): [N]
 - Tests added: [N]
 - Files modified: [N]
-- CI status: PASSING / FAILING
+- Local gate status: PASSING / FAILING
+- Remote status: NOT PUBLISHED / PENDING / PASSING / FAILING
 
 ## Wave 1: Before launch (must-fix)
-| # | Finding ID | Title | Severity | Tests Added | PR | Status |
+| # | Finding ID | Title | Severity | Tests Added | Commit | Status |
 |---|------------|-------|----------|-------------|----|--------|
 
 ## Wave 2: After launch
-| # | Finding ID | Title | Severity | Tests Added | PR | Status |
+| # | Finding ID | Title | Severity | Tests Added | Commit | Status |
 |---|------------|-------|----------|-------------|----|--------|
 
 ## Wave 3: Later / strategic (filed, not fixed)
@@ -339,11 +292,11 @@ Generate a remediation report at `docs/agents/remediation-report.md`:
 |---|------------|-------|----------|-------|-----------------|
 
 ## Final Verification
-- [ ] Wave 1 merged, CI green
-- [ ] Wave 2 merged, CI green (or explicitly deferred)
+- [ ] Wave 1 integrated locally, full local gate green
+- [ ] Wave 2 integrated locally, full local gate green (or explicitly deferred)
 - [ ] Wave 3 issues filed in backlog
 - [ ] /simplify final pass complete for waves that ran
-- [ ] All worktrees and remediate branches removed
+- [ ] Owned worktrees safely removed or retention reasons recorded
 
 ## Deferred Items (if any)
 [Waves the user chose to defer with timeline]
@@ -360,7 +313,7 @@ Present the report summary to the user.
 - **Wave ordering.** Process Waves in order: 1 → 2 → 3. Never
   interleave waves.
 - **Per-wave verification.** Each wave goes through the full merge →
-  verify → CI-check cycle before the next wave begins.
+  verify → full local gate cycle before the next wave begins.
 - **User can defer waves.** After any wave, user may ship and schedule
   the next wave separately. Pass `wave=N` in `$ARGUMENTS` to resume.
 - **TDD mandatory.** Each agent writes a failing test before
@@ -373,20 +326,20 @@ Present the report summary to the user.
   security, or UX invariant **halts** — escalate to the human, never
   auto-implement it literally.
 - **Agents do NOT push** (Central Commit Rule). Only the orchestrator
-  pushes. Worktree agents commit locally, orchestrator batch-pushes.
-- **Sequential merges.** Merge PRs one at a time, test after each.
-  Never merge multiple PRs simultaneously.
+  may publish the completed integration branch once. Worktree agents commit
+  locally; the orchestrator integrates and verifies locally.
+- **Sequential merges.** Integrate local branches one at a time and test after each.
 - **File ownership enforced.** Two agents must never modify the same
   file. If findings overlap files, group them into one work unit.
 - **Branch verification before every commit.** Run
   `git branch --show-current` and verify the result (Error #33).
 - **/simplify twice.** Once per agent (after their fix), once on the
   integrated result per wave.
-- **CI accountability.** The push is not done until CI is green. If CI
-  fails, fix it (max 3 iterations per wave).
-- **Clean exit.** Remove worktrees and remediate branches per wave
-  before reporting.
+- **CI accountability.** Inspect every expected workflow after an authorized
+  integration push. Diagnose and repair failures locally; no rerun/re-push loop.
+- **Clean exit.** Preserve every artifact before removing owned worktrees;
+  retain anything whose ownership or integration cannot be established.
 - **Never weaken a test.** If a test fails after merge, fix the source
   code, not the test.
-- **Check for existing PRs** before creating with `gh pr create`.
+- **No working-branch PRs.** All remediation branches remain local.
 - Run verification commands sequentially, never as parallel Bash calls.

@@ -316,7 +316,7 @@ Implement (atomic change)
 **Native command integration:**
 
 - **`/simplify`** — runs after the reviewer approves plan compliance. Spawns 3 parallel agents (code reuse, code quality, efficiency) and applies fixes automatically. This separates concerns: reviewer checks plan compliance, `/simplify` handles code quality. Because `/simplify` is Anthropic-maintained, it improves without blueprint changes.
-- **`/batch`** — when the plan marks phases as `[batch-eligible]` (independent, no file overlap), `/batch` can execute them all in parallel. Each phase runs in its own git worktree and opens a PR. Use this instead of sequential phase-by-phase when phases are truly independent.
+- **`/batch`** — when the plan marks phases as `[batch-eligible]` (independent, no file overlap), `/batch` can execute them all in parallel. Each phase runs in its own local git worktree and produces local commits. Disable automatic push/PR behavior or orchestrate local worktrees directly. Use this instead of sequential phase-by-phase when phases are truly independent.
 
 **If stuck:**
 - Get help from subagents for targeted debugging.
@@ -464,27 +464,20 @@ Mismatch discovered mid-implementation
         The plan needs revision before more code is written.
 ```
 
-### CI Fails After Push (Background Agent)
+### CI Fails After an Authorized Push
 
+```text
+CI failure detected for the exact published commit
+1. Read the existing failed-run log; identify the first failing check.
+2. Reproduce in a task-owned local worktree and fix the confirmed cause.
+3. Run the complete applicable local gates and integrate the repair locally.
+4. Report the failed remote result and locally verified repair candidate.
+5. Do not rerun hosted jobs or re-push fixes as a debugging loop.
+   A further remote publication needs authorization after local gates pass.
 ```
-CI failure detected
-├── Attempt 1: Read the failure log
-│   ├── Lint/format error → fix and re-push
-│   ├── Type error → fix and re-push
-│   ├── Test failure (test is correct) → fix the code and re-push
-│   └── Test failure (test is wrong) → fix the test and re-push
-├── Attempt 2: Different failure after fix?
-│   └── Read the new failure. Fix and re-push.
-├── Attempt 3: Still failing?
-│   └── STOP. Report to the user:
-│       - What failed (exact error)
-│       - What you tried (all 3 attempts)
-│       - Why you think it's stuck
-│       Do NOT retry a 4th time. Do NOT force-push.
-└── Failure is in unrelated code (not your changes)?
-    └── Report to the user. Don't fix code you didn't change
-        unless the user explicitly asks.
-```
+
+Never weaken tests to hide a valid failure. Preserve every confirmed actionable
+finding and explain any issue that requires a new scope/architecture decision.
 
 ### Subagents Disagree or Return Conflicting Results
 

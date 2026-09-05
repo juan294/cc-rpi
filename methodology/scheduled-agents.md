@@ -485,7 +485,7 @@ After scheduled agents finish their overnight runs, use `/triage` to process all
 8. Commits code fixes (and reports too, on private repos — Rule #70)
 9. Updates shared-context.md with triage results
 10. Touches `docs/agents/.last-triage` to mark reports as processed
-11. Processes Dependabot PRs last (Rule #84): auto-merges patch/minor with green CI, attempts one fix for obvious CI failures, defers majors and non-obvious failures
+11. Processes Dependabot inputs locally (Rule #84): batches applicable updates, reproduces failures locally, and records unresolved compatibility decisions. No remote rebase, auto-merge or working-branch push; full local integration precedes one authorized integration push.
 
 For multi-project orchestration, the `morning-triage.sh` script template (in `templates/scripts/`) runs `/triage` across all configured projects sequentially, producing a cross-project summary.
 

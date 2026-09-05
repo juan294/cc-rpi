@@ -2,7 +2,7 @@
 
 Model tier: **sonnet** — Sonnet 5 (1M context) session.
 
-Process all overnight agent reports, GitHub Security & Quality Alerts, and the Dependabot PR queue. Discovers every report using timestamp-based discovery, checks for agent failures, scans open Dependabot PRs (Rule #84), synthesizes findings, proposes an action plan, implements all fixes, and merges the Dependabot PRs that are safe to auto-merge. Report commit policy depends on repo visibility: public repos keep reports local, private repos commit them as historical artifacts (Rule #70).
+Process all overnight agent reports, GitHub Security & Quality Alerts, and the Dependabot PR queue. Discovers every report using timestamp-based discovery, checks for agent failures, scans open Dependabot PRs (Rule #84), synthesizes findings, proposes an action plan, implements all fixes, and integrates applicable dependency updates locally. Report commit policy depends on repo visibility: public repos keep reports local, private repos commit them as historical artifacts (Rule #70).
 
 ## Input
 
@@ -61,12 +61,12 @@ Find EVERY report, agent failure, and GitHub security/quality alert. No assumpti
 
    For each PR, classify the update type from the title (e.g., `Bump foo from 1.2.3 to 1.2.4` -> patch; `1.2.x -> 1.3.0` -> minor; `1.x -> 2.0.0` -> major) and the CI status:
 
-   - **patch + CI green** -> ready-to-merge (auto)
-   - **minor + CI green** -> ready-to-merge (auto)
+   - **patch + CI green** -> ready for local batch verification
+   - **minor + CI green** -> ready for local batch verification
    - **major** -> defer, human review required (regardless of CI)
    - **CI red, fix looks obvious** (e.g., snapshot/lockfile drift) -> attempt-fix
    - **CI red, not obvious** -> defer, note in report
-   - **Mergeable conflict** -> attempt rebase via `gh pr update-branch`; if still conflicting, defer
+   - **Mergeable conflict** -> resolve in the local dependency batch; if still conflicting, record the blocker
 
 4. **Check GitHub Security & Quality Alerts (critical):**
 
@@ -124,7 +124,7 @@ Find EVERY report, agent failure, and GitHub security/quality alert. No assumpti
    | # | PR | Update Type | CI | Disposition |
    |---|----|----|----|----|
 
-   Total: N reports to process, M agent failures detected, G GitHub security/quality alerts found, K Dependabot PRs (auto-merge: A, attempt-fix: F, defer: D).
+   Total: N reports to process, M agent failures detected, G GitHub security/quality alerts found, K Dependabot PRs (local batch: A, attempt-fix: F, defer: D).
 
    Do NOT stop here -- proceed directly to analysis unless there are ZERO reports, ZERO failures, ZERO GitHub security/quality alerts, ZERO GitHub alert query failures, AND ZERO Dependabot PRs (in which case report "all clear" and **STOP**).
 
@@ -200,7 +200,7 @@ Read-only. Do not modify any files.
    - Alert #Z (secret scanning): [secret type, action without secret value]
 
    ### Dependabot PRs (Step 5)
-   - Auto-merge: PR #X (patch), PR #Y (minor)
+   - Local batch: PR #X (patch), PR #Y (minor)
    - Attempt-fix: PR #Z (snapshot drift)
    - Defer: PR #W (major bump)
 
@@ -231,14 +231,14 @@ After user approval, implement all action items.
 2. **Run verification sequentially:**
 
    ```bash
-   $TEST_CMD; $TYPECHECK_CMD; $LINT_CMD
+   $TEST_CMD && $TYPECHECK_CMD && $LINT_CMD
    ```
 
 3. **Run `/simplify`** on all changed files.
 
 4. **Run verification again** (in case `/simplify` introduced changes).
 
-## Step 4: Commit & Push
+## Step 4: Commit Locally
 
 Commit policy depends on repo visibility (Rule #70). Determine visibility before staging:
 
@@ -280,15 +280,16 @@ gh repo view --json visibility --jq '.visibility' 2>/dev/null
    git commit -m "fix: resolve agent report findings [triage]"
    ```
 
-3. **Push to remote. Monitor CI:**
+3. Keep the working branch local. Integrate the completed fixes and dependency
+   batch locally and run the complete applicable CI-equivalent gate before any
+   single authorized integration push. Inspect workflow/deployment triggers;
+   never create Vercel Previews or publish working branches/PRs.
 
-   ```bash
-   git push
-   gh run list --branch $(git branch --show-current) --limit 1 \
-     --json databaseId,conclusion,status
-   ```
+4. After an authorized push, inspect every expected workflow for the exact commit.
+   Diagnose failures from existing logs and repair locally; do not rerun hosted
+   jobs or re-push as a debugging loop.
 
-4. **If CI fails:** diagnose and fix (same logic as `/fix-ci`, max 3 iterations).
+
 
 5. **Touch the triage marker** (marks all current reports as processed):
 
@@ -298,41 +299,20 @@ gh repo view --json visibility --jq '.visibility' 2>/dev/null
 
 ## Step 5: Process Dependabot PRs
 
-After the triage commit is pushed and green, process the Dependabot PRs identified in Step 1.3 (Rule #84). These are independent commits from the triage code fixes -- handle them last so a flaky dependency PR doesn't block triage.
+Process the discovered dependency updates in a local batch before final local
+integration and publication (Rule #84). Existing PRs are read-only inputs.
 
-For each PR by disposition:
-
-1. **auto-merge (patch + CI green, minor + CI green):**
-
-   ```bash
-   gh pr merge <num> --squash --auto --delete-branch
-   ```
-
-   `--auto` waits for required checks; `--delete-branch` keeps the remote tidy.
-
-2. **attempt-fix (CI red, fix obvious — e.g., snapshot/lockfile drift, generated file out of date):**
-
-   - Check out the PR locally: `gh pr checkout <num>`
-   - Regenerate the affected file (run the project's update script, regenerate snapshots, etc.)
-   - Push the fix to the PR branch
-   - If CI goes green, queue the auto-merge as in step 1
-   - One attempt only -- if it doesn't go green, defer
-
-3. **defer (major, non-obvious CI failures, conflicts after rebase):**
-
-   - Add a comment summarizing why it's deferred (e.g., "Major version bump -- requires human review of breaking changes")
-   - Leave the PR open
-   - Note in the triage report's deferred-PRs section
-
-4. **Mergeable conflicts (before classifying as defer):**
-
-   ```bash
-   gh pr update-branch <num>
-   ```
-
-   If the rebase resolves the conflict and CI is green, proceed with auto-merge. Otherwise, defer.
-
-Switch back to the triage branch (`main` or wherever the session started) before continuing to the report step.
+1. Patch/minor candidates: inspect each change, apply relevant updates to one
+   task-owned local branch/worktree, and verify their combined behavior.
+2. Obvious failures: reproduce locally, fix the actual cause and rerun local
+   checks. Do not push to the Dependabot branch or request a hosted rebase.
+3. Major or unresolved updates: record the compatibility decision/blocker in
+   the local triage report. Preserve every finding; do not silently drop one.
+4. Integrate the verified batch locally, simplify, and run the complete local
+   gate. Include it with the completed triage change in the single authorized
+   integration push. Never merge dependency PRs directly into production.
+5. Keep PR comments, closing and external issue creation pending authorization;
+   do not use them as part of a remote experimentation loop.
 
 ## Step 6: Report
 
@@ -371,7 +351,7 @@ Generate a triage report at `docs/agents/triage-report.md`:
 - [ ] All tests passing
 - [ ] Typecheck clean
 - [ ] Lint clean
-- [ ] CI green
+- [ ] Full applicable local gate green; remote publication status recorded
 
 ## Carried Items (if any)
 [Items that persist across multiple triage cycles -- track for escalation]
@@ -384,13 +364,13 @@ Present the report summary to the user.
 - **Exhaustive discovery.** Use timestamp-based scan (Rule #71). Never assume how many reports exist. Present the full count before processing.
 - **Report commit policy is visibility-conditional (Rule #70).** Public repos: reports stay local, only code fixes are committed (`docs/agents/`, `logs/`, `scripts/agents/` gitignored). Private repos: reports are committed alongside code fixes as historical artifacts.
 - **GitHub alert coverage is mandatory.** Every triage run must query and report GitHub code scanning alerts (including CodeQL and quality warnings), Dependabot security alerts, and secret scanning alerts. Do not rely only on local agent reports. If a query fails or alerts appear disabled unexpectedly, report that as a YELLOW/RED triage finding and action item.
-- **Process Dependabot PRs (Rule #84).** Triage scans for open Dependabot PRs and merges what it can: patch + minor with green CI auto-merge, majors defer for human review, obvious CI failures get one fix attempt. Dependabot processing happens last so it can't block triage code fixes.
+- **Process Dependabot PRs (Rule #84).** Triage reads open PRs, batches applicable dependency updates locally, and verifies the combined result before the single authorized integration push. No remote rebase, auto-merge, or dependency-branch push loop.
 - **Touch `.last-triage` after completion.** This marks all current reports as processed for the next triage run.
 - **Check for agent failures.** Scan `logs/` BEFORE analyzing reports. A missing report might mean a failed agent, not "nothing to report."
 - **Fix everything (Rule #58).** Categorize findings by severity, but implement 100% of action items. No deferring. No "nothing urgent." `leanness-report.md` is actionable: extract and implement every concrete recommendation after the user approves the action plan.
 - **Leanness safety.** Leanness recommendations are not bulk-applied as an undifferentiated cleanup. Review each item individually, keep edits scoped to the files named by the report, preserve behavior, verify importer/public API impact before deleting exports, and rely on or add tests according to the risk.
 - **Read every report completely.** No skimming, no summaries-of-summaries. Extract ALL action items from every report, including `leanness-report.md`.
 - **shared-context.md integration.** Read before analysis, append triage entry after completion.
-- **CI accountability.** Push is not done until CI is green. Max 3 fix iterations.
+- **CI accountability.** Inspect expected runs after an authorized push; diagnose failures from existing logs and repair locally without rerun/re-push loops.
 - **Branch verification before every commit.** Run `git branch --show-current` first (Error #33).
 - Run verification commands sequentially, never as parallel Bash calls.

@@ -112,10 +112,10 @@ After the user provides a version number, prepare all files for release. Do not 
    history -- a non-empty result (other than dated CHANGELOG entries) means a
    file was missed.
 
-4. **Run verification commands** sequentially (chain with `&&` or `;`, never parallel Bash calls):
+4. **Run verification commands** sequentially (chain with `&&` or aggregate failures explicitly, never parallel Bash calls):
 
    ```bash
-   $TYPECHECK_CMD; $LINT_CMD; $TEST_CMD; $BUILD_CMD
+   $TYPECHECK_CMD && $LINT_CMD && $TEST_CMD && $BUILD_CMD
    ```
 
    Also run every repo-invariant script the project ships, not just the build.
@@ -145,159 +145,66 @@ After the user provides a version number, prepare all files for release. Do not 
 
 ## Step 3: Publish
 
-After human approval, execute the release. The flow depends on the branching strategy detected in Step 1.
+Apply the remote budget from the push-accountability rule. Working and release
+branches remain local. Do not create feature/release PRs or Preview deployments.
 
-### Main-only flow
-
-Confirm with the user before creating the tag and GitHub release. Present what will be tagged
-and published, then proceed only after approval.
-
-1. Create the release commit:
+1. Commit the complete release preparation on the local working branch after
+   verifying the intended branch and all applicable local gates.
+2. Inspect the documented integration/production topology and current remote
+   workflow/deployment triggers. Check that the integration branch has not moved,
+   integrate the completed candidate locally, and bind final gate evidence to
+   that integrated state. Reconcile and reverify locally if it has moved.
+3. Confirm the version, integrated commit, release notes, expected remote runs,
+   and publication authorization. Use authorization already given for this
+   release; otherwise present the complete candidate before asking. Production
+   remains separately authorized from ordinary integration publication.
+4. If a push would create a Vercel Preview, stop before pushing. Use a documented,
+   non-destructive bypass; never change remote settings as an improvised bypass.
+5. Publish only the completed authorized target branch once. In a main-only
+   release whose explicitly authorized target is `main`:
 
    ```bash
-   git add <changed-files>
-   git commit -m "release: vX.Y.Z -- [summary from CHANGELOG]"
+   git push origin main
+   # Capture the exact published commit for the verification below:
+   git rev-parse main
    ```
 
-2. Create an annotated git tag:
+   In develop-based repositories, ordinary completion publishes only the fully
+   verified integration branch. A production release integrates locally into
+   the documented production branch and publishes that final branch only with
+   explicit production authorization. If branch protection requires a release
+   PR, prepare the candidate locally and report that publication constraint;
+   do not create a working-branch PR or bypass protection.
+6. Inspect every expected workflow for the exact pushed commit:
 
    ```bash
-   git tag -a vX.Y.Z -m "vX.Y.Z"
+   gh run list --branch <published-branch> --commit <published-sha> \
+     --json databaseId,headSha,name,status,conclusion
    ```
 
-3. Push the commit, then the tag by name:
+   Report missing, pending, failed and successful runs accurately. A remote
+   failure is diagnosed from existing logs and repaired locally; never use
+   reruns or fix-and-repush as an experimentation loop.
+7. Only after every expected main/integration publication workflow passes for
+   that exact commit, create and publish the named release tag and GitHub release:
 
    ```bash
-   git push origin main && git push origin vX.Y.Z
-   ```
-
-4. Create the GitHub release:
-
-   ```bash
-   gh release create vX.Y.Z --notes "[CHANGELOG entry for this version]"
-   ```
-
-5. Verify CI:
-
-   ```bash
-   gh run list --branch main --limit 1
-   ```
-
-6. Report the result with a link to the GitHub release.
-   If the project has a registry publish step, remind the user:
-   "Release is published. When ready, run `npm publish` / `cargo publish` / etc."
-
-### Feature-branch flow
-
-1. Create a release branch and commit:
-
-   ```bash
-   git checkout -b release/vX.Y.Z
-   git add <changed-files>
-   git commit -m "release: vX.Y.Z -- [summary from CHANGELOG]"
-   ```
-
-2. Push the branch:
-
-   ```bash
-   git push -u origin release/vX.Y.Z
-   ```
-
-3. Check for an existing PR before creating one:
-
-   ```bash
-   gh pr list --head release/vX.Y.Z
-   ```
-
-   If no existing PR, create one:
-
-   ```bash
-   gh pr create --title "release: vX.Y.Z" --body "[CHANGELOG entry]"
-   ```
-
-4. Verify CI on the PR:
-
-   ```bash
-   gh run list --branch release/vX.Y.Z --limit 1
-   ```
-
-5. **STOP.** Tell the user to review and merge the PR. After merge, provide the commands to
-   tag and release:
-
-   ```bash
-   git checkout main && git pull
-   git tag -a vX.Y.Z -m "vX.Y.Z"
+   git tag -a vX.Y.Z <published-sha> -m "vX.Y.Z"
    git push origin vX.Y.Z
-   gh release create vX.Y.Z --notes "[CHANGELOG entry]"
+   gh release create vX.Y.Z --notes-file /absolute/path/to/release-notes.md
    ```
 
-6. Report the result with a link to the PR.
-   If the project has a registry publish step, remind the user:
-   "After PR is merged and tagged, run `npm publish` / `cargo publish` / etc."
-
-### Develop-based flow
-
-Use when `develop` (or `dev`/`integration`) is the **permanent** integration branch and the
-release is a PR from `develop` -> `main` directly. There is NO intermediate `release/vX.Y.Z`
-branch -- the integration branch already holds the changes.
-
-1. Land the release prep on the integration branch:
-
-   ```bash
-   git checkout develop && git pull --rebase
-   git add <changed-files>
-   git commit -m "release: vX.Y.Z -- [summary from CHANGELOG]"
-   git push origin develop
-   ```
-
-2. Check for an existing release PR before creating one:
-
-   ```bash
-   gh pr list --base main --head develop
-   ```
-
-   If none, open the `develop` -> `main` PR:
-
-   ```bash
-   gh pr create --base main --head develop --title "release: vX.Y.Z" --body "[CHANGELOG entry]"
-   ```
-
-3. Verify CI on the PR:
-
-   ```bash
-   gh run list --branch develop --limit 1
-   ```
-
-4. Merge with squash + auto-merge. NEVER pass `--delete-branch` -- `develop` is permanent:
-
-   ```bash
-   gh pr merge --squash --auto
-   ```
-
-   Repos standardized per Rule #76 enable delete-branch-on-merge, but that only removes
-   ordinary feature heads; deleting the permanent integration branch would be destructive.
-
-5. **STOP.** Wait for the PR to merge (confirm with `gh pr view --json state`). After it lands,
-   tag the squashed release commit on `main`:
-
-   ```bash
-   git checkout main && git pull --rebase
-   git tag -a vX.Y.Z -m "vX.Y.Z"
-   git push origin vX.Y.Z
-   gh release create vX.Y.Z --notes "[CHANGELOG entry]"
-   ```
-
-6. Report the result with a link to the PR and the GitHub release.
-   If the project has a registry publish step, remind the user:
-   "After tagging, run `npm publish` / `cargo publish` / etc."
+   Inspect any expected tag-triggered runs as well. A missing, pending or failed
+   branch check blocks tag/release publication; preserve the local candidate.
+8. Report the tag, commit, GitHub release link and verification outcome.
+   Registry publication remains advisory unless separately authorized.
 
 ## Rules
 
 - NEVER use `git push --tags` -- push tags by name: `git push origin vX.Y.Z` (Error #44).
 - NEVER use `--body` with `gh release create` -- use `--notes` (Error #20).
-- ALWAYS check for an existing PR before creating one with `gh pr create` (Error #53).
-- NEVER pass `--delete-branch` on a `develop` -> `main` release PR -- `develop` is a permanent
-  integration branch (develop-based flow; Rule #76).
+- Keep working branches and release preparation local; no feature/release PR loop.
+- Preserve permanent integration branches and task artifacts during cleanup.
 - ALWAYS verify CI after push (push accountability).
 - ALWAYS present the diff before committing (Step 2 gate).
 - ALWAYS ask for the version number -- never guess or auto-increment.

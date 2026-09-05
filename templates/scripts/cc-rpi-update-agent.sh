@@ -166,7 +166,10 @@ Important context:
 - The cc-rpi blueprint is at: $CC_RPI_PATH
 - This project is at: $PROJECT_ROOT
 - Apply all updates non-interactively. Do not ask for confirmation.
-- Commit changes when done.
+- Preserve user content and unknown ownership; skip conflicts and report them.
+- Commit completed verified changes locally on a task-owned branch/worktree.
+- Never push, create PRs, deploy, trigger hosted runs, or change remote settings.
+- Do not create Vercel Previews or use hosted CI as a debugging loop.
 - Write your final summary as your text output (it becomes the report).
 
 If there are no changes needed, just output: 'cc-rpi sync: already up to date as of <version>.'"

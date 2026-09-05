@@ -20,6 +20,8 @@ set -euo pipefail
 # Project root — two levels up from scripts/agents/
 # ---------------------------------------------------------------------------
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+# Public variable consumed by scripts sourcing this library.
+# shellcheck disable=SC2034
 PROJECT_NAME="$(basename "${PROJECT_DIR}")"
 
 # ---------------------------------------------------------------------------

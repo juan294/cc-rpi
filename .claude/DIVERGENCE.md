@@ -70,3 +70,10 @@ Symlinks require developer mode or an elevated shell on Windows. A checkout
 without that support materializes them as regular files. `check-tree-drift.sh`
 reports that as a failure with a fix rather than passing silently, so the fork
 is visible instead of invisible.
+
+## Local extensions
+
+`.claude/skills/drawio/` is a user-owned local extension. It has no exported
+`templates/skills/` counterpart and is not one of the 12 domain skills.
+Preserve its editable sources and specialized desktop exporter instructions
+during generated self-application, update, and detach.

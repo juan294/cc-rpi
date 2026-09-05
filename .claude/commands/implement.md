@@ -11,7 +11,7 @@ Process:
    isolated to avoid conflicts with other agents or uncommitted work on
    the shared branch.
 5. Check if remaining phases are marked `[batch-eligible]` in the plan.
-   - If ALL remaining phases are batch-eligible, suggest using `/batch` to execute them in parallel (one worktree per phase, each opens a PR).
+   - If ALL remaining phases are batch-eligible, suggest using `/batch` to execute them in parallel (one local worktree per phase, local commits only). Disable automatic push/PR behavior; if unavailable, orchestrate local worktrees directly.
    - If user agrees, hand off to `/batch` with the plan reference. Done.
    - If user declines or phases have dependencies, continue sequentially below.
 6. For the CURRENT phase only:
@@ -28,13 +28,12 @@ Process:
       `docs/plans/<plan-name>-notes.md` under `## Deviations`, as:
       plan said / found / chose / why. Deviations only -- never narration,
       and no file at all if the phase had none. `/validate` reads it.
-      **Commit it with the phase.** You are in a worktree: an uncommitted
-      notes file is destroyed at teardown, before `/validate` ever sees it.
-      `.gitignore` excludes `docs/plans/*` but re-includes `*-notes.md`
-      precisely so these survive -- do not re-ignore them. Reference the plan
-      by NAME in backticks, never as a markdown link: the plan itself stays
-      untracked, so a link to it dangles in a clean checkout and fails CI's
-      link check.
+      **Commit it with the phase.** Preserve the approved plan, phase files,
+      decisions and handoff as curated history using explicit ignore exceptions
+      where needed. Raw machine evidence stays local per visibility policy.
+      Verify all artifacts survive outside disposable worktree-only state before
+      cleanup; never bulk-stage ignored research directories.
+
 7. STOP. Report results and wait for human confirmation.
 8. Do NOT proceed to the next phase without confirmation.
 

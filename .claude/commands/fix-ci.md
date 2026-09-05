@@ -26,13 +26,15 @@ Process:
 5. For typecheck/lint/build failures, fix them directly (these are usually straightforward).
 
 6. After all fixes, run the full test suite locally:
-   `pnpm run typecheck 2>&1; pnpm run lint 2>&1; pnpm run test 2>&1`
+   the project's complete local CI-equivalent gate, including applicable coverage, typechecks, lint and build. Use `&&` or aggregate failures explicitly.
 
 7. If new failures appear, repeat the fix cycle (max 3 iterations).
 
 8. When all checks pass, commit with message:
    `fix: resolve CI failures [auto]`
-   Then push and spawn a background agent to verify CI passes.
+   Keep the repair branch local. Integrate only the complete verified result
+   locally. Inspect triggers before any single authorized integration push;
+   never create Previews, rerun hosted jobs, or re-push as a debugging loop.
 
 Rules:
 - Never weaken a test to make it pass — fix the source code.

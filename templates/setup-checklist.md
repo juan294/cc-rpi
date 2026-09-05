@@ -38,6 +38,8 @@ Use this when setting up a new project to follow cc-rpi best practices.
   - `docs/research/` — Research documents
   - `docs/plans/` — Implementation plans
   - `docs/decisions/` — Architecture decision records
+  - Version curated research, approved plans, phase files and handoffs; keep raw
+    machine inventories and transient operational evidence local by visibility.
 - [ ] Configure `.claude/settings.json` (adapt from `templates/settings.json.template`):
   - Enable Agent Teams: `"env": { "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1" }`
   - Configure hooks for file edits and pre-commit (deterministic enforcement)
@@ -222,34 +224,21 @@ a "no" here and move on.
 - [ ] Require implementation to happen in worktrees or temporary
   branches regardless of topology
 - [ ] Set up branch protection rules on GitHub
-- [ ] Apply the canonical GitHub repo settings (Rule #76) so the repo
-  doesn't drift from the blueprint:
-
-  ```bash
-  gh api -X PATCH repos/{owner}/{repo} \
-    -f allow_squash_merge=true -f allow_merge_commit=false \
-    -f allow_rebase_merge=false -f delete_branch_on_merge=true \
-    -f allow_auto_merge=true
-  ```
-
-  - [ ] Squash-merge only (merge commits and rebase merges disabled)
-  - [ ] Auto-merge enabled
-  - [ ] Delete-branch-on-merge enabled (never `--delete-branch` a
-    permanent `develop` branch — it is protected, not an ordinary head)
-  - [ ] Dependabot alerts + security update PRs enabled
-  - [ ] Production deployment environment restricted to protected
-    branches only
+- [ ] Inspect current repository settings and the documented release topology.
+  Preserve required merge-commit or squash semantics. Remote settings changes
+  belong to explicitly authorized setup work; no universal squash-only PATCH.
+- [ ] Preserve permanent integration branches and production protections.
 - [ ] Configure pre-commit hooks (typecheck, lint, test) — see
   Pre-Commit Hooks above
 
 ## Push Accountability
 
-- [ ] Add push accountability instructions to CLAUDE.md or CLAUDE.local.md:
-  - After every push to the branch under active CI verification,
-    spawn a background CI monitor
-  - Background agent polls, investigates failures, fixes, and re-pushes
-  - Main terminal stays unblocked
-- [ ] Test the workflow: push a deliberate failure, verify the background agent catches it
+- [ ] Document local working branches, complete local gates and local integration.
+- [ ] Inspect workflow/deployment triggers before the one authorized completed
+  integration push. Never create Vercel Previews or hosted debugging loops.
+- [ ] Observe the exact pushed SHA and expected workflow/event/check set.
+  Diagnose any remote-only failure locally; obtain any new required authorization.
+- [ ] Exercise failure detection with local stubs, not a deliberate failing push.
 
 ## Release Verification (E2E Pro)
 
@@ -344,7 +333,7 @@ The shell script reads update instructions from cc-rpi at runtime, so when cc-rp
 - [ ] Always `/plan` before `/implement`
 - [ ] Always review plans before approving
 - [ ] Mark independent plan phases as `[batch-eligible]` during `/plan`
-- [ ] Never skip the human confirmation gate between implementation phases
+- [ ] Preserve phase acceptance gates unless the user explicitly authorizes continuation
 - [ ] Always run `/simplify` after reviewer approval during `/implement`
 - [ ] Use `/batch` for independent phases and bulk migrations
 - [ ] Use `/validate` after implementation
@@ -392,7 +381,7 @@ license badge only if the project is open source.
 
 - **CI additions:** Test the CLI binary end-to-end (invoke the compiled CLI with test args, assert output)
 - **Testing:** Focus on integration tests (stdin/stdout/stderr/exit codes) over unit tests
-- **CLAUDE.md:** Document all commands and flags. Add "ESM CLI files use shebang — never run with `node`, use `chmod +x && ./cli` or `npx .`"
+- **CLAUDE.md:** Document all commands and flags. Add "ESM interpretation follows `.mjs` or the package `type` field; a shebang selects the runtime and does not change module mode"
 - **Pre-commit:** Add smoke test (run `./cli --help` and assert exit 0)
 
 ### Monorepo

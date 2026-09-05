@@ -16,7 +16,8 @@ templates carry.
 ## Adapter Isolation
 
 - The `document.modelContext` global is pre-standard and shipping behind
-  a Chrome origin trial. Confine every reference to it to a single
+  experimental browser implementations. Feature-detect it and confine every
+  reference to it to a single
   adapter module.
 - Tool handlers import the adapter -- they never touch the global
   directly. When the spec moves, the change is one file.

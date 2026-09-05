@@ -64,7 +64,8 @@ if [[ "$COMMAND" == *"git pull"* ]] && [[ "$COMMAND" == *"--rebase"* ]]; then
     emit_block "guard-bash.sh" "Error #33: uncommitted changes" \
       "git pull --rebase fails with a dirty working tree." \
       "  git add <files> && git commit -m \"msg\"
-  git pull --rebase && git push"
+  git pull --rebase
+  # Complete local gates and integration; publication needs explicit authorization."
     log_event block error-33
     exit 2
   fi
@@ -80,8 +81,8 @@ if [[ "$COMMAND" == *"git push"* ]]; then
   if [[ "$COMMAND" == *"--tags"* ]] && [[ "$COMMAND" != *"--follow-tags"* ]]; then
     emit_block "guard-bash.sh" "Error #44: --tags pushes all local tags" \
       "--tags pushes every tag, not just new ones; old tags cause failures." \
-      "  git push origin main && git push origin v1.0.0
-  git push origin main --follow-tags"
+      "  # After approved completed integration and exact-candidate CI:
+  git push origin v1.0.0"
     log_event block error-44
     exit 2
   fi
@@ -96,9 +97,8 @@ if [[ "$COMMAND" == *"git push"* ]]; then
   #    && [[ "$COMMAND" != *"--follow-tags"* ]]; then
   #   emit_block "guard-bash.sh" "Error #48: direct push to protected branch" \
   #     "Pushing directly to main/master is a high-stakes action." \
-  #     "  git push origin develop                 # develop/main topology
-  # git push -u origin feature/my-change    # main-only or PR flow
-  # git push origin main --follow-tags      # releases with tags (ask first)"
+  #     "  git status --short
+  # Complete local gates/integration and obtain publication authorization."
   #   exit 2
   # fi
 

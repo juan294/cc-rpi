@@ -38,7 +38,10 @@ description: RPI workflow details -- phase rules, pre-release sequence, implemen
   use `/batch` to execute independent phases in parallel.
   `[batch-eligible]` is decided during `/plan` by identifying phases
   with no file overlap; `/batch` then runs them in parallel, one
-  worktree per phase, each opening a PR.
+  worktree per phase, each producing local commits. Disable automatic
+  push/PR behavior; if that cannot be disabled, orchestrate local worktrees
+  directly. The orchestrator integrates and verifies locally before the
+  single authorized integration push.
 - Use `/batch` for bulk changes outside RPI too --
   migrations, multi-issue sprints, repetitive refactors. Don't
   manually iterate through 20 files when `/batch` can parallelize.

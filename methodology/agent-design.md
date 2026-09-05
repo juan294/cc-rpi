@@ -120,13 +120,13 @@ These are bundled slash commands maintained by Anthropic. They improve automatic
 
 **Purpose:** Orchestrate large-scale parallel changes across a codebase.
 
-**Mechanics:** Takes an instruction, researches the codebase, decomposes work into 5-30 independent units, presents a plan for approval. Once approved, spawns one background agent per unit in an isolated git worktree. Each agent implements its unit, runs tests, and opens a PR. Requires a git repository.
+**Mechanics:** Takes an instruction, researches the codebase, decomposes work into 5-30 independent units, presents a plan for approval. Once approved, spawns one background agent per unit in an isolated git worktree. Each agent implements its unit, runs tests, and produces local commits. Disable automatic push/PR behavior; if the native tool cannot do so, orchestrate local worktrees directly. Requires a git repository.
 
 **Where it runs in RPI:**
 - **Implement (Phase 3)** — when the plan marks phases as `[batch-eligible]` (independent, no file overlap, no dependency on another phase's output), `/batch` executes them all in parallel instead of sequential phase-by-phase
 - **Standalone** — for migrations, bulk refactors, multi-issue sprints, and any parallelizable work that doesn't need the full RPI cycle (e.g., `/batch migrate all test files from Jest to Vitest`)
 
-**Relationship to Agent Teams:** `/batch` is higher-level. It handles decomposition, worktree isolation, and PR creation automatically. Agent Teams give you lower-level control (shared task list, direct messaging between agents). Use `/batch` when the work is clearly decomposable; use Agent Teams when agents need to coordinate.
+**Relationship to Agent Teams:** `/batch` is higher-level. Use its decomposition and worktree isolation only when publication can be disabled; otherwise orchestrate local worktrees directly. Agent Teams give you lower-level control (shared task list, direct messaging between agents). Use `/batch` when the work is clearly decomposable; use Agent Teams when agents need to coordinate.
 
 ---
 
@@ -231,13 +231,13 @@ When multiple agents operate in parallel (sub-agents, teammates, or `/batch` uni
 
 | Agent Role | Can Edit Files | Can git commit | Can git push |
 |------------|:-:|:-:|:-:|
-| Main session / Team lead | Yes | Yes | Yes |
+| Main session / Team lead | Yes | Yes | Completed integration branch once, when authorized |
 | Sub-agent (Task tool) | Yes | No | No |
-| Worktree agent (`isolation: "worktree"`) | Yes | Yes (local only) | No — main agent batches |
+| Worktree agent (`isolation: "worktree"`) | Yes | Yes (local only) | No |
 | Teammate (Agent Teams) | Yes | No — write to task output | No |
-| `/batch` unit | Yes (in worktree) | Yes (isolated branch) | Yes (opens PR) |
+| `/batch` unit | Yes (in worktree) | Yes (local isolated branch) | No |
 
-`/batch` is the exception — it creates isolated worktrees with their own branches, so each unit can safely commit and push without conflicts.
+No agent is exempt from the owner remote budget. Working branches and worktrees stay local; the orchestrator integrates and fully verifies before the single authorized integration push. Never create Vercel Previews.
 
 ### Branch Verification Before Every Commit
 
@@ -277,33 +277,21 @@ This pattern is more complex than central commit but necessary when agents need 
 
 ### Parallel Agent Push Strategy
 
-When N agents each push independently, every push triggers M workflow runs (CI matrix + auxiliary workflows like Dependency Review, CodeQL). For 8 agents x 4 workflows = 32 workflow runs, most of which queue simultaneously and compete for runner minutes. On macOS runners (10x cost multiplier), this burns through Actions minutes fast.
-
-**Strategy: agents commit locally, main agent pushes in batch.**
+Agents commit locally. The orchestrator reviews each branch, integrates completed
+work locally, and verifies the complete result before any publication.
 
 | Step | Who | What |
 |------|-----|------|
-| 1. Spawn | Main agent | Creates worktrees — each agent gets its own branch via `git worktree add` or `isolation: "worktree"` |
-| 2. Implement | Worktree agents | Write code, run tests, commit — but never push or create PRs. Deliverable is a local commit on their branch |
-| 3. Review | Main agent | Verifies each worktree has clean commits. Optionally runs cross-branch checks (type conflicts, shared file edits) |
-| 4. Push | Main agent | Pushes all branches in one burst: `git push origin branch-1 branch-2 ... branch-N` |
-| 5. PRs | Main agent | Creates all PRs sequentially via `gh pr create`, linking to corresponding issues |
-| 6. Monitor | Background agent | Watches all CI runs: `gh run list --branch branch-1 --branch branch-2 ... --limit N`. If any fail, main agent fixes and re-pushes just that branch |
+| 1. Spawn | Orchestrator | Assign bounded tasks with distinct file ownership and local worktrees where needed |
+| 2. Implement | Worktree agents | Write, test and commit locally; no push or PR creation |
+| 3. Integrate | Orchestrator | Review and integrate local commits sequentially, resolving failures locally |
+| 4. Verify | Orchestrator | Run full applicable local CI selection, coverage, typechecks, lint, build and preflight |
+| 5. Publish | Orchestrator | Inspect triggers; push only completed integration once when authorized; no Vercel Previews |
+| 6. Monitor | Assigned monitor | Inspect expected runs for the pushed commit; diagnose failures locally without rerun/re-push loops |
 
-**Why it matters:**
-
-| Approach | Pushes | CI triggers | Risk |
-|----------|--------|-------------|------|
-| Each agent pushes | N x retries | N x M x retries | Wrong-branch pushes, merge conflicts |
-| Main agent batches | N (once) | N x M (once) | None — single point of control |
-
-**Key benefits:**
-
-- Fewer CI runs — agents debugging locally don't trigger CI on every attempt
-- Lower API usage — no redundant GitHub API calls from parallel agents
-- No wrong-branch pushes — only the main agent touches remote
-- No merge conflicts — main agent can detect shared-file edits before pushing
-- Cheaper GitHub Actions minutes — especially on macOS runners (10x cost multiplier)
+A batch push of many branches still triggers work for each branch. Local
+integration followed by one completed push avoids those paid experimental runs.
+Production publication remains a separate explicitly authorized action.
 
 ### Scope Discipline and the Watchdog
 
@@ -628,7 +616,7 @@ Classify every action by its risk level to determine autonomy:
 |--------|----------|----------|
 | **Read-only** | Searching code, reading files, running tests, `git status`, `git log` | Fully autonomous |
 | **Low** | Writing code per approved plan, creating branches, committing to feature branches | Fully autonomous |
-| **Medium** | Pushing to a non-production integration branch, creating PRs, running `npm install` | Autonomous with post-action verification |
+| **Medium** | Publishing completed non-production integration, installing dependencies | Follow authorization and remote-budget boundaries |
 | **High** | Merging PRs, pushing to `main`/production, deploying, modifying external services | Human-gated — always ask first |
 | **Critical** | Deleting branches, force-pushing, dropping databases, modifying CI/CD pipelines | Human-gated — explain consequences before asking |
 
@@ -641,14 +629,15 @@ Classify every action by its risk level to determine autonomy:
 | Writing code per approved plan | Yes | Plan was already human-approved |
 | Creating git branches | Yes | Reversible, local scope |
 | Committing to feature branches | Yes | Reversible, local scope |
-| Pushing to a non-production integration branch | Yes, with CI monitor | Medium risk; background agent verifies |
-| Creating PRs | Yes | PR creation is proposing, not acting |
-| Adding PR descriptions | Yes | Informational, not destructive |
+| Pushing completed non-production integration | When authorized, after full local gates and trigger inspection | One completed push, no Preview deployments |
+| Creating working-branch PRs | No | Working branches remain local |
+| Adding external PR descriptions | When explicitly authorized | External communication |
 | Merging PRs to a shared integration branch | Ask first | Affects a shared branch |
 | Merging PRs to `main`/production | Always ask | Affects production |
-| Deploying to any environment | Always ask | External side effects |
+| Deploying production | Requires explicit authorization | Production side effects |
+| Creating Vercel Previews | No | Owner remote budget |
 | Modifying CI/CD workflows | Always ask | Affects all contributors |
-| Deleting branches or worktrees | Ask if remote | Local cleanup is fine; remote deletion is permanent |
+| Deleting owned local branches/worktrees | After integration and preservation checks | Preserve unknown, unmerged and foreign work |
 
 #### The Quality Cascade Principle
 

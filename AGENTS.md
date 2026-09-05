@@ -66,10 +66,10 @@ When the user invokes a slash-style command:
   blueprint
 - `.codex/skills/` holds blueprint-shipped Codex-only skills; sync them
   into `~/.codex/skills/` for local Codex discovery
-- Research and plan docs in `docs/research/` and `docs/plans/` are
-  committed history; `docs/agents/` is operational output whose commit
-  policy depends on repo visibility (Rule #70) -- gitignored on public
-  repos, tracked on private repos as a historical audit trail
+- This approved v2 plan, its phase directory and deviation/handoff notes are
+  explicitly tracked. Existing machine-specific research audits remain ignored;
+  do not bulk-stage `docs/research/`. Curated plans/research in new adopters are
+  versioned knowledge. `docs/agents/` is ignored here under public-repo Rule #70.
 - **Contract layer.** The `PostToolUse` hook `verify-edit.sh` (emoji +
   markdownlint on `.md` edits) is Claude-Code-specific -- Codex will not run
   it, so apply Rule #77 (no emojis in docs) by hand. The validator
@@ -83,3 +83,13 @@ When the user invokes a slash-style command:
   (`{ts, session_id, hook, decision, rule, file}`) to
   `.claude/metrics/contract-events.jsonl`, the aggregator and the weekly
   `contract-metrics-agent.sh` snapshot work unchanged.
+
+## Owner remote compute policy
+
+Working branches and worktrees stay local. Run complete applicable local gates,
+then integrate locally into the documented integration branch. Inspect hosted
+triggers before one explicitly authorized completed integration push. Never
+create Vercel Previews or use hosted CI as a debugging loop. Production and
+publication retain their explicit authorization boundary. Preserve dirty,
+untracked, unintegrated and foreign worktrees; remove only proven task-owned,
+clean, integrated work after its artifacts are preserved.

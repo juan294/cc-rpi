@@ -12,6 +12,14 @@ A blueprint repository for setting up and running projects with [Claude Code](ht
 
 ---
 
+## Local work and publication
+
+Working branches/worktrees stay local. Complete all applicable checks with
+`bash scripts/verify-local.sh`, integrate locally, and inspect hosted triggers
+before one explicitly authorized completed integration push. Never create
+Vercel Previews or use hosted CI as a debugging loop. Production remains a
+separate authorized release. Preserve plans and handoffs before safe cleanup.
+
 ## Requirements
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI installed and configured
@@ -88,7 +96,7 @@ The full Research-Plan-Implement pattern adapted for Claude Code, based on Human
 - **Agent Design** — Documentarian rule, tool restrictions, subagent catalog, Anthropic-native commands (`/simplify`, `/batch`), agent teams, autonomy principles
 - **Pseudocode Notation** — Compact notation for writing implementation plans
 - **Testing** — Automated-first verification hierarchy, TDD protocol
-- **Push Accountability** — Post-push CI ownership, background polling, fix-and-repush cycle
+- **Push Accountability** — Local gates, one authorized integration push, exact-candidate CI observation
 - **CI & Guardrails** — Pre-commit hooks, CI workflows, development guardrails, enforcement stack
 - **Scheduled Agents** — Recurring quality agents on cron/launchd, shared context system
 - **Cost Monitoring** — Model economics: cost pools, model-tier binding, access tiers, cost-per-outcome

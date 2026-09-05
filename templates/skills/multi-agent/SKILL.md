@@ -7,42 +7,28 @@ description: "Rules for sub-agents, Agent Teams, worktree agents, central commit
 
 ## Central Commit Pattern
 
-Wrong -- sub-agent pushes directly, causes wrong-branch push:
+Shared-worktree subagents edit only their assigned files. The orchestrator owns
+commits there. Agents in isolated task-owned worktrees may commit locally:
 
 ```bash
-# In sub-agent worktree:
-git add . && git commit -m "fix" && git push origin feature-branch
+git branch --show-current
+git add <assigned-files> && git commit -m "fix: scoped change"
 ```
 
-Right -- sub-agent commits locally, main agent pushes:
-
-```bash
-# Sub-agent (worktree): commit only
-git add . && git commit -m "fix"
-
-# Main agent: review, then batch-push all branches
-git push origin branch-1 branch-2 branch-3
-```
+The orchestrator reviews and integrates completed commits locally. Never stage
+unrelated files or publish a working branch/PR.
 
 ## Central Push Pattern
 
-Wrong -- N agents push independently, triggering N x M CI runs:
+A single command pushing N branches still triggers remote work for N branches.
+Keep all working branches local. Complete applicable tests, coverage, typechecks,
+lint, build and deployment preflight locally, then integrate and verify the
+combined result. Inspect workflow/deployment triggers before the single authorized
+push of the completed integration branch. Never create Vercel Previews;
+production publication remains separately and explicitly authorized.
 
-```bash
-# Agent 1 pushes -> 9 CI workflows
-# Agent 2 pushes -> 9 CI workflows
-# Agent 3 pushes -> 9 CI workflows
-# Total: 27 workflow runs
-```
-
-Right -- main agent batch-pushes, monitors CI centrally:
-
-```bash
-# All agents commit locally in their worktrees
-# Main agent pushes all at once:
-git push origin branch-1 branch-2 branch-3
-# One background agent monitors all CI runs
-```
+After an authorized push, inspect every expected run for its exact commit.
+Existing logs can inform local repair; never trigger a hosted rerun/re-push loop.
 
 ## Sub-Agent Permissions
 

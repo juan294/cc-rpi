@@ -7,7 +7,7 @@ user-invocable: false
 # Error Patterns -- Top 20
 
 **#1: Parallel verification kills siblings** --
-Chain with `;` or `&&`, never parallel Bash calls.
+Use `&&` or aggregate each exit status; bare `;` hides early failures.
 
 **#2: Worktree cwd resets to main repo** --
 Prefix EVERY command with `cd /absolute/path &&`.
@@ -19,10 +19,10 @@ Run typecheck/lint BEFORE committing. Fix first.
 Never use `~` in Read/Write/Edit paths. Full absolute.
 
 **#9: Push rejected (non-fast-forward)** --
-Pull with rebase first: `git pull --rebase && git push`.
+Reconcile remote integration history locally, then rerun affected gates.
 
 **#12: Push and forget CI** --
-Spawn background agent to monitor CI after every push.
+Inspect expected workflows for the authorized pushed commit.
 
 **#13: Skipping TDD** --
 Write the failing test FIRST. Red-Green-Refactor.
@@ -31,16 +31,16 @@ Write the failing test FIRST. Red-Green-Refactor.
 Run `pnpm install` / `uv sync` before build/test/lint.
 
 **#25: No upstream tracking** --
-First push: `git push -u origin branch-name`.
+Working branches remain local; only completed integration may be published.
 
 **#30: PR create before pushing** --
-Push branch to remote BEFORE `gh pr create`.
+Do not publish a working branch merely to create a PR.
 
 **#33: Pull rebase with dirty tree** --
 Commit before `git pull --rebase` (hook enforced).
 
 **#44: Push --tags pushes ALL tags** --
-Push specific: `git push origin v1.0.0` or `--follow-tags`.
+Push only the named authorized release tag: `git push origin v1.0.0`.
 
 **#45: Fabricated filesystem paths** --
 Never guess paths. Use Glob/Grep to find files first.
@@ -52,19 +52,19 @@ Run `git branch --show-current` before every commit.
 Each sub-agent owns different files. Central commit.
 
 **#51: CI explosion from parallel pushes** --
-Batch pushes. One push triggers one CI run.
+Integrate and verify locally; one authorized integration push may trigger several workflows.
 
 **#56: Merge to main without topology** --
 Ask: does merging to main deploy to production?
 
 **#58: Deploy without preview verification** --
-CI passing is NOT sufficient. Verify on preview URL.
+Run local runtime and platform preflights; never create Previews.
 
 **#59: Improvised production recovery** --
 Roll back immediately. Never deploy to diagnose.
 
 **#62: Supabase migration without local test** --
-Always `supabase db reset` locally before `db push`.
+Test role access with `supabase db reset --local`; remote application is separate.
 
 ## Error Domains
 

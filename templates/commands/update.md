@@ -15,7 +15,8 @@ Before starting, verify this project was bootstrapped or adopted from cc-rpi:
 
 ## Phase 1: Check for Updates
 
-1. Pull the latest cc-rpi: `git -C <cc-rpi-path> pull --rebase`
+1. Check the cc-rpi clone for a clean tree and preserve intended changes before
+   `git -C <cc-rpi-path> pull --rebase`. Do not pull through someone else's work.
 2. Check if `.claude/cc-rpi-sync.json` exists in THIS project.
    - If YES: read it and note the `lastSyncCommit` hash.
    - If NO: this is the first sync. Treat everything as new.
@@ -23,7 +24,7 @@ Before starting, verify this project was bootstrapped or adopted from cc-rpi:
 3. If `lastSyncCommit` exists:
    - Run `git -C <cc-rpi-path> log --oneline <lastSyncCommit>..HEAD` to see what changed.
    - Run `git -C <cc-rpi-path> diff --name-only <lastSyncCommit>..HEAD` to get changed files.
-   - If nothing changed, report "Already up to date" and stop.
+   - Even if upstream did not change, inspect the installed components for damage or local customization before reporting "Already up to date".
 
 ## Phase 2: Internalize New Knowledge
 
@@ -42,9 +43,9 @@ On incremental syncs (lastSyncCommit exists), prioritize reading files that appe
 ## Phase 3: Update Slash Commands
 
 7. Compare each file in cc-rpi `templates/commands/` against this project's `.claude/commands/`:
-   - **Skip** `bootstrap.md`, `adopt.md`, and `update.md` — these are user-level commands, not project-level.
+   - **Skip** `bootstrap.md`, `adopt.md`, `update.md`, and `detach.md` — these are user-level commands, not project-level.
    - For each remaining command (research, plan, implement, validate, describe-pr, pre-launch, explore-release, tool-design):
-     - If it exists in both locations and the cc-rpi version is different → replace the project version.
+     - If it exists in both locations and differs, reconcile against the recorded installed baseline. Preserve local edits; without a trustworthy baseline, skip and report the conflict.
      - If it exists in cc-rpi but not in this project → add it.
      - If it exists only in this project → leave it (project-specific command).
 
@@ -52,7 +53,7 @@ On incremental syncs (lastSyncCommit exists), prioritize reading files that appe
 
 8. Compare each skill directory in cc-rpi `templates/skills/` against this project's `.claude/skills/`:
    - For each skill in the blueprint:
-     - If it exists in both locations and the cc-rpi SKILL.md is different -> replace the project's SKILL.md.
+     - If it exists in both locations and differs, reconcile the full directory against its recorded baseline; preserve customized files and report unresolved ownership.
      - If it exists in cc-rpi but not in this project -> create the directory and copy SKILL.md (new skill from blueprint).
      - If it exists only in this project -> leave it (project-specific skill).
    - Blueprint skills: `shell-tools/`, `git-workflow/`, `multi-agent/`, `deployment-safety/`, `ci-workflow/`, `github-cli/`, `error-patterns/`, `systematic-debugging/`, `python-rules/`, `macos-rules/`, `supabase/`, `webmcp/`
@@ -67,7 +68,7 @@ On incremental syncs (lastSyncCommit exists), prioritize reading files that appe
 9. Compare each file in cc-rpi `templates/rules/` against this project's `.claude/rules/`:
    - Blueprint rules: `rpi-details.md`, `push-accountability.md`, `deployment-safety.md`, `supabase.md`, `testing.md`, `webmcp.md`
    - For each blueprint rule:
-     - If it exists in both and the cc-rpi version is different → update the content but **preserve custom `paths`** the project may have adapted.
+     - If it exists in both and differs, reconcile against its recorded baseline and preserve project edits including custom `paths`; skip and report unknown ownership.
      - If it exists in cc-rpi but not in this project → add it (new rule from blueprint). Adapt `paths` to match project structure.
      - If it exists only in this project → leave it (project-specific rule).
    - Skip stack-irrelevant rules: if not using Supabase, skip `supabase.md`. If no test framework, skip `testing.md`. If no deployment pipeline, skip `deployment-safety.md`. If the project exposes no tools to an agent, skip `webmcp.md` — use the same detection grep as the skills step above. If unsure, skip and report.
@@ -102,7 +103,7 @@ On incremental syncs (lastSyncCommit exists), prioritize reading files that appe
     - If a section doesn't exist in the project → **add it** from the template. Place it after the last existing blueprint-managed section, preserving the order from the template. New blueprint sections are new knowledge — `/update` is responsible for delivering them.
 18. **Do NOT touch** project-specific sections: One-liner, Stack, Key Commands, Git Workflow, Deployment, Commit Messages, Research Documents, Implementation Plans, or any custom section.
 19. If CLAUDE.md still contains `<important if>` blocks, migrate them to `.claude/rules/` files with `paths` frontmatter and remove the blocks from CLAUDE.md.
-20. The verification sequencing rule ("Run verification sequentially with `;` or `&&`") should be a one-liner in the Git Workflow section, not a separate subsection.
+20. The verification sequencing rule ("Run verification sequentially with `&&` or explicit failure aggregation") should be a one-liner in the Git Workflow section, not a separate subsection.
 
 ## Phase 6: Update settings.json and Hooks
 
@@ -114,9 +115,8 @@ On incremental syncs (lastSyncCommit exists), prioritize reading files that appe
     `guard-bash.sh`, `verify-edit.sh`):
     - If `.claude/hooks/<name>.sh` doesn't exist in this project, create
       `.claude/hooks/` if needed and copy it in.
-    - If it exists and differs from the blueprint copy, replace it -- hook
-      scripts are blueprint-managed, the same rule as skills, not a place
-      for project customization.
+    - If it differs, reconcile against the recorded baseline. Preserve project
+      guards and customizations. Unknown ownership means skip and report, not overwrite.
 26. Sync hook registrations: for each entry in the template's `hooks` object
     (`PreToolUse`, `PostToolUse`, etc.):
     - If this project's settings.json has no entry whose `command`
@@ -169,7 +169,7 @@ On incremental syncs (lastSyncCommit exists), prioritize reading files that appe
 - **Never delete project content.** Only add or update blueprint-managed sections.
 - **Preserve project identity.** Stack, deployment, key commands, commit conventions — these are the project's own.
 - **Preserve Codex compatibility.** `AGENTS.md` is part of the blueprint-managed compatibility layer.
-- **Hook scripts are blueprint-managed, like skills.** `.claude/hooks/*.sh` and their `settings.json` registrations sync the same way skill SKILL.md files do -- replace on drift, add if missing, never invented by the project. A project's own additional hook entries are left untouched.
+- **Ownership before replacement.** Hook scripts, skills, rules and commands can contain local edits. Reconcile from recorded baseline bytes; preserve unknown or customized content and report conflicts. Never infer ownership from a filename or header alone.
 - **Be idempotent.** Running twice with no cc-rpi changes should produce zero file changes.
 - **Commit atomically.** All sync changes go in one commit with the sync metadata.
 - **If unsure, skip and report.** When a section has been heavily customized beyond the template, leave it alone and note it in the report as "skipped — heavily customized."

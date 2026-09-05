@@ -2,7 +2,7 @@
 
 ## Scope
 
-This repository contains methodology documentation, operational patterns, and templates. It does not contain executable software or services. However, the templates and patterns influence how agents operate in real projects, so security matters.
+This repository contains methodology documentation, operational patterns, and templates. It includes executable local verification scripts and hooks. Templates and patterns also influence how agents operate in real projects, so both code and instructions are in scope.
 
 ## Supported Versions
 
@@ -16,7 +16,7 @@ If you discover a security issue — for example, a pattern or template that cou
 
 **Do not open a public issue.**
 
-Instead, use [GitHub's private vulnerability reporting](../../security/advisories/new) to submit your report.
+Instead, use [GitHub's private vulnerability reporting](https://github.com/juan294/cc-rpi/security/advisories/new) to submit your report.
 
 Please include:
 - A description of the issue

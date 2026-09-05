@@ -42,7 +42,8 @@ This project follows its own Research-Plan-Implement pattern.
 3. /implement -- Execute one phase at a time with review gates
 4. /validate -- Verify implementation against the plan
 
-Each phase is its own conversation. STOP after each phase.
+Each phase is its own conversation. Stop after each phase unless the owner
+has explicitly authorized continuation.
 Use /clear between tasks, /compact when context is heavy.
 
 ## Key Commands
@@ -58,7 +59,9 @@ python3 templates/scripts/validate-findings.py --self-test
 python3 templates/scripts/contract-metrics.py --self-test
 ```
 
-Run verification sequentially with `&&` or `;`, NEVER as parallel Bash calls.
+Run `bash scripts/verify-local.sh` for the full local CI-equivalent gate.
+Verification runs sequentially and aggregates every required exit; never let a
+later success hide an earlier failure.
 
 This repo ships **no markdownlint config**, so `npx markdownlint` applies its
 80-column defaults, which every file here violates by design. The
@@ -89,11 +92,12 @@ release: vX.Y.Z         # Version bumps
 
 ## Push Accountability
 
-After every push, verify CI on the branch you just pushed:
-
-1. `gh run list --branch $(git branch --show-current) --limit 1` to check status
-2. If CI fails -- investigate with `gh run view <id> --log-failed`, fix, re-push
-3. The push isn't done until CI is green
+Working branches remain local. Complete all local gates and local integration,
+inspect hosted triggers, then push completed main once only with explicit owner
+release authorization. Never create Vercel Previews or use hosted CI to debug.
+After an authorized push, inspect the exact candidate SHA and expected workflow,
+event and check set. A remote-only failure returns to local diagnosis and any
+new required authorization; never automatically fix-and-repush.
 
 ## Project File Locations
 

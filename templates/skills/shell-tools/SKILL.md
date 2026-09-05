@@ -11,22 +11,26 @@ jq, Python, and the tool layer.
 
 ## Sequencing Fallible Calls
 
-Wrong -- independent Bash calls issued in parallel; one failure kills all siblings:
+Run resource-intensive verification sequentially. Fail fast when later checks
+need earlier success:
 
 ```bash
-# Parallel call 1: pnpm run typecheck
-# Parallel call 2: pnpm run lint
-# Parallel call 3: pnpm run test
+pnpm run typecheck && pnpm run lint && pnpm run test
 ```
 
-Right -- chain sequentially so each result survives:
+To run every check, collect each status and return an aggregate failure:
 
 ```bash
-pnpm run typecheck 2>&1 ; pnpm run lint 2>&1 ; pnpm run test 2>&1
+result=0
+pnpm run typecheck || result=$?
+pnpm run lint || result=$?
+pnpm run test || result=$?
+exit "$result"
 ```
 
-Use `&&` when a later step is meaningless after an earlier failure, `;` when
-you want every result regardless.
+A bare `first; second` returns only the second command's status. A passing
+last command must not hide an earlier failure. Sibling cancellation is a
+harness-specific behavior, not a universal shell property.
 
 ## Quoting and Escaping
 
@@ -49,21 +53,19 @@ python3 -c 'assert x != y'
 
 ### Complex Regex in zsh
 
-Wrong -- zsh treats `!`, `{`, and `}` specially before the command ever runs:
+Shell quoting and executable capabilities are separate. Single-quoted
+patterns pass literally to bash and zsh. macOS BSD grep does not support
+`-P`; wrapping it in `bash -c` does not add PCRE support.
+
+For JSON, parse JSON:
 
 ```bash
-grep -oP '(?<=version":")[^"]+' package.json
-# zsh: event not found
+python3 -c 'import json; print(json.load(open("package.json"))["version"])'
 ```
 
-Right -- use the built-in Grep tool, a dedicated linter, or wrap in bash:
-
-```bash
-bash -c 'grep -oP '"'"'(?<=version":")[^"]+'"'"' package.json'
-```
-
-Reach for the built-in Grep tool first. It takes the pattern as data, so no
-shell parsing happens at all.
+For plain text use `rg`, a supported `grep -E` pattern, or Python `re`.
+Discover which executable is installed and check its help before using
+nonportable flags. Use a script for complex parsing.
 
 ## Paths
 
@@ -100,7 +102,8 @@ pwd
 ls /absolute/path/to/parent
 ```
 
-Or use the Glob tool. A path you did not observe is a path that does not exist.
+Or use the Glob tool. An unobserved path is unknown; only an actual filesystem check can establish
+that it is missing.
 
 ### Re-read Before Bulk Operations
 
@@ -110,11 +113,11 @@ Wrong -- act on a file list captured several steps ago:
 rm /tmp/out/a.json /tmp/out/b.json   # b.json already gone -> non-zero exit
 ```
 
-Right -- list first, or make the removal tolerant:
+Right -- inspect ownership and preserve unknown files before removal:
 
 ```bash
 ls /tmp/out/
-rm -f /tmp/out/*.json
+# Delete only explicitly identified, task-owned disposable files.
 ```
 
 ## Choosing the Tool
@@ -171,11 +174,13 @@ eslint --fix .
 Before "fixing" a warning, check whether the pattern is intentional. Add a
 linter exception rather than changing correct content.
 
-### A 403 From WebFetch Is Not Transient
+### Diagnose HTTP 403
 
-A 403 means the domain blocks automated requests. Retrying, or trying an
-alternate path on the same domain, returns 403 again. Switch strategies: use
-WebSearch, or ask for the content directly.
+403 means the server refused this request. Inspect the response for an
+authentication, permission, resource-policy, rate-limit, or automation-block
+reason. It does not prove every URL on the domain is blocked. Avoid blind
+retries; retry only after a relevant correction or use an authorized alternate
+source. See [HTTP semantics](https://www.rfc-editor.org/rfc/rfc9110.html#name-403-forbidden).
 
 ### Create Boilerplate Files Sequentially
 
@@ -209,13 +214,18 @@ produces an unhelpful parse error instead of the real problem:
 curl https://api.example.com/things | jq '.[].id'
 ```
 
-Right -- capture the response and check the status:
+Right -- check transport and HTTP status before parsing:
 
 ```bash
-curl -sS -w '%{http_code}' -o /tmp/resp.json https://api.example.com/things
-head -c 200 /tmp/resp.json
-jq '.[].id' /tmp/resp.json
+response_file=$(mktemp) || exit 1
+trap 'rm -f "$response_file"' EXIT
+http_code=$(curl -sS -w '%{http_code}' -o "$response_file" "$URL") || exit $?
+case "$http_code" in
+  2??) jq '.[].id' "$response_file" ;;
+  *) printf 'HTTP %s; inspect the saved response securely\n' "$http_code" >&2; exit 1 ;;
+esac
 ```
 
-`curl -sf` is the terse form: it fails the pipeline on an HTTP error instead
-of emitting the error body.
+For a terse pipeline use `set -o pipefail` and `curl -fsS "$URL" | jq '.'`.
+Without `pipefail`, a successful parser can mask curl's failure. Avoid printing
+response bodies containing credentials or private data. See [curl's manual](https://curl.se/docs/manpage.html).

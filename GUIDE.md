@@ -44,6 +44,16 @@ Each phase runs in its own Claude Code conversation. This is intentional — it 
 
 **5. Specs are the new code.** In AI-assisted development, your plans and research documents are effectively your source code. The generated code is more like a compiled artifact. Treat your specs with the same rigor you'd treat source files — review them carefully, version them in git, iterate on them until they're right.
 
+## Local verification and publication
+
+Keep implementation branches and worktrees local. Finish the applicable local
+gates and integrate locally before the single authorized integration push.
+Inspect workflow/deployment triggers; never create Vercel Previews or use hosted
+CI as a debugging loop. Observe the exact pushed SHA and required check set.
+A remote-only failure returns to local diagnosis and any new required approval.
+Production and publication retain explicit authorization boundaries. Preserve
+project knowledge, dirty files and unintegrated work through worktree cleanup.
+
 ## Getting Started
 
 ### Step 1: Clone the Blueprint and Install Commands
@@ -194,13 +204,13 @@ install when you want the same cleanup pass in Codex.
 | `/tool-design [goal]` | WebMCP: turns a stated user goal into a tool contract plus seed evals by role-playing the conversation twice (clean and vague) against the codebase's real initial state. Saves to `docs/plans/`. Feeds `/plan`. | When a project exposes (or plans to expose) an agent-facing tool surface and the goal is already stated. Sits between `/brainstorm` and `/plan`. |
 | `/describe-pr` | Generates a PR description from the current branch's diff and commit history. | Before opening or updating a PR. |
 | `/pre-launch` | Spawns 8 core specialist agents (Principal Architect, Staff FE, Staff BE, Performance Engineer, DevOps/SRE Lead, Security Reviewer, QA/Reliability Lead, Product Designer/UX Lead), plus a conditional ninth (Agent Surface Engineer) when the project exposes tools to an agent, for a deep launch-readiness audit. Produces a 16-section report with 5-tier severity findings, finding IDs, and Before/After/Later time horizons. | Before any production release. Run `/remediate` after to fix findings in 3 waves. |
-| `/remediate` | Parses the 16-section pre-launch report, groups findings by wave (Before / After / Later launch), creates GitHub issues for every finding (Rule #58), spawns parallel TDD agents per wave in worktrees, merges sequentially, verifies CI, runs `/simplify` twice per wave. Wave 3 strategic items are filed as issues but not auto-fixed. | After `/pre-launch` when findings exist. Automates the full fix cycle in 3 waves. |
-| `/triage` | Discovers overnight agent reports via timestamp-based scanning, checks for agent failures in logs, queries GitHub Security & Quality Alerts (code scanning/CodeQL, Dependabot security, secret scanning) every run, scans open Dependabot PRs (Rule #84), and extracts `leanness-report.md` items individually. Synthesizes findings, proposes action plan, implements fixes, then auto-merges safe Dependabot PRs (patch/minor with green CI) and defers majors. Public repos: reports stay local. Private repos: reports are committed alongside fixes. | Every morning. First command of the day for each project. |
+| `/remediate` | Parses the 16-section pre-launch report, groups findings by wave (Before / After / Later launch), records every finding locally (Rule #58; external issues need authorization), spawns parallel TDD agents per wave in worktrees, integrates locally, runs full local gates, runs `/simplify` twice per wave. Wave 3 strategic items are filed as issues but not auto-fixed. | After `/pre-launch` when findings exist. Automates the full fix cycle in 3 waves. |
+| `/triage` | Discovers overnight agent reports via timestamp-based scanning, checks for agent failures in logs, queries GitHub Security & Quality Alerts (code scanning/CodeQL, Dependabot security, secret scanning) every run, scans open Dependabot PRs (Rule #84), and extracts `leanness-report.md` items individually. Synthesizes findings, proposes action plan, implements fixes, then prepares local dependency fixes; remote merges require authorization. Public repos: reports stay local. Private repos: reports are committed alongside fixes. | Every morning. First command of the day for each project. |
 | `/explore-release` | Wave B of E2E Pro: diff-driven, fresh-context exploratory release charters run as parallel agents, each completing the mandatory eight-maneuver table under a synthetic-fixture safety contract. Blocks on any failure or skipped high-risk area. Feeds evidence to `/release`; never tags. | Once there's a deployed release candidate to test, before `/release`. |
 | `/status` | Quick 5-line project orientation: branch, last commit, working tree, CI status, open items. | Start of session. Quick check without starting a full task. |
 | `/update-docs` | Spawns 4 parallel discovery agents, then updates all documentation, Mermaid diagrams, version references, and inline code docs based on changes since last release. | After features/fixes are done, before releasing. Refreshes everything in one pass. |
 | `/release` | Detects project type and branching strategy, bumps versions everywhere, generates CHANGELOG entry, creates release commit and tag, publishes GitHub release, advises on registry publish. | When ready to cut a new version. Run `/update-docs` first. |
-| `/fix-ci` | Self-healing CI: gets failure logs, spawns parallel fix agents per failure category, iterates until green or retry budget exhausted. | When CI is red. Automates the diagnose-fix-verify loop. |
+| `/fix-ci` | Reads CI failure evidence, reproduces and repairs locally, and runs full local gates before an authorized integration push. | When CI is red. Automates the diagnose-fix-verify loop. |
 
 ### Model Tiers at a Glance
 
@@ -231,7 +241,7 @@ The recommended pre-release sequence:
 | Command | What It Does | When to Use |
 |---------|-------------|-------------|
 | `/simplify` | Spawns 3 parallel agents (code reuse, code quality, efficiency) to review changed code and apply fixes. Anthropic-maintained. In Codex, use `codex-simplify` instead of defining a project skill named `simplify`. | After reviewer approval in `/implement`. After `/pre-launch` audit. Anytime after significant code changes. |
-| `/batch [instruction]` | Decomposes work into 5-30 independent units, executes each in a parallel git worktree, opens a PR per unit. | For `[batch-eligible]` plan phases. Migrations, bulk refactors, multi-issue sprints. |
+| `/batch [instruction]` | Decomposes work into 5-30 independent units, executes each in a parallel git worktree, returns local commits to one integration owner. | For `[batch-eligible]` plan phases. Migrations, bulk refactors, multi-issue sprints. |
 | `/clear` | Resets the conversation context. | Between unrelated tasks. The most underused command. |
 | `/compact [focus]` | Summarizes the current conversation with a focus area. | Same task, but context is getting heavy. |
 | `/worktree` | Creates an isolated git worktree for implementation. | When starting `/implement`. Keep main clean. |
@@ -274,7 +284,7 @@ Plans use a compact pseudocode notation so you can see exactly what changes in e
 You type `/implement docs/plans/2026-02-21-rate-limiting.md` and the agent:
 
 1. Reads the plan.
-2. Checks for `[batch-eligible]` phases — if all remaining phases are independent, offers to use `/batch` to execute them in parallel (one worktree per phase, each opens a PR).
+2. Checks for `[batch-eligible]` phases — if all remaining phases are independent, offers to use `/batch` to execute them in parallel (one local worktree per phase, integrated by one owner).
 3. Otherwise, starts with Phase 1 only.
 4. Delegates implementation to subagents, then sends the result to a reviewer subagent for **plan compliance** (does the code match the spec?).
 5. Runs `/simplify` — Anthropic's native code quality pass (reuse, quality, efficiency). This catches things the plan-compliance reviewer doesn't check.
@@ -282,7 +292,7 @@ You type `/implement docs/plans/2026-02-21-rate-limiting.md` and the agent:
 7. Updates the plan's checkboxes.
 8. **Stops and waits for your confirmation.**
 
-You review, approve, and it moves to Phase 2. One phase at a time. Never auto-proceeding.
+You review, approve, and it moves to Phase 2. One phase at a time. Continuation requires an explicit user instruction.
 
 **Your job:** Confirm each phase. If something doesn't look right, say so. The cost of stopping is low; the cost of a runaway multi-phase implementation is high.
 
@@ -369,10 +379,10 @@ When findings exist, run `/remediate` to process them in 3 waves. Wave 1
 (Before launch — blockers + high-severity must-fix) runs first with full
 TDD + verification + CI gate. Wave 2 (After launch — medium severity)
 runs next, either in the same session or deferred. Wave 3 (Later /
-strategic) files GitHub issues for architectural work but does not spawn
+strategic) records local follow-ups for architectural work but does not spawn
 fix agents — that work requires human judgment. Rule #58's 100% coverage
-is preserved: every finding gets an issue, even if only Waves 1-2 get
-auto-fixed.
+is preserved: every finding has a disposition; external issues require
+authorization, and only Waves 1-2 get automated fixes.
 
 ### Release Verification (E2E Pro)
 
@@ -486,7 +496,7 @@ The blueprint repository contains detailed documentation on every topic mentione
 | Agent design | `methodology/agent-design.md` | Subagent catalog, autonomy boundaries, Agent Teams |
 | Plan notation | `methodology/pseudocode-notation.md` | How to write and read implementation plans |
 | Testing approach | `methodology/testing.md` | TDD protocol, verification hierarchy |
-| CI ownership | `methodology/push-accountability.md` | Background CI monitoring, fix-and-repush |
+| CI ownership | `methodology/push-accountability.md` | Local gates and exact-candidate CI observation |
 | Model economics | `methodology/cost-monitoring.md` | Cost pools, model-tier binding, access tiers, cost-per-outcome |
 | Error patterns | `patterns/agent-errors.md` | 64 documented errors with symptoms and solutions |
 | Operational rules | `patterns/quick-reference.md` | Index of 89 rules, each pointing to the surface that holds it |
