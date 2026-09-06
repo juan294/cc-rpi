@@ -327,6 +327,8 @@ boundary explicitly.
 
 **Why this matters:** Tests written after implementation tend to test that the code does what it does (tautological), not that it does what it should (behavioral). TDD forces tests to be independent specifications.
 
+**Reviewing a test that already exists:** ordering is invisible after the fact, so judge the assertion instead. Name the change to production code that would make it fail. If nothing would -- it asserts the implementation back to itself, passes on any branch of an `or`, or only checks that a handler is imported or registered -- it is tautological no matter when it was written. See [the testing rule](../templates/rules/testing.md) for the mocking boundary, the can-this-fail check and coverage honesty.
+
 ---
 
 ## Error #14: Suggesting manual steps instead of using available tools

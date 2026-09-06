@@ -25,13 +25,16 @@ concurrency:
 jobs:
   coverage:
     name: Coverage report
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.13"
+          python-version: "3.13.15"
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24.19.0"
       - name: Install measured coverage prerequisites
         run: python3 -m pip install --quiet PyYAML==6.0.3 coverage==7.16.0 uv==0.12.10
       - name: Run authoritative coverage suite

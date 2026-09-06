@@ -3,7 +3,7 @@
   "name": "cc-rpi",
   "displayName": "cc-rpi -- RPI Methodology",
   "description": "RPI for Claude Code and Codex: namespaced workflows and domain knowledge from shared portable sources.",
-  "version": "1.29.0",
+  "version": "2.0.0",
   "author": {
     "name": "Juan Gonzalez"
   },

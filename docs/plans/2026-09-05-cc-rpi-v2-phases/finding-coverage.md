@@ -34,7 +34,7 @@ The phase contracts govern if an earlier audit proposed changing owner philosoph
 | WF-07 | M | 3 | Archy adapters must point to its current runbook; preserve merge-commit promotion, candidate-tree equality and no-back-merge. No generic squash policy. |
 | WF-08 | C + M | 2, 3 | Repair canonical script/root references and install declared dependencies. Check adopter-specific playbook/link resolution; do not count disappeared worktrees as broken installs. |
 | WF-09 | C + M | 2, 3 | Validate portable frontmatter and installation mapping in source and installed outputs. Canonical 12 slugs already correct; legacy display-name copies need migration, not invented source bugs. Classify references separately. |
-| WF-10 | C + M | 2, 5 | New native entries describe task/occasion, with provenance separately recorded. Managed plan/status aliases get rename notices; other existing aliases remain explicit-only only where forwarding is verified. Preserve unknown custom entries. |
+| WF-10 | C + M | 2, 5 | New native entries describe task/occasion, with provenance separately recorded. Managed plan/status registrations are discontinued with rename guidance and recovery. Other retained aliases are explicit-only rename notices with no native forwarding. Preserve unknown custom entries. |
 | WF-11 | C + M | 2, 4 | Shared roles with explicit adapters; inherit deliberately selected pane by default and validate actual schema/config. Optional economy policy uses supported native fields and honors explicit overrides. No provider name substitution or inference from prose. Preserve useful bounded-role guidance. |
 | WF-12 | C + E | 1, 5 | Reconcile contradictory verification instructions and record identity/invalidations. Preserve full owner phase/final gates. Reusing evidence for narration is distinct from dropping a required validation phase. |
 | WF-13 | C + M | 5 | Group failing tests by root cause/file ownership before independent delegation; keep all failure repair obligations. A pending remote run is not proof a requested repair completed. |
@@ -100,7 +100,7 @@ These are planning corrections, separate from the 57 original audit findings.
 | Review point | Phase | Final decision |
 | --- | --- | --- |
 | Rules absent from architecture | 2, 5, 6 | Add rule components and explicit per-harness rendering; root Codex routing plus essential invariants, with nested loading differences tested. |
-| Legacy collisions/listing cost | 2, 6 | No managed plan/status forwarders. Other existing aliases are explicit-only and require a working native forwarding path. |
+| Legacy collisions/listing cost | 2, 6 | No managed plan/status forwarders. Other retained aliases are explicit-only rename notices; no native forwarding is claimed. Preserve custom entries and recovery evidence. |
 | Native permission boundary | 4, 6 | Native deny/ask rules first; stateful hooks supplement them. Avoid blanket denies that also forbid authorized release actions. |
 | Fail-closed design reversal | 4 | Document the intentional change in header, divergence and migration history; preflight dependencies and emit runnable fixes. |
 | Plugin-first distribution | 2, 3, 6 | Run actual package compatibility early; use native immutable package ownership where proven. Retain reconciliation for project state, legacy customizations and direct fallback. |

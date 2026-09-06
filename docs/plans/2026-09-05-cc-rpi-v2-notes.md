@@ -18,9 +18,9 @@ and the named tag/release, after trigger inspection. No fleet rollout is include
 - Phase 3 accepted in local commit `9fe3da7`: full 10-check gate and 121 tests passed.
 - Phase 4 accepted in local commit `f8c4e22`: all ten gates and 297 tests passed;
   measured overall coverage was 88.79% lines and 84.37% branches.
-- Phase 5 workflow refinement is in progress. Root owns triage, shared handoff,
-  component registration, generation and integration; bounded assignments own
-  workflow bodies, audit/dispatch contracts and conservative rule refinement.
+- Phase 5 accepted in local commit `27144df`: all ten gates and 333 tests passed,
+  with 88.54% measured line and 84.40% branch coverage.
+- Phase 6 final acceptance is in progress; native cases use isolated snapshots.
 - Actual clients available: Claude Code 2.1.261; Codex CLI 0.153.4.
 - Local verification prerequisites: Python 3.13.15, PyYAML 6.0.3,
   coverage.py 7.16.0, ShellCheck 0.11.0. Local Docker is available.
@@ -89,7 +89,7 @@ and the named tag/release, after trigger inspection. No fleet rollout is include
   not claimed native forwarders. Unknown/custom aliases are migration candidates.
 - Phase 5 must add executable triage scan-start/late-arrival/failed-retry coverage.
 
-## Phase 3 work in progress
+## Historical Phase 3 progress
 
 - Public interface: `plan --source --target --harness --route --action --output`,
   `apply --plan`, read-only `check`, and `rollback --journal`. User scope binds
@@ -142,7 +142,7 @@ and the named tag/release, after trigger inspection. No fleet rollout is include
   preview under `.rpi/local/phase3-review/`. Strict eight-maneuver project release
   requirements and modified skill content were preserved.
 
-## Phase 4 work in progress
+## Historical Phase 4 progress
 
 - Model selection inherits the owner by default. Explicit economy profiles cover
   bounded mechanical work only, and explicit requests take precedence. Twenty
@@ -216,3 +216,73 @@ and the named tag/release, after trigger inspection. No fleet rollout is include
   review then reproduced loss of previously explicit nonstandard report names;
   scan inventory now includes existing registered paths, with a RED/GREEN
   regression. This invalidates that first gate; the final full rerun follows.
+
+
+## Phase 6 acceptance and release preparation
+
+The final acceptance scope includes nine actual extracted-package adopter/harness
+cells, the complete ten-check local gate on macOS and pinned local Linux with
+Python 3.11/3.13, version-bound native checks, independent review and two fresh
+exploratory release charters. Full platform and charter acceptance remains pending
+until its exact candidate-bound receipts exist. No main push/tag/release is
+claimed by this preparation record.
+
+Native primary workflow acceptance is observed for Claude 2.1.261 and Codex
+0.153.4. Each client has actual menu/selector evidence, bundled resource reads,
+TDD implementation, seeded mismatch detection, relevant/irrelevant trigger
+observations and distinct native hook/permission outcomes. Codex's final policy
+control also verifies clean pull execution and dirty pull denial using fake
+transport. Claude's denied compound pull control includes a trailing execution
+marker, whose absence is independently checked. No native fixture publishes code.
+
+The eight Codex cases are independently reviewed. Claude primary implementation
+passes five tests after three meaningful RED failures and one independent review;
+the bounded Haiku implementation repeat passes four tests after three RED failures
+with one reviewer. Source remains unchanged in research, plan and validation
+cases. Native result messages are terminal success observations; the controller
+then terminates its print process (exit 143), not a claimed CLI exit zero.
+
+The original Haiku research case failed controlling-resource resolution and is
+explicitly unsuccessful. Its first implementation invoked the native simplify
+helper and exceeded the case's one-reviewer budget; a bounded repeat enforced
+native permissions and completed the local lenses. Economy research is therefore
+not accepted unattended workflow coverage. These optional comparison findings
+do not invalidate observed primary Claude/Codex invocation or enforcement; no
+performance or savings claim is made. See the evaluated compatibility limits.
+
+All failed infrastructure attempts remain preserved: early Codex sandbox setup;
+Phase 6 Codex command lookup and later fixture PATH mismatch; Claude reference
+permission-controller omissions; one interrupted UI-controller stdin attempt;
+and the original economy trials. Reruns and approval/sentinel-only continuations
+are explicitly identified, not folded into the 16 named scenarios as successes.
+The lookup defect received a failing regression and independent review before
+repair. Native workflow bodies did not change during that policy-only correction.
+
+Final documentation covers native routes, ownership/migration/rollback, inherited
+models, optional scheduler scope, diagnostic limits and release topology. The
+scheduler now requires ignored report paths before output, proven by regression
+and independent review. All 57 audit IDs retain a disposition; no additional rule
+or error IDs are retired. The release profile is docs/release-verification.md.
+
+Raw native, matrix, review and release receipts remain ignored in .rpi/local.
+The public plan and handoff preserve decisions and support boundaries. Final
+publication must bind the exact integrated commit, pass Validate and Coverage
+for its single main push, then read back the annotated tag and GitHub release.
+
+### Exploratory findings and invalidated release evidence
+
+Both fresh-context release charters ran against the same immutable extracted
+candidate and reported failures. E1 found forced termination leaving a stale lock
+and partial detach deleting shared runtime files. E2 found prior receipt reuse
+during interrupted verification, missing locale binding, a configured Git alias
+escape, misleading scheduler status and help requiring HOME. These are actionable
+findings under repair with failing regressions and independent review; the
+original reports are preserved. A defunct fixture child was an executor cleanup
+limitation, separately resolved by removing its owned disposable container.
+
+The earlier macOS Python 3.11 and 3.13 gates each passed ten checks and 352 tests,
+but precede these discoveries and cannot establish release readiness. Linux gates
+had not started. The repaired candidate needs new complete local platform gates
+and affected fresh-context charter/native control verification. Unchanged native
+workflow observations remain scoped to their exact resource hashes; no failed
+charter is rewritten as a pass.

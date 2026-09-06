@@ -29,9 +29,14 @@ Literal shell argv, command chains and substitutions are inspected without
 executing them. Literal `echo`, `printf`, search arguments and quoted cat/tee
 here-document bodies are text. Recognized local Git commands, `git -C PATH`,
 ordinary environment wrappers and local package commands remain available.
+Shell `command -v` / `command -V` lookup inspects names without executing them;
+substitutions and subsequent chained commands still receive their own checks.
 Policy-sensitive `eval`, dynamic target expansion, unknown executable wrappers,
 Git configuration injection and Git environment overrides are rejected. This
 parser is not a complete shell security boundary.
+Configured Git aliases are also rejected: inspect the alias and issue its expanded
+literal command separately, so both the supplemental guard and native permissions
+can review the operation actually requested.
 
 A push requires one explicit configured remote and one literal integration ref
 or annotated version tag. Implicit upstream/refspec configuration, working
@@ -73,10 +78,17 @@ inventory sequentially; custom fixture selections cannot attest the full suite.
 Publication compares every expected name/argv and successful exit, candidate
 identity and runtime identity before and after verification. This validates
 local evidence, not user authorization. See [migration setup](migrations/v2.md).
+Starting a new verification attempt supersedes the prior success before checks
+execute. Interrupted attempts remain unusable, and overlapping attempts cannot
+overwrite each other's result. Runtime identity includes a digest of locale,
+timezone and Python execution settings; changing them requires fresh verification.
+Project-specific external inputs still belong in the declared checks, since a
+receipt cannot attest every machine setting or mutable external service.
 
 Direct native event fixtures and pinned source inspection establish the adapter
 contract. They do not establish actual client trust, invocation or approval.
-Phase 6 separately records a trusted allowed and denied invocation and real
-native accepted/declined approval for each supported adapter. Until then report
-registration, trust and observed enforcement separately; absent telemetry is
+The v2 acceptance record separately observes trusted allowed and denied native
+invocations and actual accepted/declined approvals for both evaluated adapters;
+see [compatibility evidence](compatibility.md). Registration, trust and observed
+enforcement remain separate states for every adopter. Absent telemetry is
 unobserved. Optional telemetry failure does not change the policy decision.

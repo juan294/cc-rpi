@@ -1,428 +1,159 @@
-# New Project Setup Checklist
-
-Use this when setting up a new project to follow cc-rpi best practices.
-
-## README Header
-
-- [ ] Structure the project README with a standard header:
-  1. `# Project Name — Tagline`
-  2. GitHub badges (CI, Security Scan, Secret Scanning, stack versions, and optionally license if open source)
-  3. One-line project description
-  4. Horizontal divider (`---`)
-  5. Rest of the README content below the divider
-- [ ] Adjust badge URLs to match the project's GitHub owner/repo
-- [ ] Add or remove stack badges as relevant (TypeScript, Node.js, Next.js, Python, etc.)
-
-## Directory Setup
-
-- [ ] Create `CLAUDE.md` at project root (adapt from `CLAUDE.md.template`)
-  - Manually craft every line — don't auto-generate with `/init`
-  - Keep it lean: only universally applicable instructions
-- [ ] Create `AGENTS.md` at project root (adapt from `AGENTS.md.template`)
-  - This is the Codex compatibility layer for cc-rpi projects
-  - Point Codex at `CLAUDE.md`, `.claude/commands/`, `.claude/rules/`,
-    and `.claude/skills/` as the source of truth
-  - Keep Codex-only helpers that would collide with Claude-native
-    commands out of `.claude/skills/`
-  - Keep it focused on workflow translation, not duplicate project docs
-- [ ] Create `.claude/commands/` and copy slash commands from `templates/commands/`
-- [ ] Create `.claude/skills/` for domain-specific knowledge (loaded on demand):
-  - Each skill is a **folder** with a `SKILL.md` entry point, plus optional `references/`, `scripts/`, `examples/`, `assets/` subdirectories
-  - Start with library reference and code quality skills (highest immediate value)
-  - See `methodology/agent-design.md` "Skill Categories" for the full taxonomy
-  - Skills keep CLAUDE.md lean while giving Claude access to specialized knowledge
-- [ ] Create `.claude/agents/` for custom subagent definitions (optional):
-  - e.g., `security-reviewer.md`, `performance-analyzer.md`
-  - Define tool restrictions and model per agent
-- [ ] Create `docs/` directory with subdirectories:
-  - `docs/research/` — Research documents
-  - `docs/plans/` — Implementation plans
-  - `docs/decisions/` — Architecture decision records
-  - Version curated research, approved plans, phase files and handoffs; keep raw
-    machine inventories and transient operational evidence local by visibility.
-- [ ] Configure `.claude/settings.json` (adapt from `templates/settings.json.template`):
-  - Enable Agent Teams: `"env": { "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1" }`
-  - Configure hooks for file edits and pre-commit (deterministic enforcement)
-  - Pre-approve common tool permissions to reduce prompts (especially for teammates)
-  - Hooks are deterministic (guaranteed to run), unlike CLAUDE.md instructions (advisory)
-- [ ] Add `.claude/settings.local.json` to `.gitignore`:
-  - This is the personal/local counterpart to `settings.json` (which is committed and shared)
-  - Use for: individual permission overrides, personal API keys, local tool paths
-  - Claude Code merges both files, with `settings.local.json` taking precedence
-
-### Shared vs Local Configuration
-
-Two file pairs follow the same split pattern:
-
-| Shared (committed) | Local (gitignored) | Purpose |
-|--------------------|--------------------|---------|
-| `CLAUDE.md` | `CLAUDE.local.md` | Project instructions vs personal preferences |
-| `.claude/settings.json` | `.claude/settings.local.json` | Team permissions/hooks vs individual overrides |
-
-**`CLAUDE.md`** — Team-wide rules: RPI workflow, operational rules, git conventions, key commands. Every developer and agent sees the same instructions. Checked into version control.
-
-**`CLAUDE.local.md`** — Personal preferences and local context: your preferred verbosity level, local paths, personal workflow notes, task-specific context you don't want to pollute the shared file with. Gitignored. Optional.
-
-**`settings.json`** — Shared tool permissions, hooks, Agent Teams env var. Committed.
-
-**`settings.local.json`** — Personal permission overrides (e.g., broader `Bash(*)` for your machine), local env vars. Gitignored.
-
-**`AGENTS.md`** — Codex compatibility bridge. Teaches Codex how to
-interpret the existing cc-rpi layout (`CLAUDE.md`, `.claude/commands/`,
-`.claude/rules/`, `.claude/skills/`) without changing the methodology.
-Committed.
-
-## CLAUDE.md Configuration
-
-### Authoring Principles
-
-- Keep CLAUDE.md **LEAN** -- loaded every session,
-  only universally applicable instructions.
-- Budget: ~100 usable instruction slots.
-  System prompt uses ~50. Don't waste them.
-- Test: "Would removing this line cause mistakes?"
-  If not, cut it.
-- Domain rules go in `.claude/rules/` (conditional loading)
-  and `.claude/skills/` (on-demand knowledge).
-  Don't duplicate their content in CLAUDE.md.
-- Use `.claude/rules/` with `paths` frontmatter for rules
-  that only apply when working with specific file types.
-- Manually craft every line --
-  don't auto-generate with `/init`.
-
-### Checklist
-
-- [ ] Fill in project name, description, and stack
-- [ ] Document build/test/lint commands
-- [ ] Document deployment pipeline (which branch deploys where)
-- [ ] Document git workflow (integration branch, production branch,
-  implementation isolation)
-- [ ] Add project-specific context (key routes, data types, code ownership)
-- [ ] Keep `AGENTS.md` aligned with the project's workflow conventions:
-  - Slash-style commands dispatch to `.claude/commands/*.md`
-  - `.claude/rules/` remains the rule source of truth
-  - `.claude/skills/` remains the skill source of truth
-  - Claude-native commands (`/simplify`, `/batch`, `/worktree`) are
-    translated to Codex-equivalent behavior
-  - Codex-only helpers that would shadow native Claude commands stay in
-    `~/.codex/skills/`, not `.claude/skills/`
-
-## Slash Commands
-
-Copy and adapt from `templates/commands/`:
-- [ ] `/brainstorm` — Optional Socratic pre-step for vague/greenfield ideas (feeds `/plan`)
-- [ ] `/research` — Codebase research with parallel subagents
-- [ ] `/plan` — Interactive plan creation with phases
-- [ ] `/implement` — Phase-by-phase execution with review gates
-- [ ] `/validate` — Post-implementation verification
-- [ ] `/describe-pr` — PR description generation
-- [ ] `/remediate` — Fix all pre-launch findings with parallel TDD agents
-- [ ] `/triage` — Morning agent report processing and action
-- [ ] `/explore-release` — Fresh-context exploratory release charters (E2E Pro Wave B)
-- [ ] `/tool-design` — Design agent-facing tools before implementing them (if the project exposes tools to an agent)
-
-Adjust file paths in each command to match your project's docs directory.
-
-For Codex compatibility, `AGENTS.md` should instruct Codex to treat each
-file in `.claude/commands/` as the workflow spec when the user invokes
-the matching slash-style command.
-
-**Slash commands vs skills:** Commands (`.claude/commands/`) are user-invoked workflows. Skills (`.claude/skills/`) are knowledge + workflows that Claude can also auto-detect. Use commands for RPI phases; use skills for domain conventions and reusable task patterns.
-
-## Skills Setup
-
-- [ ] Create `.claude/skills/` directory
-- [ ] Copy blueprint skills from `cc-rpi/templates/skills/` to `.claude/skills/`:
-  - Always: `shell-tools/`, `git-workflow/`, `multi-agent/`, `deployment-safety/`, `ci-workflow/`, `github-cli/`, `error-patterns/`, `systematic-debugging/`
-  - Python projects: also `python-rules/`
-  - macOS development: also `macos-rules/`
-  - Supabase projects: also `supabase/`
-- [ ] Review installed skills -- remove any that don't apply to your stack
-- [ ] Add project-specific skills as needed (see `methodology/agent-design.md` for the skill taxonomy)
-
-### Codex-Only Skill Setup (Optional)
-
-- [ ] Do not create a project skill literally named `simplify` in a
-  Claude-compatible repo
-- [ ] If Codex users want a `/simplify` equivalent, copy
-  `cc-rpi/.codex/skills/codex-simplify/` to
-  `~/.codex/skills/codex-simplify/`
-- [ ] In `AGENTS.md`, state explicitly that Claude keeps native
-  `/simplify` while Codex users invoke `codex-simplify`
-
-## Rules Setup
-
-- [ ] Create `.claude/rules/` directory
-- [ ] Copy rule templates from `cc-rpi/templates/rules/`:
-  - Always: `rpi-details.md`, `push-accountability.md`
-  - Deployment pipelines: `deployment-safety.md`
-  - Supabase projects: `supabase.md`
-  - Projects with tests: `testing.md`
-- [ ] Review `paths` frontmatter in conditional rules --
-  adjust globs to match your project's file structure
-- [ ] Add project-specific rules as needed
-  (e.g., API conventions, database patterns)
-
-## Agent-Facing Surface (WebMCP)
-
-Optional -- only applies if this project exposes tools to an AI agent
-(WebMCP tools in a web UI, or an MCP server). Most projects will record
-a "no" here and move on.
-
-- [ ] Decide whether the project will expose tools to an agent, and record
-  the decision -- including "no", so a later reader knows it was considered
-- [ ] If so, install the `webmcp` skill and rule, adapting `paths`
-- [ ] Run `/tool-design` before `/plan` for the first agent-facing feature
-- [ ] Confine the pre-standard `document.modelContext` global to one adapter
-  module (rule #91)
-- [ ] Seed the eval suite from the `/tool-design` transcripts (rule #92)
-- [ ] Register for the Chrome origin trial, or enable
-  `chrome://flags/#enable-webmcp-testing` for local development
-
-## Agent Tool Hooks
-
-- [ ] Create `.claude/hooks/` directory
-- [ ] Copy `guard-bash.sh` from `templates/hooks/guard-bash.sh` to `.claude/hooks/guard-bash.sh`
-- [ ] Verify `jq` is installed (`brew install jq` on macOS)
-- [ ] Hooks configuration is already in `settings.json.template` — verify it was copied to `.claude/settings.json`
-- [ ] Test: make a trivial edit, then run `echo '{"tool_name":"Bash","tool_input":{"command":"git pull --rebase"}}' | bash .claude/hooks/guard-bash.sh` (should print BLOCKED)
-- [ ] Add project-specific guards to the bottom of the script (e.g., bare `python3` for uv projects)
-
-## Pre-Commit Hooks
-
-- [ ] Install a hook framework (e.g., Husky for Node.js, pre-commit for Python)
-- [ ] Configure pre-commit to run typecheck + lint:
-  ```bash
-  # Example: Husky
-  npx husky init
-  echo "pnpm run typecheck && pnpm run lint" > .husky/pre-commit
-  ```
-- [ ] Test that the hook rejects a commit with a deliberate type error
-- [ ] Add a note to CLAUDE.md reminding agents to run checks before committing
-
-## CI Setup
-
-- [ ] Create a CI workflow (GitHub Actions, etc.) that runs on push and PR:
-  - Typecheck
-  - Lint
-  - Unit tests
-  - Build verification
-  - (Optional) Security audit, E2E tests
-- [ ] Mark critical CI jobs as required for PR merges
-- [ ] Enable branch protection on the production branch (require CI + review)
-- [ ] Verify CI runs successfully on the chosen integration branch
-
-## Git Setup
-
-- [ ] Choose a documented branch topology:
-  - `main-only` — `main` is the long-lived integration branch, and may
-    also be the production branch
-  - `develop/main` — `develop` is integration, `main` is production
-- [ ] Document the integration branch in `CLAUDE.md`
-- [ ] Document the production branch in `CLAUDE.md` (or state that the
-  repo has no separate production branch)
-- [ ] Require implementation to happen in worktrees or temporary
-  branches regardless of topology
-- [ ] Set up branch protection rules on GitHub
-- [ ] Inspect current repository settings and the documented release topology.
-  Preserve required merge-commit or squash semantics. Remote settings changes
-  belong to explicitly authorized setup work; no universal squash-only PATCH.
-- [ ] Preserve permanent integration branches and production protections.
-- [ ] Configure pre-commit hooks (typecheck, lint, test) — see
-  Pre-Commit Hooks above
-
-## Push Accountability
-
-- [ ] Document local working branches, complete local gates and local integration.
-- [ ] Inspect workflow/deployment triggers before the one authorized completed
-  integration push. Never create Vercel Previews or hosted debugging loops.
-- [ ] Observe the exact pushed SHA and expected workflow/event/check set.
-  Diagnose any remote-only failure locally; obtain any new required authorization.
-- [ ] Exercise failure detection with local stubs, not a deliberate failing push.
-
-## Release Verification (E2E Pro)
-
-E2E Pro turns release verification into auditable evidence: it proves that every
-*required* check actually ran and passed against the exact artifact being tagged.
-It sits alongside `/release` (the tagging authority), `/pre-launch` + `/remediate`
-(static code audit), and `methodology/testing.md` (test hierarchy) — it does not
-replace them.
-
-- [ ] Copy `cc-rpi/templates/e2e-pro-playbook-template.md` into the project (suggested:
-  `docs/release/e2e-pro-playbook.md`)
-- [ ] Complete the Project Adaptation Profile and environment truth table with
-  *verified* repository values (do not infer an environment's fidelity from its name)
-- [ ] **Adopt Wave A always** — the truthful release gate: zero-pass fails, a
-  required skip/fail blocks (quarantine does not excuse it), candidate identity is
-  fixed and verified, and the tag is the last action. It is cheap and mechanical.
-- [ ] Adopt **Waves C–H by project risk**, not by default — the capability registry,
-  combination engine, plan compiler, staging fidelity, model-based tests, and TTL
-  automation are structural. Delete inapplicable sections and record why.
-- [ ] Install `/explore-release` (Wave B) once there is a deployed candidate to test
-- [ ] Have `/release` gate on the E2E Pro evidence set before tagging
-
-## Blueprint Sync (Recommended)
-
-Set up nightly syncing with the cc-rpi blueprint so this project automatically stays current with new rules, error patterns, and command improvements.
-
-- [ ] Install the user-level commands with `cc-rpi/scripts/install.sh` (installs
-      `/bootstrap`, `/adopt`, `/update`, `/detach` into `~/.claude/commands/`
-      with the blueprint path filled in and verified)
-- [ ] Confirm with `cc-rpi/scripts/install.sh --check` -- re-run the installer
-      after every `git pull` of cc-rpi, or the installed copies silently go stale
-- [ ] Run `/update` once manually to verify it works and create the initial `.claude/cc-rpi-sync.json`
-- [ ] Copy the scheduled agent script from `cc-rpi/templates/scripts/cc-rpi-update-agent.sh` to `scripts/agents/cc-rpi-update.sh`
-- [ ] Set `CC_RPI_PATH` in the script to your cc-rpi clone location
-- [ ] Make it executable: `chmod +x scripts/agents/cc-rpi-update.sh`
-- [ ] Create required directories: `mkdir -p docs/agents logs`
-- [ ] Run `claude setup-token` from an interactive terminal (required for non-interactive auth under launchd/cron)
-- [ ] Ensure your launchd plist has `HardResourceLimits`/`SoftResourceLimits` (NumberOfFiles: 122880), `EnvironmentVariables` (HOME, TERM, PATH), and ProgramArguments uses `/bin/bash -c "exec /bin/bash <script>"` wrapper — see script comments for the full plist template
-- [ ] Schedule with launchd (macOS) or cron (Linux) — see script comments for templates
-- [ ] Test with `launchctl start <label>` (not by running the script from a terminal — terminal execution masks launchd issues)
-- [ ] Check `docs/agents/cc-rpi-update-report.md` and `logs/cc-rpi-update.error.log` for results
-
-### How It Works
-
-The sync uses `.claude/cc-rpi-sync.json` to track the last synced commit. On each run, it:
-1. Pulls the latest cc-rpi
-2. Uses `git diff` to identify what changed since last sync (efficient — no full re-read)
-3. Updates slash commands (direct replacement from templates)
-4. Updates the Codex compatibility layer in `AGENTS.md`
-5. Updates blueprint-managed CLAUDE.md sections (smart merge — preserves project-specific content)
-6. Adds new settings.json permissions (additive — never removes project-specific entries)
-7. Commits changes with `chore: sync with cc-rpi blueprint <version>`
-
-The shell script reads update instructions from cc-rpi at runtime, so when cc-rpi improves the `/update` command, all projects automatically get the new logic.
-
-## Scheduled Agents (Optional)
-
-- [ ] Create `scripts/agents/` and `scripts/agents/lib/` directories
-- [ ] Copy `lib/agent-utils.sh` from `cc-rpi/templates/scripts/agents/lib/agent-utils.sh` to `scripts/agents/lib/`
-- [ ] Copy `install-agents.sh` from `cc-rpi/templates/scripts/agents/install-agents.sh` to `scripts/agents/`
-- [ ] Create `docs/agents/` directory for agent reports and shared context
-- [ ] Create `logs/` directory for agent output capture
-- [ ] **Determine repo visibility** (Rule #70 — commit policy depends on it):
-  ```bash
-  gh repo view --json visibility --jq '.visibility' 2>/dev/null
-  # PUBLIC -> gitignore the directories below (next step)
-  # PRIVATE / INTERNAL -> SKIP the gitignore step; agent dirs are tracked
-  # (no remote / gh unavailable) -> treat as PUBLIC (fail-safe)
-  ```
-- [ ] **(Public repos only) Gitignore agent operational directories** so operational details don't leak:
-  ```gitignore
-  # Agent operational output (gitignored on public repos; tracked on private repos)
-  docs/agents/
-  logs/
-  scripts/agents/
-  ```
-  On private repos, omit this — reports are committed by `/triage` as historical artifacts.
-- [ ] Write at least one agent script (e.g., test-health, security-audit) — source `lib/agent-utils.sh` and add a `# SCHEDULE:` comment
-- [ ] Run `claude setup-token` for non-interactive auth (required for launchd/cron)
-- [ ] Install agents: `bash scripts/agents/install-agents.sh` (auto-generates plists from `# SCHEDULE:` comments)
-- [ ] Test with `launchctl start` (macOS) — don't test from a terminal, it masks launchd issues
-- [ ] Check status: `bash scripts/agents/install-agents.sh --status`
-- [ ] Verify the agent produces a report in `docs/agents/`
-- [ ] Add `/pre-launch` slash command for multi-agent production audit
-- [ ] Add `/triage` slash command for morning agent report processing
-- [ ] (Optional) Set up `morning-triage.sh` for multi-project orchestration
-
-## Workflow Habits
-
-- [ ] Always `/research` before `/plan` (except greenfield —
-  no code means nothing to research; start with `/plan`)
-- [ ] Always `/plan` before `/implement`
-- [ ] Always review plans before approving
-- [ ] Mark independent plan phases as `[batch-eligible]` during `/plan`
-- [ ] Preserve phase acceptance gates unless the user explicitly authorizes continuation
-- [ ] Always run `/simplify` after reviewer approval during `/implement`
-- [ ] Use `/batch` for independent phases and bulk migrations
-- [ ] Use `/validate` after implementation
-- [ ] Run `/remediate` after `/pre-launch` to fix all findings with parallel agents
-- [ ] Run `/triage` every morning to process overnight agent reports
-- [ ] Use `/clear` between unrelated tasks to reset context
-- [ ] Run each RPI phase in its own conversation
-- [ ] Research and plan against the integration branch; implement in
-  worktrees
-- [ ] Read research output critically — throw out and redo if wrong
-- [ ] Invest most review time on research and plans, not generated code
-- [ ] For large features, have Claude interview you before planning (AskUserQuestion)
-- [ ] Follow TDD: write failing tests before implementation code
-- [ ] Monitor CI after every push — never push and forget
-- [ ] Keep the methodology stable across agents:
-  - Claude Code uses `.claude/commands/`, `.claude/rules/`,
-    `.claude/skills/`
-  - Codex uses `AGENTS.md` to interpret those same artifacts
-  - The workflow stays the same; only the harness translation changes
-
-## Project-Type Adaptation
-
-The defaults above assume a web application. Adapt these sections based on your project type:
-
-### Web Application (default)
-
-The standard setup applies as-is. Choose either a `main-only` or a
-`develop/main` topology, then document which branch is integration and
-which branch deploys to production. Typical stack badges: framework
-(Next.js, Remix), runtime (Node.js), language (TypeScript). Add a
-license badge only if the project is open source.
-
-### Library / npm Package
-
-- **Git workflow:** `main-only` is often simplest if releases are tagged
-  from `main`, but implementation still happens in worktrees or
-  temporary branches
-- **CI additions:** Add `npm pack` or `pnpm pack` verification, publish dry-run
-- **Testing:** Prioritize unit tests and type-level tests. Add consumer integration tests (test the package from a downstream project's perspective)
-- **CLAUDE.md:** Document the public API surface. Add "do not change exports without a major version bump" rule
-- **Pre-commit:** Add `publint` or `arethetypeswrong` checks if publishing types
-- **Badges:** Add npm version badge, bundle size badge
-
-### CLI Tool
-
-- **CI additions:** Test the CLI binary end-to-end (invoke the compiled CLI with test args, assert output)
-- **Testing:** Focus on integration tests (stdin/stdout/stderr/exit codes) over unit tests
-- **CLAUDE.md:** Document all commands and flags. Add "ESM interpretation follows `.mjs` or the package `type` field; a shebang selects the runtime and does not change module mode"
-- **Pre-commit:** Add smoke test (run `./cli --help` and assert exit 0)
-
-### Monorepo
-
-- **Git workflow:** Use the same explicit topology choice as the base
-  project (`main-only` or `develop/main`), but CI runs per-package with
-  change detection
-- **CI additions:** Use `turbo`/`nx` affected detection. Only run checks for changed packages
-- **CLAUDE.md:** Document the workspace structure, how packages depend on each other, which package owns which feature
-- **Pre-commit:** Run typecheck across ALL workspace packages (not just changed ones — cross-package type errors are common)
-- **Worktrees:** Extra caution — worktrees with monorepos can have `node_modules` issues. Document `pnpm install` in worktree setup
-- **Agent Teams:** Monorepos are ideal for teams — each teammate owns a different package
-
-### Python Project
-
-- **Pre-commit hooks:** Use the `pre-commit` framework (not Husky). Configure with `.pre-commit-config.yaml`
-- **Key commands:** Replace `pnpm run *` with equivalents: `pytest`, `mypy .`, `ruff check .`, `ruff format --check .`
-- **CI additions:** Add `pip audit` for dependency security, `mypy` for type checking
-- **CLAUDE.md:** Document virtual environment setup. Add `{ encoding: 'utf-8' }` note for subprocess calls
-- **Permissions:** Update settings.json to allow `Bash(python *)", "Bash(pytest *)", "Bash(pip *)`
-
-### Static Site / Documentation
-
-- **Git workflow:** `main-only` is often enough for simple sites, but
-  implementation should still happen in worktrees or temporary branches
-- **CI:** Build verification + link checking + image optimization check
-- **Testing:** Minimal — focus on build success and broken link detection
-- **CLAUDE.md:** Keep lean. Document build command, content directory structure, frontmatter conventions
-
-## Thoughts Directory Structure
-
-```
-docs/
-├── research/                  # Research documents
-│   └── YYYY-MM-DD-topic.md
-├── plans/                     # Implementation plans
-│   ├── YYYY-MM-DD-feature.md  # Main plan
-│   └── YYYY-MM-DD-feature-phases/
-│       ├── phase-1.md
-│       └── phase-2.md
-├── decisions/                 # ADRs / decision records
-└── prs/                       # PR descriptions
-    └── {number}_description.md
-```
+# RPI Project Setup Checklist
+
+Use this checklist for an explicitly requested new setup or adoption. Preserve
+existing project knowledge and choose the native harnesses and installation
+routes from actual requirements. The [lifecycle contract](skills/rpi-bootstrap/references/lifecycle-contract.md)
+is the execution authority; this checklist does not authorize remote operations.
+
+## Establish the project and scope
+
+- [ ] Verify source and target paths, project purpose, stack, package manager,
+  integration/production branches and deployment triggers.
+- [ ] Use `rpi-bootstrap` for an empty project or `rpi-adopt` when existing
+  instructions, settings, skills and custom ownership require reconciliation.
+- [ ] Read current AGENTS.md, CLAUDE.md, native settings, custom extensions,
+  ownership receipts and release runbooks before planning changes.
+- [ ] Confirm Git and Python 3.11 or newer. Check the installed client versions
+  against [compatibility evidence](../docs/compatibility.md).
+- [ ] Record whether the product exposes an implemented or planned agent-facing
+  surface. Select WebMCP/server-MCP guidance only when applicable.
+
+## Select native routes and components
+
+- [ ] Choose Claude Code, Codex or both, with one direct/plugin route per harness
+  and scope. Diagnose existing registrations before adding duplicates.
+- [ ] For direct installation, plan the four user-scope lifecycle skills
+  separately from the project installation. Defaults are `~/.claude/skills/` and
+  `~/.agents/skills/`, with user state under `~/.config/cc-rpi/installations/user`.
+- [ ] For plugins, use the repository root as the Claude package and
+  `generated/codex/` as the Codex package. Native managers own caches, updates,
+  removal and trust. Do not copy or merge files inside those caches.
+- [ ] Use direct installation when Claude needs conditional domain selection;
+  the tested Claude plugin manager enables the whole package. Verify Codex's
+  enabled modules through its actual native controls.
+- [ ] Select the generally relevant shell, Git, multi-agent, deployment, CI,
+  GitHub CLI, error-pattern and debugging domains. Include Python, macOS,
+  Supabase and WebMCP modules only when applicable. The distribution manifest
+  is the authoritative inventory; install complete directories and resources.
+- [ ] Keep Claude native `/simplify` and the separate Codex `codex-simplify`
+  helper. Avoid adding a project skill named `simplify` that shadows the native
+  workflow.
+
+## Plan, apply, check and recover
+
+- [ ] Resolve the local source from the checkout or actual native metadata.
+  Codex packages carry their source under `runtime/`; direct installations use
+  their recorded local source receipt. Do not guess a personal checkout path.
+- [ ] Generate an explicit engine `plan` with source, target, harness, route,
+  action and task-owned `--output` path. Use `install` for setup, `update` for
+  reconciliation and `detach` for proven-owned removal.
+- [ ] Read the concrete plan: component selection, source identity, file/block/key
+  changes, conflicts, instruction budgets and recovery paths. `conflict` blocks
+  the selected operation set; `noop` requires no apply.
+- [ ] Review native permission/hook changes separately. The exact
+  `--allow-capabilities` component selections permit lifecycle setup changes;
+  they do not grant native tool permission or user consent for publication.
+- [ ] Apply the reviewed plan within existing authorization, then run engine
+  `check` and `diagnose` with the explicit source/target and selected route.
+  Preserve nonzero statuses and missing-evidence diagnostics.
+- [ ] Retain `.rpi/manifest.json`, nonsecret baseline bytes and transaction
+  journals. Resume or use `rollback --journal` for interrupted transactions;
+  concurrent edits must cause reconciliation rather than forced restoration.
+- [ ] For v1 migration, supply an immutable local `--legacy-base` only when its
+  provenance and rendering inputs are known. Legacy names and sync metadata
+  alone do not prove ownership. Follow the [migration guide](../docs/migrations/v2.md).
+- [ ] Confirm detach preserves edited/unknown content, project facts, research,
+  plans, decisions, local extensions and independent user/plugin installations.
+
+## Shared project intelligence
+
+- [ ] Keep verified project purpose, architecture, exact verification commands,
+  branch topology, owner constraints and release routing in AGENTS.md.
+- [ ] Make CLAUDE.md import AGENTS.md and contain only Claude-specific additions.
+  Avoid reverse imports and duplicate universal instruction bodies.
+- [ ] Preserve managed shared RPI blocks and the conditional rule map. Claude
+  uses native path rules; Codex follows the root task/path map to full installed
+  rule resources. Confirm rules are reachable from actual root and nested cwd.
+- [ ] Keep domain details in selected skills/resources. Read controlling
+  contracts completely; reuse valid implementation reads. Do not impose a
+  universal instruction-slot quota or context-percentage law.
+- [ ] Preserve project-owned extensions and unrelated settings. Shared project
+  configuration is committed; personal/native authentication and private values
+  stay in their supported local stores. Do not add broad Git/shell allowances
+  merely to avoid prompts.
+- [ ] Leave model/effort overrides absent by default. Use [optional native
+  profiles](../docs/model-profiles.md) only as explicit owner choices; do not
+  write global defaults, silently change a parent pane or promise restoration.
+- [ ] Keep Agent Teams and schedules opt-in. A narrow task may stay with the
+  parent; use bounded independent assignments when useful, with at most three
+  simultaneous implementers and lower resource limits when needed.
+
+## Verify actual native behavior
+
+- [ ] Confirm native skill discovery and bundled resource access. Direct Claude
+  workflows use `/rpi-research`; plugin Claude workflows use
+  `/cc-rpi:rpi-research`. Codex direct skills use `$rpi-research`; choose the
+  `cc-rpi:rpi-research` selector for its plugin route.
+- [ ] Use `rpi-plan` and `rpi-status`; native `/plan` and `/status` are distinct.
+  Legacy aliases are explicit rename notices, not native forwarding.
+- [ ] Inspect hook registration, current source hash, native trust and observed
+  execution separately. Configured or copied hooks are not guaranteed to run.
+  Supported native permission boundaries retain approval authority.
+- [ ] Keep guarded operations blocked when their required enforcement boundary
+  is unavailable. Do not disable guards or fabricate approval receipts.
+- [ ] Confirm malformed events and missing prerequisites produce the documented
+  `BLOCKED / WHY / FIX` behavior at the actual supported boundary. Source-level
+  fixtures alone do not prove native execution.
+
+## Local verification and publication
+
+- [ ] Declare the project's complete CI selection in `.rpi/policy.json` with
+  unique check names and literal argv arrays, plus its `verification_command`.
+  Include all applicable tests, measured coverage, typechecks, lint and builds.
+- [ ] Run the installed `.rpi/scripts/rpi-verify.py` or documented wrapper locally.
+  Its receipt must match the current candidate, runtime and complete check list.
+  Required skipped/failed checks block acceptance; do not invent coverage values.
+- [ ] Configure and verify appropriate local pre-commit checks. Exercise failures
+  with local fixtures rather than a deliberately failing remote push.
+- [ ] Preserve project release obligations, including any stricter adopter
+  maneuver validator. Adapt [the release playbook](e2e-pro-playbook-template.md):
+  truthful Wave A always; structural waves by actual risk. Exercise an existing
+  authorized immutable candidate for exploratory release checks.
+- [ ] Keep implementation branches/worktrees local. Integrate completed work
+  locally, inspect hosted triggers and publish completed integration once only
+  within authorization. Never create Vercel Previews or hosted debugging loops.
+- [ ] Treat production, remote settings and new hosted schedules as separate
+  authorization scopes. Observe the exact authorized published SHA and checks.
+
+## Project documentation and adaptation
+
+- [ ] Give README a project-specific title, concise purpose, accurate badges,
+  setup requirements, verification commands and deployment/release references.
+- [ ] Version curated `docs/research/`, `docs/plans/`, phase files, decisions and
+  durable handoffs. Keep raw inventory, credentials and transient recovery local.
+  Operational report tracking follows repository visibility and Rule #70.
+- [ ] For libraries, include package/export checks and consumer integration tests.
+  For CLIs, exercise stdin/stdout/stderr and exit codes. For Python, use the
+  project's pinned runtime and actual pytest/typecheck/lint commands.
+- [ ] For monorepos, record package ownership and cross-package checks before
+  dividing work. For web apps, cover UI/accessibility and deployment behavior.
+  For documentation/static sites, include build and link checks.
+- [ ] For agent-facing products, use `rpi-tool-design` before the first related
+  plan and seed evals from its transcripts. Read the selected WebMCP resource for
+  current browser/API requirements rather than copying a stale global recipe.
+
+## Updates and optional schedules
+
+- [ ] Update from an explicitly selected local source through `rpi-update` and
+  its plan/apply/check lifecycle. Source acquisition and native plugin updates
+  are separate operations; never infer healthy installed bytes from a matching
+  version alone.
+- [ ] Do not create a fleet rollout or schedule by default. An opted-in scheduled
+  launcher must bind source/target, use supported native invocation and existing
+  permissions, preserve conflict/recovery evidence, and report actual engine
+  check results. It must not publish, deploy or silently update global installs.
+- [ ] Verify the actual scheduler environment, authentication, executable paths
+  and resource limits if a schedule is requested. Historical launchd workarounds
+  are not universal requirements; diagnose the observed failure.
+- [ ] End setup with a durable handoff: chosen routes/components, preserved
+  customizations, checks, remaining conflicts and next authorized phase.

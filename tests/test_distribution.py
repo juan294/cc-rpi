@@ -270,6 +270,20 @@ class DistributionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.render()
 
+    def test_encoding_failure_is_not_reported_as_a_candidate_source_defect(self):
+        # The real fault an ASCII filesystem encoding produces for a Unicode path.
+        try:
+            (json.dumps({"path": "r\udcc3\udca9pertoire"}, ensure_ascii=False) + "\n").encode()
+            self.fail("expected the surrogate payload to be unencodable")
+        except UnicodeError as error:
+            encoding_fault = error
+        fix = distribution.blocked_fix(encoding_fault)
+        self.assertIn("PYTHONUTF8=1", fix)
+        self.assertIn("not at fault", fix)
+        self.assertNotIn("templates/distribution.json", fix)
+        # A genuine manifest fault must still point at the manifest.
+        self.assertIn("templates/distribution.json", distribution.blocked_fix(KeyError("components")))
+
 
 if __name__ == "__main__":
     unittest.main()

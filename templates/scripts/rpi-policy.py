@@ -243,6 +243,12 @@ def git_command(args, cwd, harness, event, canonical):
     if not args:
         return None
     command, tail = args[0], args[1:]
+    alias = subprocess.run(['git', '-C', str(cwd), 'config', '--get', 'alias.' + command],
+                           capture_output=True, text=True)
+    if alias.returncode != 1:
+        fail('Configured Git aliases or unreadable configuration cannot establish the executed command.',
+             'Inspect git config --get ' + shlex.quote('alias.' + command) +
+             '; issue the expanded literal command separately for policy and native permission review.', 'git-alias')
     if command == 'pull':
         root = repository(cwd)
         if git(root, 'status', '--porcelain', '--untracked-files=normal'):
@@ -464,6 +470,12 @@ def inspect_command(command, cwd, harness, event, depth=0):
             words.pop(0)
         while words and Path(words[0]).name in ('env', 'command', 'exec', 'sudo', 'time'):
             wrapper = Path(words.pop(0)).name
+            if wrapper == 'command' and words and words[0] in ('-v', '-V'):
+                # Shell lookup describes operands; it does not execute them.
+                # Embedded substitutions and subsequent segments are still checked.
+                decisions.append('command-lookup')
+                words.clear()
+                break
             if wrapper == 'env':
                 while words and (words[0] in ('-i', '--ignore-environment', '--') or re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*=.*', words[0])):
                     words.pop(0)

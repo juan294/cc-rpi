@@ -1,489 +1,271 @@
 # The cc-rpi Guide
 
-A practical guide to using the cc-rpi blueprint for AI-assisted software development with Claude Code, with Codex compatibility via `AGENTS.md`.
+cc-rpi provides one shared Research-Plan-Implement methodology through native
+Claude Code and Codex skills. Canonical workflows and resources are authored once;
+adapters generate complete packages for each client. Both clients can bootstrap,
+adopt, update and detach projects through the same ownership-aware engine.
 
-## What Is This?
+## The workflow
 
-cc-rpi is a blueprint repository. You clone it once, and every time you start a new project, you point Claude Code at it and say "set this project up." The agent reads the blueprint, learns the rules, and configures your new project with battle-tested practices — slash commands, error prevention rules, CI setup, the works.
+Research describes what exists. Planning defines the intended change and its
+success criteria. Implementation follows TDD, independent review, repair,
+simplify and local verification. Validation compares the result with the approved
+scope and the actual tested candidate. Use `rpi-assess` separately when you want
+an evaluation or recommendations.
 
-That setup now includes an `AGENTS.md` compatibility layer so the same
-project can be operated from Codex without changing the
-underlying methodology. Claude Code still handles bootstrap and adopt,
-but the resulting project is portable across agent harnesses.
+Review research and plans carefully: mistaken assumptions propagate into later
+work. Separate phase conversations and durable handoffs keep scope, decisions
+and evidence retrievable. Within a long phase, use native compaction as needed;
+there is no universal instruction-slot or context-utilization target.
 
-At its core, cc-rpi teaches Claude Code to work the way experienced developers have found works best: research first, plan second, implement third. This sounds obvious, but without explicit structure, AI coding agents tend to skip straight to writing code — and that's where things go wrong.
+Phase acceptance remains explicit. If your request authorizes all phases, the
+agent continues after completing each phase's checks without asking the same
+permission again. A new architectural decision, destructive scope or publication
+requirement still needs its actual authorization. A supplied release version or
+already-authorized documentation update should not trigger a duplicate question.
 
-## The Big Idea: Research-Plan-Implement
+## Installation
 
-The methodology is called RPI, and it's built on one insight that changes everything:
+Installation requires Git and Python 3.11 or newer, plus the native clients you
+choose to use. See [compatibility evidence](docs/compatibility.md) for tested
+versions and limitations. The engine itself uses the Python standard library;
+contributor verification has additional pinned dependencies in
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
-**Errors amplify as they move downstream.**
-
-A mistake in your research becomes a wrong assumption in your plan, which becomes hundreds of lines of code solving the wrong problem. But a mistake in a single line of code is just... a bug. So the system is designed to focus your attention where it matters most: reviewing the research and the plan, not reading every line of generated code.
-
-Here's what the pipeline looks like:
-
-```
-Research  ──human reviews──▶  Plan  ──human reviews──▶  Implement  ──human reviews──▶  Validate
-   │                           │                           │                            │
-   ▼                           ▼                           ▼                            ▼
- "What exists?"           "What do we change?"        "Make the changes"         "Did it work?"
-```
-
-Each phase runs in its own Claude Code conversation. This is intentional — it keeps the AI's context window clean. A fresh conversation reading a well-written plan performs dramatically better than a long conversation that's been going for an hour.
-
-## The Philosophy in Five Minutes
-
-**1. Research before you act.** Never modify code you haven't read. Every change starts with understanding what exists today, described factually — no opinions, no suggestions, just "here's how the code works right now."
-
-**2. Plan before you implement.** Write a phased plan with explicit success criteria before touching production code. Plans are broken into phases, and each phase has automated tests that prove it works.
-
-**3. Keep acceptance boundaries visible.** Review research and plans before
-implementation, and inspect each phase's review and verification evidence. The
-agent continues through phases you already authorized; it pauses only for a
-necessary new decision, not to repeat permission.
-
-**4. Keep context grounded in current state.** Tools, repositories and native
-memory can persist outside a conversation. Handoffs make the objective, approved
-scope, decisions and verification evidence retrievable; the next session checks
-actual files and refs before relying on them.
-
-**5. Specs are the new code.** In AI-assisted development, your plans and research documents are effectively your source code. The generated code is more like a compiled artifact. Treat your specs with the same rigor you'd treat source files — review them carefully, version them in git, iterate on them until they're right.
-
-## Local verification and publication
-
-Keep implementation branches and worktrees local. Finish the applicable local
-gates and integrate locally before the single authorized integration push.
-Inspect workflow/deployment triggers; never create Vercel Previews or use hosted
-CI as a debugging loop. Observe the exact pushed SHA and required check set.
-A remote-only failure returns to local diagnosis and any new required approval.
-Production and publication retain explicit authorization boundaries. Preserve
-project knowledge, dirty files and unintegrated work through worktree cleanup.
-
-## Getting Started
-
-### Step 1: Choose an Explicit Installation Scope
-
-Keep a local cc-rpi source checkout or a supported native package. The shared
-engine plans before applying changes; it never infers permission to overwrite
-mixed project instructions or install global settings. Python 3.11+ is required.
-From the source checkout, inspect the package without changing an installation:
+Keep a verified local source checkout or supported native package. From a source
+checkout, inspect the source and available installation options:
 
 ```bash
 bash scripts/install.sh --check
 bash scripts/install.sh --help
 ```
 
-For an explicitly chosen user-scope skill installation:
+For a chosen direct user-scope installation, generate a task-owned local plan:
 
 ```bash
-bash scripts/install.sh --scope user --harness both --output /tmp/rpi-user-plan.json
-# Review the exact local plan and any conflicts before applying:
-bash scripts/install.sh --apply /tmp/rpi-user-plan.json
+bash scripts/install.sh --scope user --harness both --route direct \
+  --output "$PWD/.rpi/local/user-install.json"
 ```
 
-User scope defaults to `~/.claude/skills`, `~/.agents/skills` and a separate
-user receipt under `~/.config/cc-rpi/installations/user`; explicit root options
-are available. Project install/update/detach never silently manages these roots.
-The installed source receipt resolves lifecycle updates to an actual local
-source. `--check` with a target or user scope inspects that installation;
-source-only `--check` validates the source package.
-
-The workflow names are `rpi-*` skills in both harnesses. Claude retains native
-`/simplify`; Codex uses the separately named `codex-simplify` helper. Legacy
-`plan` and `status` aliases are discontinued to avoid native collisions; retained
-legacy aliases are migration notices, not automatic forwarding.
-
-#### Native Package Routes
-
-Native package installation and trust belong to the harness's native manager.
-Claude supports the complete package; use direct installation when conditional
-domain selection is needed. Codex supports native module selection. Inspect the
-actual installed client/package discovery before claiming skills or hooks are
-active. A copied package or receipt alone is not native discovery or trust.
-Project rules, ownership and capability setup still use the lifecycle contract.
-Do not install both direct and plugin copies of the same workflow in one harness.
-
-See [migration guidance](docs/migrations/v2.md) and
-[native model profiles](docs/model-profiles.md) for setup boundaries.
-
-### Step 2: Set Up Your Project
-
-**Starting a new project?** Open Claude Code in the project directory and type:
-
-```
-/rpi-bootstrap
-```
-
-The agent reads the blueprint and existing project facts, resolves missing
-project decisions, and prepares an explicit lifecycle plan. It applies the
-reviewable authorized change while preserving owner content. Native permission
-and hook capability setup remains a separate choice.
-
-**Migrating an existing project?** Open Claude Code in the project directory and type:
-
-```
-/rpi-adopt
-```
-
-The agent reads the blueprint, then audits configuration, infrastructure and
-workflow using bounded independent assignments when useful. It presents a report showing what's already in place, what's missing (prioritized HIGH/MEDIUM/LOW), and what needs adaptation rather than replacement. You choose what to adopt, and it migrates item by item.
-
-The key difference: `rpi-bootstrap` creates from templates. `rpi-adopt` respects what exists and merges in what's missing.
-
-Both commands now install `AGENTS.md` by default, so after setup the
-same `rpi-research`, `rpi-plan`, `rpi-implement`, `rpi-pre-launch`, `rpi-update-docs`,
-and `rpi-release` workflows can be driven from Codex too.
-
-### Step 3: Start Working
-
-Once your project is set up (by either command), your daily workflow uses four portable skills:
-
-```
-rpi-research [topic]     →  Understand the codebase
-rpi-plan [feature]       →  Create an implementation plan
-rpi-implement [plan]     →  Execute the plan phase by phase
-rpi-validate [plan]      →  Verify everything works
-```
-
-That's it. Those four commands are 90% of your interaction with the methodology.
-
-If you switch to Codex, the workflow names stay the same. `AGENTS.md`
-provides shared root facts and an explicit conditional-rule map. Codex discovers
-its native skills from the selected direct or package route; Claude uses its own
-adapter. Neither harness depends on interpreting the other's command files.
-
-For the `/simplify` step specifically, keep Claude Code on the native
-command and invoke `codex-simplify` from your selected Codex skill
-installation when you want the same cleanup pass in Codex.
-
-## Command Cheat Sheet
-
-### Setup Commands
-
-| Command | What It Does | When to Use |
-|---------|-------------|-------------|
-| `rpi-bootstrap` | Reads the cc-rpi blueprint, asks about your project, creates CLAUDE.md, AGENTS.md, settings, slash commands, and full directory structure. | New projects. Run once at the start. |
-| `rpi-adopt` | Reads the blueprint, audits the existing project with parallel agents, presents a gap report, then migrates what you approve, including the Codex compatibility layer. | Existing projects you want to bring up to standard. |
-| `rpi-update` | Pulls latest cc-rpi, diffs changes since last sync, updates commands, AGENTS.md, blueprint-managed CLAUDE.md sections, and settings. | Manually or via nightly scheduled agent. |
-| `rpi-detach` | Inventories all cc-rpi artifacts, previews what will be removed, asks for confirmation, then cleanly removes commands, hooks, CLAUDE.md sections, and sync metadata. Preserves project config and work products. | When you want to stop using the RPI methodology and remove all blueprint artifacts. |
-
-### The Core Four
-
-| Command | What It Does | When to Use |
-|---------|-------------|-------------|
-| `rpi-research [question]` | Explores the codebase with bounded assignments when useful. Produces a research document at `docs/research/`. | Before any change. Understanding comes first. |
-| `rpi-plan [feature]` | Creates a phased implementation plan with pseudocode, success criteria, and test requirements. Saves to `docs/plans/`. | After research is reviewed and approved. |
-| `rpi-implement [plan path]` | Executes the plan one phase at a time. Reviewer checks plan compliance, then `/simplify` handles code quality. Stops after each phase. | After the plan is reviewed and approved. |
-| `rpi-validate [plan path]` | Runs every automated check from the plan, verifies all phases are complete, produces a validation report. Recommends `/simplify` for quality findings. | After implementation is done. |
-
-### Supporting Commands
-
-| Command | What It Does | When to Use |
-|---------|-------------|-------------|
-| `rpi-brainstorm [idea]` | Optional front end to RPI. Refines a vague or greenfield idea through one-question-at-a-time Socratic intake into a design brief at `docs/research/`. Feeds `rpi-plan`. | When the request is a goal, not a spec — and there's no existing code to `rpi-research`. |
-| `rpi-tool-design [goal]` | WebMCP: turns a stated user goal into a tool contract plus seed evals by role-playing the conversation twice (clean and vague) against the codebase's real initial state. Saves to `docs/plans/`. Feeds `rpi-plan`. | When a project exposes (or plans to expose) an agent-facing tool surface and the goal is already stated. Sits between `rpi-brainstorm` and `rpi-plan`. |
-| `rpi-describe-pr` | Generates a PR description from the current branch's diff and commit history. | Before opening or updating a PR. |
-| `rpi-pre-launch` | Covers 8 core audit domains plus the conditional Agent Surface domain, with independent coverage and staffing based on available resources. Produces a 16-section report with 5-tier severity findings, finding IDs, and Before/After/Later time horizons. | Before any production release. Run `rpi-remediate` to resolve findings with complete disposition coverage. |
-| `rpi-remediate` | Validates finding IDs and domain coverage, resolves confirmed findings through TDD, independent review, simplification and local verification; records evidence for rejected findings and scope decisions. | After `rpi-pre-launch` when findings exist. |
-| `rpi-triage` | Discovers overnight agent reports via timestamp-based scanning, checks for agent failures in logs, queries GitHub Security & Quality Alerts (code scanning/CodeQL, Dependabot security, secret scanning) every run, scans open Dependabot PRs (Rule #84), and extracts `leanness-report.md` items individually. Synthesizes findings, proposes action plan, implements fixes, then prepares local dependency fixes; remote merges require authorization. Public repos: reports stay local. Private repos: reports are committed alongside fixes. | Every morning. First command of the day for each project. |
-| `rpi-explore-release` | Wave B of E2E Pro: diff-driven, fresh-context exploratory release charters run as parallel agents, each completing the mandatory eight-maneuver table under a synthetic-fixture safety contract. Blocks on any failure or skipped high-risk area. Feeds evidence to `rpi-release`; never tags. | Once there's a deployed release candidate to test, before `rpi-release`. |
-| `/status` | Quick 5-line project orientation: branch, last commit, working tree, CI status, open items. | Start of session. Quick check without starting a full task. |
-| `rpi-update-docs` | Uses bounded discovery as useful, then updates all documentation, Mermaid diagrams, version references, and inline code docs based on changes since last release. | After features/fixes are done, before releasing. Refreshes everything in one pass. |
-| `rpi-release` | Detects project type and branching strategy, bumps versions everywhere, generates CHANGELOG entry, creates release commit and tag, publishes GitHub release, advises on registry publish. | When ready to cut a new version. Run `rpi-update-docs` first. |
-| `rpi-fix-ci` | Reads CI failure evidence, reproduces and repairs locally, and runs full local gates before an authorized integration push. | When CI is red. Automates the diagnose-fix-verify loop. |
-
-### Model and Effort Selection
-
-RPI workflows and their helpers inherit the owner's active pane model and
-effort. Shared skills omit native model/effort overrides; a workflow name does
-not determine the difficulty of its tasks.
-
-For an explicit Claude research/planning pane:
+Read the exact plan and resolve conflicts before applying it within your setup
+request. Then inspect the selected installation:
 
 ```bash
-claude --model best --effort high
+bash scripts/install.sh --apply "$PWD/.rpi/local/user-install.json"
+bash scripts/install.sh --check --scope user --harness both --route direct
 ```
 
-Keep your chosen implementation pane selection. Optional economy launches apply
-only to a bounded mechanical task you select, such as formatting or locating
-files. Architectural research, validation and stateful diagnosis retain the
-owner's selection. See [model selection](methodology/context-engineering.md#model-selection--inherit-the-owner-pane)
-and [cost monitoring](methodology/cost-monitoring.md) for explicit profiles,
-native precedence and requested-versus-observed identity.
-
-The recommended daily workflow:
-
-```
-rpi-triage -> fix all findings -> continue development
-```
-
-For multi-project orchestration, use `morning-triage.sh` to run `rpi-triage` across all projects automatically.
-
-The recommended pre-release sequence:
-
-```
-rpi-pre-launch -> rpi-remediate -> rpi-update-docs -> rpi-release
-```
-
-### Native Claude Code Commands Used in the Workflow
-
-| Command | What It Does | When to Use |
-|---------|-------------|-------------|
-| `/simplify` | Reviews reuse, quality and efficiency and applies fixes; native staffing is version-specific. In Codex, use `codex-simplify` instead of defining a project skill named `simplify`. | After reviewer approval in `rpi-implement`. After `rpi-pre-launch` audit. Anytime after significant code changes. |
-| `/batch [instruction]` | Runs bounded independent assignments in local worktrees within the current phase, at most three implementers, with one integration owner. | For `[batch-eligible]` assignments within an approved phase; no automatic cross-phase launch. |
-| `/clear` | Resets the conversation context. | Between unrelated tasks. The most underused command. |
-| `/compact [focus]` | Summarizes the current conversation with a focus area. | Same task, but context is getting heavy. |
-| `/worktree` | Creates an isolated git worktree for implementation. | When starting `rpi-implement`. Keep main clean. |
-| `Esc` + `Esc` | Rewinds to a previous checkpoint (restores conversation, code, or both). | When an approach fails and you want to undo. |
-
-## How the Four Phases Actually Work
-
-### Phase 1: Research
-
-You type `rpi-research how does authentication work in this app?` and the agent:
-
-1. Investigates the question locally or assigns bounded locator, analyzer and pattern-finding work when independent coverage benefits from delegation.
-2. Waits for all of them to finish.
-3. Synthesizes their findings into a structured research document.
-4. Saves it to `docs/research/YYYY-MM-DD-auth-flow.md`.
-
-The critical rule here is **documentarian, not critic**. The research describes what exists — it doesn't suggest improvements or identify problems. This keeps the research factual and prevents the agent from jumping to solutions before understanding the problem.
-
-Note: rpi-research is for projects that already have code. If you just bootstrapped a new project and have no code yet, skip rpi-research and start with rpi-plan — there's nothing to research. When the idea itself is still vague (a goal, not a spec), run rpi-brainstorm first to turn it into a design brief, then rpi-plan. Once you have code from your first implementation, rpi-research becomes your starting point for every subsequent task.
-
-**Your job:** Read the research document. If it's wrong or incomplete, throw it out and run `rpi-research` again with more specific steering. Multiple passes are normal. Don't approve bad research — it poisons everything downstream.
-
-### Phase 2: Plan
-
-You type `rpi-plan add rate limiting to the login endpoint` and the agent:
-
-1. Reads the research document.
-2. Explores the codebase for additional context.
-3. Asks you focused questions (only things the code can't answer).
-4. Proposes design options with trade-offs.
-5. Writes a phased implementation plan with pseudocode, file-by-file changes, and success criteria.
-6. Saves it to `docs/plans/` with separate files for each phase.
-
-Plans use a compact pseudocode notation so you can see exactly what changes in each file without reading full code blocks. Each phase has automated success criteria — tests that prove the phase works.
-
-**Your job:** Read the plan carefully. This is where your time has the highest leverage. A bad plan leads to hundreds of bad lines of code. Push back, ask questions, iterate until the plan is right.
-
-### Phase 3: Implement
-
-You type `rpi-implement docs/plans/2026-02-21-rate-limiting.md` and the agent:
-
-1. Reads the plan.
-2. Identifies bounded independent assignments within the current approved phase, with one owner per file set/worktree and one integration owner.
-3. Starts the next incomplete authorized phase.
-4. Implements locally or uses at most three implementers as useful, then obtains independent **plan compliance** review (does the code match the spec?).
-5. Runs `/simplify` — Anthropic's native code quality pass (reuse, quality, efficiency). This catches things the plan-compliance reviewer doesn't check.
-6. Runs all automated verification (tests, typecheck, lint).
-7. Updates the plan's checkboxes.
-8. **Records phase acceptance and continues when your request already authorizes the next phase.**
-
-Each phase completes its review and verification before the next begins.
-An instruction such as "all phases" authorizes continuation without repeated
-confirmation; newly required scope or architecture decisions still need review.
-
-**Your job:** Review acceptance evidence and steer when needed. You can authorize
-all phases upfront; that never removes independent review or verification.
-
-### Phase 4: Validate
-
-You type `rpi-validate docs/plans/2026-02-21-rate-limiting.md` and the agent:
-
-1. Re-reads the plan.
-2. Runs every automated verification command.
-3. Checks that all marked-complete items are actually done.
-4. Thinks about edge cases.
-5. Produces a validation report.
-
-**Your job:** Review the report. If there are manual testing items (there should be very few), do them. Then you're done.
-
-## Key Concepts
-
-### Context Engineering
-
-The entire methodology is a context management strategy. Here's why: Claude Code has a fixed-size context window. Everything the agent needs to make a good decision must fit in that window. If the window fills up with noise (old test output, failed approaches, irrelevant file searches), the agent's decisions degrade.
-
-RPI manages this by:
-- **Running each phase in its own conversation.** Fresh context every time.
-- **Producing compact artifacts between phases.** A research doc is a compressed summary of hours of exploration.
-- **Using subagents for exploration.** They consume context in their own window and return only the distilled result to yours.
-- **Clearing context between unrelated tasks.** `/clear` is your friend.
-
-There is no universal utilization target. Use native compaction during a long
-phase and durable handoffs between conversations. Record objective, approved
-scope, exact repo/worktree state, findings, decisions, check receipts and tested
-identity, deviations, risks and next step; revalidate actual state on resume.
-
-### The Documentarian Rule
-
-During `rpi-research`, agents describe what IS — never what SHOULD BE. Use the
-separate `rpi-assess` workflow for evaluative research and alternatives. No improvement suggestions, no code critiques, no "this could be refactored." Just factual descriptions with file and line references.
-
-This sounds restrictive, but it's the single most impactful rule for research quality. Without it, agents produce noisy research full of opinions that bias the planning phase.
-
-### Error Prevention
-
-The blueprint includes 89 operational rules learned from real sessions. These aren't theoretical — they're patterns that caused actual failures and wasted time. Rather than loading all rules into every session, the blueprint uses **progressive disclosure** across three layers: a compact shared AGENTS.md root block imported by Claude, an explicit Codex root rule map alongside Claude native conditional rules, and selected native skills for detailed domain knowledge. This keeps the agent's context window clean and focused.
-
-`patterns/quick-reference.md` is the **index** to those rules, not a catalog of them: each rule body lives in the skill, rule file, command, or methodology doc that needs it, and the index is one line per rule naming where it went. Rule numbers are permanent — a gap means the number was retired, and the ledger in `.claude/rules/contributing.md` records the ground.
-
-Domain skills cover shell/tools, Git, CI, deployment, multi-agent coordination,
-GitHub CLI, Python, macOS, Supabase, WebMCP, errors and debugging. The manifest
-defines workflow/domain/helper/rule inventory; inspect current counts with
-`python3 templates/scripts/rpi-distribution.py counts --source . --json` rather
-than relying on a copied resource count.
-
-### Agent Teams
-
-Claude Code has an experimental feature called Agent Teams that lets the main agent spawn long-running teammate agents that work in parallel. Agent Teams is an explicit opt-in; new installations use ordinary subagents. Updates preserve an existing user opt-in. The blueprint provides guidance on when to use teams vs. regular subagents:
-
-- **Subagents** (quick, focused): Read-only research, file exploration, code analysis. Seconds to minutes.
-- **Agent Teams** (long-running, parallel): Independent bounded work within the current approved phase. Keep ownership and resource limits explicit.
-
-### Pre-Launch Audit
-
-Before production release, `rpi-pre-launch` covers 8 core audit domains:
-
-1. **Principal Architect** — System-wide architecture, module boundaries,
-   dependency health, dead code, typecheck
-2. **Staff Frontend Engineer** — Component structure, state, routing,
-   client-side perf, hydration, bundle composition
-3. **Staff Backend Engineer** — API design, validation, DB access,
-   transactions, queues, background jobs, service boundaries
-4. **Performance Engineer** — Bundle sizes, p95/p99 latency risks,
-   cache strategy, hot paths
-5. **DevOps / SRE Lead** — Deployment safety, rollback, CI, env config,
-   observability, runbook readiness
-6. **Security Reviewer** — Dependency audit, secrets, auth/authz,
-   injection vectors
-7. **QA / Reliability Lead** — Test suite, coverage, graceful degradation,
-   failure modes, retry/idempotency coverage
-8. **Product Designer / UX Lead** — Visual hierarchy, design-system gaps,
-   component reuse, messaging/voice consistency, a11y
-9. **Agent Surface Engineer** (conditional) — Tool inventory and naming,
-   input schemas vs. handler validation, error recovery text,
-   registration lifecycle. Required when the project exposes tools to
-   an agent (WebMCP, an MCP server); otherwise record its non-applicability.
-
-The eight core domains remain required regardless of agent count. One reviewer
-may cover compatible domains; missing results are explicit coverage gaps, never
-successful checks. Preserve project-specific stricter release charters. Findings
-retain stable IDs, severity, time horizon and evidence/inference labels, and
-synthesize into the required report with READY, CONDITIONAL or NOT READY verdict.
-
-`rpi-remediate` validates the report and resolves every confirmed actionable
-finding. Severity and time horizon order work without automatically dropping low
-or strategic findings. False positives need evidence; a new architectural
-choice receives an explicit local disposition and owner review. External issue
-creation requires authorization. Review, repair, simplify and verify before
-acceptance; existing authorization is sufficient to continue.
-
-### Release Verification (E2E Pro)
-
-Where `rpi-pre-launch` audits the code as written, **E2E Pro** verifies the
-*deployed candidate's behavior* and proves that every required check
-actually ran and passed against the exact artifact being tagged. The
-template at `templates/e2e-pro-playbook-template.md` is copied into each
-project and adapted. Its mandatory floor is **Wave A** — a release gate
-that cannot lie: zero-pass fails, a required skip or failure blocks (even
-quarantined), candidate identity is fixed and verified, and the tag is the
-last action (delegated to `rpi-release`). The structural waves (capability
-registry, combination engine, plan compiler, staging fidelity, model-based
-tests, cadence/TTL) are adopted by project risk. Wave B —
-fresh-context exploratory charters — runs via the `rpi-explore-release`
-command.
-
-## Project Structure After Setup
-
-A direct installation adds the selected native workflow/domain skills under
-`.claude/skills/` and `.agents/skills/`, shared root instructions, and only the
-selected managed rules/resources. Native plugin routes load package skills from
-the native package roots instead. The public `.rpi/manifest.json` records
-component ownership and per-harness routes/domains; private plans, baselines,
-journals and evidence live under `.rpi/local/`. Project research, plans and
-handoffs remain owner work products. Capability setup writes only explicitly
-selected native config entries; registration, trust and observed enforcement
-are separate diagnostics states.
-
-## Tips for Getting the Most Out of It
-
-**Start every task with `rpi-research` — except for greenfield projects with no code yet, where you start with `rpi-plan`.** Once you have code, the research phase takes a couple of minutes and often reveals things you didn't expect.
-
-**Read your research and plans critically.** This is where your time has 10x leverage compared to reviewing code. A bad plan wastes hours; catching it early saves them.
-
-**Use `/clear` liberally.** Switching tasks? `/clear`. Finished a phase? Start a new conversation. Context hygiene is the single biggest factor in output quality.
-
-**Don't fight the phases.** It feels slower to research-then-plan-then-implement than to just say "add this feature." But the phased approach produces better results in less total time because you avoid the rework cycles that come from misunderstood requirements.
-
-**Throw out bad research.** If the research document doesn't accurately describe the codebase, don't try to salvage it. Run `rpi-research` again with better steering. Multiple passes are normal and expected.
-
-**Keep phase acceptance visible.** Review the evidence at each boundary; an
-already-authorized multi-phase run continues without repeating permission.
-
-**Invest in your CLAUDE.md.** This file is the highest-leverage configuration point in the entire system. Every session reads it. Craft every line manually. If removing a line wouldn't cause mistakes, remove it.
-
-**Log your errors and successes.** When something goes wrong, write it down. When something goes perfectly, write it down. After 3 instances of the same pattern, promote it to a rule. This is how the blueprint itself was built.
-
-## Advanced Setup
-
-### Lifecycle Skills: `rpi-bootstrap`, `rpi-adopt`, `rpi-update`, `rpi-detach`
-
-These explicitly invoked skills resolve an actual local source and target, then
-use the shared lifecycle engine to plan and apply a concrete transaction.
-Bootstrap handles a new project; adopt assesses existing content; update compares
-recorded bases with local and source state; detach removes only proven ownership.
-Mixed, modified or unproven owner content is retained with a conflict/disposition,
-and recovery records support rollback. Project detach leaves separate user
-installations alone. No lifecycle action silently pulls remote changes or grants
-native trust. Reuse the user's authorization for the concrete scope; request only
-new decisions needed by the planned diff.
-
-### Nightly Blueprint Sync
-
-Scheduled updates are optional and require explicit setup and resource
-authorization. The ordinary lifecycle never installs a scheduler. If selected,
-review the script and scope it to an explicit local source/target:
-
-1. Copy `templates/scripts/cc-rpi-update-agent.sh` to your project's `scripts/agents/`
-2. Set the `CC_RPI_PATH` variable to your cc-rpi clone location
-3. Schedule it with launchd (macOS) or cron (Linux) — the script has templates in its comments
-
-The shell script reads update instructions from cc-rpi at runtime, so when you improve the `rpi-update` command in cc-rpi, all projects automatically get the new logic on their next scheduled run.
-
-### Scheduled Agents
-
-For production projects, you can set up agents that run on a schedule (daily or weekly) to monitor code quality, run security audits, check dependency health, and detect flaky tests. These run headlessly via `claude -p "prompt"` and produce markdown reports. See `methodology/scheduled-agents.md` for templates.
-
-### Adapting for Different Project Types
-
-The blueprint adapts to six project archetypes: web applications, libraries, CLI tools, monorepos, Python projects, and static sites. Each has specific adjustments for git workflow, CI configuration, testing strategy, and CLAUDE.md content. The setup checklist walks you through the differences.
-
-## Where to Go Deeper
-
-The blueprint repository contains detailed documentation on every topic mentioned in this guide:
-
-| Topic | File | What You'll Learn |
-|-------|------|-------------------|
-| Core philosophy | `methodology/philosophy.md` | Error amplification, mental alignment, key lessons |
-| Context management | `methodology/context-engineering.md` | Compaction, progressive disclosure, session lifecycle |
-| The four phases | `methodology/four-phases.md` | Detailed process for each phase, handoffs, failure recovery |
-| Agent design | `methodology/agent-design.md` | Subagent catalog, autonomy boundaries, Agent Teams |
-| Plan notation | `methodology/pseudocode-notation.md` | How to write and read implementation plans |
-| Testing approach | `methodology/testing.md` | TDD protocol, verification hierarchy |
-| CI ownership | `methodology/push-accountability.md` | Local gates and exact-candidate CI observation |
-| Model economics | `methodology/cost-monitoring.md` | Session inheritance, explicit economy choices, cost per outcome |
-| Error patterns | `patterns/agent-errors.md` | 64 documented errors with symptoms and solutions |
-| Operational rules | `patterns/quick-reference.md` | Index of 89 rules, each pointing to the surface that holds it |
-| Domain skills | `templates/skills/` | Manifest-declared workflows and domain knowledge |
-| Rule templates | `templates/rules/` | Canonical rules rendered through harness adapters |
-| Deployment safety | `patterns/deployment-safety.md` | Resource efficiency and production deployment rules |
-| Release verification | `templates/e2e-pro-playbook-template.md` | E2E Pro: auditable release-evidence system (Wave A gate + structural waves) |
-| Worked examples | `examples/README.md` | Sample research docs, plans, logs, pseudocode |
-
-## Credits
-
-The RPI methodology is adapted from HumanLayer's opencode-rpi implementation and their ACE-FCA (Advanced Context Engineering for Coding Agents) framework, tailored for Claude Code's native capabilities.
+Use `--harness claude` or `--harness codex` for one client. Direct user scope
+installs the four lifecycle skills in `~/.claude/skills/` and `~/.agents/skills/`,
+with separate state under `~/.config/cc-rpi/installations/user`. Explicit root
+options are available. Project operations never silently update these roots.
+`--check` without an installation destination checks only the source package.
+
+### Direct and plugin routes
+
+Direct installation supports a selected set of domain modules. Project scope owns
+its remaining workflows, domain skills and managed project configuration. Install
+whole selected skill directories, including scripts and references; never copy
+only SKILL.md or invent resource paths.
+
+Native plugins provide another route. Claude's package root is the repository;
+Codex's self-contained package is `generated/codex/`, including its `runtime/`
+source closure. Native managers own plugin caches, installation, update, removal
+and trust. The project lifecycle engine never merges or edits those caches.
+
+Use one registration route per harness and scope. The tested Claude plugin manager
+controls the whole package, so choose direct installation when conditional domain
+selection is required. Codex supports native module selection on the tested
+client. Inspect actual native discovery and enabled modules; file presence alone
+is not proof that a skill or hook is active.
+
+| Route | Claude research invocation | Codex research selection |
+| --- | --- | --- |
+| Direct | `/rpi-research` | `$rpi-research` |
+| Plugin | `/cc-rpi:rpi-research` | `cc-rpi:rpi-research` in the native skill selector |
+
+The corresponding names apply to the other `rpi-*` workflows. Claude retains
+native `/simplify`; Codex receives `codex-simplify` through its selected route.
+Native `/plan` and `/status` are different from `rpi-plan` and `rpi-status`.
+Managed colliding aliases are discontinued. Retained legacy aliases are
+explicit-only rename notices, not forwarding commands; custom aliases remain
+owner-owned.
+
+### Bootstrap or adopt a project
+
+Invoke `rpi-bootstrap` for an empty project or `rpi-adopt` for existing code and
+configuration, using the selected client's native syntax. Either client can run
+these workflows. They resolve the source and target, inventory ownership, select
+harnesses/domains and generate an explicit project installation plan.
+
+Inspect planned file, instruction-block and settings-key changes, source/target
+identity, conflicts, budgets and recovery paths. Apply safe reviewed work within
+existing authorization. Native permissions and hooks require explicit capability
+setup selection; copying configuration is not native trust or user consent.
+
+Shared project intelligence belongs in AGENTS.md. CLAUDE.md imports it and adds
+Claude-specific guidance without a reverse import. Universal policy is managed
+once; conditional rules remain reachable through native Claude path rules and
+Codex's explicit root task/path map. Preserve project-specific rules, generated
+vendor blocks, local skills and stricter release charters.
+
+See the [setup checklist](templates/setup-checklist.md) and
+[lifecycle contract](templates/skills/rpi-bootstrap/references/lifecycle-contract.md)
+for exact source resolution and engine commands.
+
+## Workflow reference
+
+| Workflow | Purpose |
+| --- | --- |
+| `rpi-bootstrap` | Plan and apply a new project setup with explicit ownership and selected native components. |
+| `rpi-adopt` | Audit existing configuration and reconcile authorized gaps while preserving custom content. |
+| `rpi-update` | Compare recorded baselines, local bytes and an explicitly selected local source; apply safe owned updates and report conflicts. |
+| `rpi-detach` | Remove proven-owned unchanged components while retaining edited/unknown content and project work products. |
+| `rpi-research` | Describe the code as written, with source references and evidence. |
+| `rpi-assess` | Evaluate requested concerns and alternatives separately from descriptive research. |
+| `rpi-plan` | Create a phased implementation specification with success criteria and tests. |
+| `rpi-implement` | Complete authorized phases through TDD, independent review, repair, simplify and local verification. |
+| `rpi-validate` | Compare the actual implementation and evidence with the approved plan. |
+| `rpi-brainstorm` | Clarify a vague or greenfield goal into a design brief. |
+| `rpi-tool-design` | Design an agent-facing tool contract and seed evals from concrete role-play. |
+| `rpi-describe-pr` | Prepare a reviewable PR description without implicitly publishing it. |
+| `rpi-pre-launch` | Covers 8 core audit domains plus applicable agent surfaces and produces a validated report with stable finding IDs. |
+| `rpi-remediate` | Resolve confirmed actionable findings and document evidence-backed rejections or architectural decisions. |
+| `rpi-triage` | Discover reports and failures with durable scan checkpoints, inspect applicable alerts, and complete authorized local fixes. |
+| `rpi-status` | Diagnose project state, source/installation drift, native discovery, trust and evidence limitations. |
+| `rpi-fix-ci` | Reproduce a failed CI selection locally, repair it and run the complete applicable gate. |
+| `rpi-update-docs` | Complete authorized documentation, diagram, version and inline documentation updates. |
+| `rpi-explore-release` | Exercise an existing authorized immutable candidate using the project's required exploratory charters; never tags. |
+| `rpi-release` | Prepare the supplied or selected version, notes and release evidence, then perform only the authorized publication actions. |
+
+An empty project can begin with brainstorming or planning because there is no code
+to investigate yet. For existing code, research the relevant behavior before
+planning changes. Preserve curated research, approved plans, phase files,
+decisions and handoffs in version control. Raw machine inventories and transient
+recovery evidence remain local; operational report tracking follows visibility.
+
+## Implementation and audit discipline
+
+A narrow task may stay with the parent. Delegate useful independent questions or
+owned file sets with an objective, allowed actions/files, evidence contract,
+resource constraints and completion condition. Group failing tests by likely
+root cause rather than assigning one agent per test. At most three implementers
+may work simultaneously, with fewer when slots or resources require it.
+
+Await every required result. Missing, failed or stale results are gaps, including
+an absent independent review. For coordinated work,
+[structured dispatch validation](templates/references/dispatch.md) checks the
+handoff's declared scope and completion; it does not authenticate evidence or
+create permission. Revalidate actual repository state when resuming.
+
+Standalone simplify reruns checks invalidated by its changes. A parent-owned pass
+returns exact changed files and invalidated checks for the parent's final gate.
+Use native Claude `/simplify` or Codex `codex-simplify` without silently changing
+models. Native batch/team mechanics vary; use them only when they can preserve
+local work, ownership and the current approved phase. Otherwise use bounded
+ordinary assignments. Agent Teams is opt-in, not an installation default.
+
+Before release, `rpi-pre-launch` covers 8 core audit domains: architecture (AR), frontend (FE), backend
+(BE), performance (PE), operations (DO), security (SE), QA and UX. Agent surfaces
+(AS) additionally apply when implemented tools are exposed to agents. One
+investigator can cover several compatible domains; eight domains do not require
+eight model instances. Absence of a frontend or service is an inspected fact,
+not permission to silently omit a core domain.
+
+Findings retain the required ID grammar, fields, regression-risk reasoning and
+`file:line` evidence. Coverage gaps block audit acceptance. Remediation resolves
+all confirmed actionable findings within authorized scope; severity/time horizon
+order work rather than exempting low or strategic findings. False positives need
+evidence. Architectural decisions or explicitly deferred scope receive local
+owner-reviewed dispositions, not invented completion or automatic external issues.
+
+## Verification, diagnostics and release
+
+Declare the project's actual complete CI selection in `.rpi/policy.json` and run
+its installed `.rpi/scripts/rpi-verify.py` or documented wrapper. This repository
+uses `bash scripts/verify-local.sh`. Checks run sequentially, retain every exit,
+and bind results to candidate bytes and runtime identity. Required failures or
+skips block acceptance; changed inputs cannot reuse an old passing receipt.
+
+Read-only engine `diagnose` and `rpi-status` distinguish configured, discovered,
+trusted and observed states. Missing native observations stay unavailable. A hook
+can exist yet be skipped or untrusted. Supported native permissions retain
+approval authority; guarded remote automation stays blocked when the necessary
+boundary is unavailable. See [compatibility](docs/compatibility.md) and
+[migration](docs/migrations/v2.md), including the deliberate fail-closed change.
+
+The pre-release sequence is `rpi-pre-launch`, `rpi-remediate`, `rpi-update-docs`,
+then `rpi-release`. Adapt the [E2E Pro playbook](templates/e2e-pro-playbook-template.md)
+to the project's actual release runbook. Wave A requires truthful exact-candidate
+evidence; structural waves depend on risk. Preserve existing stricter adopter
+requirements, including eight-maneuver validators. An existing authorized
+immutable candidate can supply exploratory evidence; do not create a Vercel
+Preview to satisfy a gate.
+
+Keep working branches/worktrees local, finish all applicable local checks and
+integrate completed work locally. Inspect hosted triggers before one authorized
+completed integration push. Never use hosted CI as a debugging loop. Production,
+publication and new hosted schedules retain their separate authorization scopes.
+Observe the exact published SHA and required workflow/event/check set.
+
+## Model selection
+
+Workflows inherit the owner's active pane model and effort. Optional
+[native profiles](docs/model-profiles.md) are explicit session choices. The
+installer does not rewrite global defaults, start a model resolver or silently
+switch a parent to an economy model. Record requested role, requested model/effort
+and source, resolved values where exposed, and evidence source/client version.
+An alias or configuration value is a request, not an observed model identity.
+
+For an explicitly selected Claude research/planning launch, the documented
+`claude --model best --effort high` uses native controls. Keep the owner's chosen
+implementation pane selection. Mechanical economy tasks use a separate selected
+session/profile; native overrides can persist or outrank other settings, so no
+automatic parent restoration is promised.
+
+## Updates, detach and optional schedules
+
+An update compares current installed bytes even when the source revision has not
+changed, so missing resources are still detected. `ready`, `noop` and `conflict`
+plans are distinct. Preserve `.rpi/manifest.json`, nonsecret baselines and durable
+journals; use the recorded rollback path for interrupted transactions and retain
+concurrent user edits. Detach removes only unchanged proven ownership and leaves
+research, plans, decisions, custom files and separate user/plugin installations.
+
+Schedules require explicit setup and resource authorization. The optional
+`templates/scripts/cc-rpi-update-agent.sh` launcher requires `RPI_UPDATE_ENABLED=1`,
+absolute `CC_RPI_PATH` and `RPI_PROJECT_ROOT`, and selected `RPI_HARNESS` and
+`RPI_ROUTE`. Direct mode also requires `RPI_UPDATE_SKILL_DIR` from actual user
+skill discovery. It validates source/resources, uses the matching native workflow
+without adding a duplicate plugin in direct mode, and keeps native permissions.
+Required unavailable permissions are denied rather than bypassed.
+
+The launcher checks installation state after the native attempt and preserves
+both exit statuses in unique ignored `.rpi/local/update-runs/` reports. It refuses
+unignored output paths, performs no separate inference auth probe and does not
+blindly retry a partial update. It neither pulls source nor updates global user
+skills, native caches, models or schedules. Plugin manager updates remain separate.
+Verify the actual scheduler environment/authentication and keep local recovery
+records; do not assume a universal launchd file-descriptor requirement.
+
+## Further reading
+
+The index contains 92 operational rules with permanent IDs. The distribution
+manifest owns native component counts.
+
+| Topic | Reference |
+| --- | --- |
+| Methodology and reading order | [methodology/README.md](methodology/README.md) |
+| Context and durable handoffs | [context engineering](methodology/context-engineering.md) |
+| Assignment design | [agent design](methodology/agent-design.md) |
+| Testing and release evidence | [testing](methodology/testing.md) |
+| Publication policy | [push accountability](methodology/push-accountability.md) |
+| Model choices and costs | [cost monitoring](methodology/cost-monitoring.md) |
+| 64 documented errors | [error catalog](patterns/agent-errors.md) |
+| Index of 92 rules | [quick reference](patterns/quick-reference.md) |
+| Current component inventory | [distribution manifest](templates/distribution.json) |
+| Project adaptation | [setup checklist](templates/setup-checklist.md) |
+| Worked examples | [examples](examples/README.md) |
+
+The methodology draws on HumanLayer's opencode-rpi and ACE-FCA framework, adapted
+to native Claude Code and Codex workflows through shared authored sources.

@@ -1,202 +1,96 @@
-#!/bin/bash
-# scripts/agents/cc-rpi-update.sh
+#!/usr/bin/env bash
+# Explicitly opted-in, project-scoped local update launcher for Claude Code.
+# Configure RPI_UPDATE_ENABLED=1, absolute CC_RPI_PATH and RPI_PROJECT_ROOT,
+# RPI_HARNESS=claude|codex|both, and RPI_ROUTE=direct|plugin in the scheduler.
+# For direct invocation also bind RPI_UPDATE_SKILL_DIR to the actual discovered
+# user-scope rpi-update skill. Plugin invocation loads the local source package
+# for this session only. Do not mix direct and plugin registrations.
 #
-# Scheduled agent that syncs this project with the latest cc-rpi blueprint.
-# Designed to run nightly via launchd (macOS) or cron (Linux).
+# Requires Python 3.11+, Git and a Claude CLI supporting --plugin-dir,
+# --permission-mode dontAsk and --permission-prompts none (verified in 2.1.261).
+# Configure native authentication/permissions through the owner's supported
+# setup before opting in. There is no inference auth probe or permission bypass.
+# A blocked update remains blocked; the process reports both CLI/check exits.
 #
-# The key trick: this script reads the update instructions from cc-rpi itself
-# at runtime. When cc-rpi improves the /update command, all projects
-# automatically get the new logic on the next scheduled run.
-#
-# ── Setup ──
-#
-# 1. Copy this script to your project: scripts/agents/cc-rpi-update.sh
-# 2. Set CC_RPI_PATH below to your cc-rpi clone location
-# 3. Make executable: chmod +x scripts/agents/cc-rpi-update.sh
-# 4. Create required directories: mkdir -p docs/agents logs
-# 5. Schedule with launchd or cron (see examples below)
-#
-# ── macOS launchd ──
-#
-#   Create ~/Library/LaunchAgents/com.<project>.agent.cc-rpi-update.plist:
-#   (Replace YOUR_USERNAME with your macOS username)
-#
-#   <?xml version="1.0" encoding="UTF-8"?>
-#   <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
-#     "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-#   <plist version="1.0">
-#   <dict>
-#     <key>Label</key>
-#     <string>com.<project>.agent.cc-rpi-update</string>
-#     <key>ProgramArguments</key>
-#     <array>
-#       <string>/bin/bash</string>
-#       <string>-c</string>
-#       <string>exec /bin/bash /absolute/path/to/project/scripts/agents/cc-rpi-update.sh</string>
-#     </array>
-#     <key>StartCalendarInterval</key>
-#     <dict>
-#       <key>Hour</key>
-#       <integer>3</integer>
-#       <key>Minute</key>
-#       <integer>0</integer>
-#     </dict>
-#     <key>HardResourceLimits</key>
-#     <dict>
-#       <key>NumberOfFiles</key>
-#       <integer>122880</integer>
-#     </dict>
-#     <key>SoftResourceLimits</key>
-#     <dict>
-#       <key>NumberOfFiles</key>
-#       <integer>122880</integer>
-#     </dict>
-#     <key>EnvironmentVariables</key>
-#     <dict>
-#       <key>HOME</key>
-#       <string>/Users/YOUR_USERNAME</string>
-#       <key>TERM</key>
-#       <string>xterm-256color</string>
-#       <key>PATH</key>
-#       <string>/opt/homebrew/bin:/usr/local/bin:/Users/YOUR_USERNAME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
-#     </dict>
-#     <key>StandardOutPath</key>
-#     <string>/absolute/path/to/project/logs/cc-rpi-update.log</string>
-#     <key>StandardErrorPath</key>
-#     <string>/absolute/path/to/project/logs/cc-rpi-update.error.log</string>
-#   </dict>
-#   </plist>
-#
-#   One-time setup (run interactively before scheduling):
-#     claude setup-token
-#
-#   Install: launchctl load ~/Library/LaunchAgents/com.<project>.agent.cc-rpi-update.plist
-#   Test:    launchctl start com.<project>.agent.cc-rpi-update
-#   Remove:  launchctl unload ~/Library/LaunchAgents/com.<project>.agent.cc-rpi-update.plist
-#
-# ── Linux cron ──
-#
-#   # Run nightly at 3:00 AM:
-#   0 3 * * * /absolute/path/to/project/scripts/agents/cc-rpi-update.sh \
-#     >> /absolute/path/to/project/logs/cc-rpi-update.log 2>&1
-#
-
+# Optional launchd/cron schedules are installed separately. Diagnose their actual
+# PATH, authentication and resource limits; historical launchd workarounds are not
+# universal requirements. Never rewrite HOME or source an interactive rc file.
+# Reports use unique task-owned .rpi/local/update-runs directories. Preserve these
+# and lifecycle journals on failure; there is no blind retry of partial mutation.
 set -euo pipefail
 
-# ── Configuration ──
-# Change these for your project:
-CC_RPI_PATH="<path-to-your-cc-rpi-clone>"
-CLAUDE_BIN="${CLAUDE_BIN:-$HOME/.local/bin/claude}"
-
-# ── Environment setup (required for launchd) ──
-# launchd provides a minimal environment — no PATH, no TERM, possibly no HOME.
-# These lines are no-ops in a normal terminal but critical under launchd.
-# Do NOT use `source ~/.zshrc` — too fragile for non-interactive shells.
-export HOME="${HOME:-$(eval echo ~"$(whoami)")}"
-export TERM="${TERM:-xterm-256color}"
-export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$PATH"
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-
-AGENT_NAME="cc-rpi-update"
-REPORT_FILE="docs/agents/${AGENT_NAME}-report.md"
-UPDATE_INSTRUCTIONS="$CC_RPI_PATH/templates/commands/update.md"
-
-# ── File descriptor check ──
-# launchd enforces a hard limit of 256 file descriptors by default.
-# Claude CLI needs 100K+ for its Node.js runtime. The plist must set
-# HardResourceLimits/SoftResourceLimits — ulimit alone can't exceed
-# the hard limit. This check catches a missing plist configuration.
-ulimit -n 122880 2>/dev/null
-FD_LIMIT=$(ulimit -n)
-if [ "$FD_LIMIT" -lt 10000 ]; then
-  echo "[$(date)] FATAL: File descriptor limit too low ($FD_LIMIT)."
-  echo "  launchd hard limit is 256 by default — ulimit can't raise above it."
-  echo "  Fix: Add HardResourceLimits + SoftResourceLimits to your .plist:"
-  echo "    <key>HardResourceLimits</key>"
-  echo "    <dict><key>NumberOfFiles</key><integer>122880</integer></dict>"
-  echo "    <key>SoftResourceLimits</key>"
-  echo "    <dict><key>NumberOfFiles</key><integer>122880</integer></dict>"
-  echo "  Then: launchctl unload + load the plist to apply."
+blocked() {
+  printf 'BLOCKED / WHY: %s / FIX: %s\n' "$1" "$2" >&2
   exit 1
-fi
-
-# ── Preflight checks ──
-
-if [ ! -d "$CC_RPI_PATH" ]; then
-  echo "[$(date)] ERROR: cc-rpi not found at $CC_RPI_PATH"
-  exit 1
-fi
-
-if [ ! -f "$UPDATE_INSTRUCTIONS" ]; then
-  echo "[$(date)] ERROR: Update command not found at $UPDATE_INSTRUCTIONS"
-  exit 1
-fi
-
-if [ ! -x "$CLAUDE_BIN" ]; then
-  echo "[$(date)] ERROR: claude binary not found at $CLAUDE_BIN"
-  echo "[$(date)] Set CLAUDE_BIN in this script or export it as an env var."
-  echo "[$(date)] Common locations: \$HOME/.local/bin/claude, /usr/local/bin/claude"
-  exit 1
-fi
-
-# ── Authentication preflight ──
-# Under launchd, there's no TTY and no browser for OAuth.
-# Claude must be set up with a persistent token via `claude setup-token`.
-if ! "$CLAUDE_BIN" -p "echo ok" --output-format text >/dev/null 2>&1; then
-  echo "[$(date)] FATAL: Claude CLI auth failed in non-interactive mode."
-  echo "  launchd has no TTY/browser — interactive OAuth won't work."
-  echo "  Fix: Run 'claude setup-token' from an interactive terminal first."
-  exit 1
-fi
-
-# ── Build the prompt ──
-# The agent reads the update instructions from cc-rpi at runtime.
-# This means when cc-rpi updates the /update command, this script
-# automatically uses the new logic without any changes needed here.
-
-PROMPT="You are the cc-rpi-update scheduled agent for this project.
-
-Your job: sync this project with the latest cc-rpi blueprint.
-
-Read and follow the instructions in: $UPDATE_INSTRUCTIONS
-
-Important context:
-- The cc-rpi blueprint is at: $CC_RPI_PATH
-- This project is at: $PROJECT_ROOT
-- Apply all updates non-interactively. Do not ask for confirmation.
-- Preserve user content and unknown ownership; skip conflicts and report them.
-- Commit completed verified changes locally on a task-owned branch/worktree.
-- Never push, create PRs, deploy, trigger hosted runs, or change remote settings.
-- Do not create Vercel Previews or use hosted CI as a debugging loop.
-- Write your final summary as your text output (it becomes the report).
-
-If there are no changes needed, just output: 'cc-rpi sync: already up to date as of <version>.'"
-
-# ── Run with retry ──
-
-MAX_RETRIES=2
-RETRY_COUNT=0
-
-cd "$PROJECT_ROOT"
-echo "[$(date)] Starting $AGENT_NAME agent..."
-echo "[$(date)] Project: $PROJECT_ROOT"
-echo "[$(date)] Blueprint: $CC_RPI_PATH"
-
-while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-  if "$CLAUDE_BIN" -p "$PROMPT" \
-    --allowedTools "Read,Write,Edit,Glob,Grep,Bash(git *)" \
-    --permission-mode bypassPermissions \
-    --output-format text \
-    > "$REPORT_FILE" 2>&1; then
-    echo "[$(date)] $AGENT_NAME complete. Report: $REPORT_FILE"
-    exit 0
-  fi
-  RETRY_COUNT=$((RETRY_COUNT + 1))
-  echo "[$(date)] Attempt $RETRY_COUNT failed. Retrying in 10s..."
-  sleep 10
+}
+[[ ${RPI_UPDATE_ENABLED:-} == 1 ]] || blocked 'scheduled updates are not opted in' 'set RPI_UPDATE_ENABLED=1 only for the authorized project scope'
+[[ ${CC_RPI_PATH:-} == /* && -d "$CC_RPI_PATH" ]] || blocked 'source must be an existing absolute directory' 'set CC_RPI_PATH to the verified local source'
+[[ ${RPI_PROJECT_ROOT:-} == /* && -d "$RPI_PROJECT_ROOT" ]] || blocked 'target must be an existing absolute directory' 'set RPI_PROJECT_ROOT to the intended Git root'
+case ${RPI_HARNESS:-} in claude|codex|both) ;; *) blocked 'harness scope is missing or invalid' 'set RPI_HARNESS=claude, codex or both' ;; esac
+case ${RPI_ROUTE:-} in direct|plugin) ;; *) blocked 'installation route is missing or invalid' 'set RPI_ROUTE=direct or plugin to match installed ownership' ;; esac
+CC_RPI_PATH=$(cd -- "$CC_RPI_PATH" && pwd -P)
+PROJECT_ROOT=$(cd -- "$RPI_PROJECT_ROOT" && pwd -P)
+[[ $(git -C "$PROJECT_ROOT" rev-parse --show-toplevel) == "$PROJECT_ROOT" ]] || blocked 'target is not the Git root' 'bind RPI_PROJECT_ROOT to the actual intended repository root'
+command -v python3 >/dev/null || blocked 'Python is missing' 'configure Python 3.11+ on the scheduler PATH'
+python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 11))' || blocked 'Python is older than 3.11' 'configure a supported interpreter on PATH'
+CLAUDE_BIN=${CLAUDE_BIN:-$(command -v claude || true)}
+[[ -n "$CLAUDE_BIN" && -x "$CLAUDE_BIN" ]] || blocked 'Claude CLI is unavailable' 'set CLAUDE_BIN to its actual executable path'
+ENGINE="$CC_RPI_PATH/templates/scripts/rpi-distribution.py"
+NATIVE_SKILL="$CC_RPI_PATH/generated/claude/skills/rpi-update"
+for required in "$ENGINE" "$CC_RPI_PATH/templates/distribution.json" "$NATIVE_SKILL/SKILL.md" "$NATIVE_SKILL/references/lifecycle-contract.md"; do
+  [[ -f "$required" ]] || blocked "missing source resource: $required" 'restore the complete verified local package before scheduling'
 done
+python3 "$ENGINE" validate --source "$CC_RPI_PATH"
+python3 "$ENGINE" check-generated --source "$CC_RPI_PATH"
 
-echo "[$(date)] $AGENT_NAME FAILED after $MAX_RETRIES attempts" | tee -a "$REPORT_FILE"
-exit 1
+native_args=("$CLAUDE_BIN")
+if [[ "$RPI_ROUTE" == plugin ]]; then
+  [[ -f "$CC_RPI_PATH/.claude-plugin/plugin.json" ]] || blocked 'Claude package metadata is missing' 'restore the native package manifest'
+  native_args+=(--plugin-dir "$CC_RPI_PATH")
+  invocation='/cc-rpi:rpi-update'
+else
+  [[ ${RPI_UPDATE_SKILL_DIR:-} == /* ]] || blocked 'direct native skill path is missing' 'set RPI_UPDATE_SKILL_DIR from actual user-scope native discovery'
+  for resource in SKILL.md references/lifecycle-contract.md; do
+    cmp -s "$RPI_UPDATE_SKILL_DIR/$resource" "$NATIVE_SKILL/$resource" || blocked 'direct lifecycle skill/resources differ from selected source' 'review the separate user-scope update before scheduling; never overwrite it implicitly'
+  done
+  invocation='/rpi-update'
+fi
+
+REPORT_ROOT="$PROJECT_ROOT/.rpi/local/update-runs"
+python3 - "$PROJECT_ROOT" "$REPORT_ROOT" <<'PY'
+from pathlib import Path
+import sys
+if not Path(sys.argv[2]).resolve().is_relative_to(Path(sys.argv[1])):
+    raise SystemExit('BLOCKED / WHY: report path escapes project / FIX: restore owned .rpi/local directories')
+PY
+RUN_ID=$(python3 -c 'import secrets; print(secrets.token_hex(8))')
+RUN_DIR="$REPORT_ROOT/run.$RUN_ID"
+for artifact in report.md check.json status.txt; do
+  git -C "$PROJECT_ROOT" check-ignore --quiet -- "$RUN_DIR/$artifact" || blocked 'scheduled output is not ignored' 'review .rpi/local exclusions before scheduling; existing ignore rules are preserved'
+done
+mkdir -p -- "$REPORT_ROOT"
+mkdir -- "$RUN_DIR"
+REPORT_FILE="$RUN_DIR/report.md"
+PROMPT="$invocation
+Update only this explicitly authorized project installation.
+Source: $CC_RPI_PATH
+Target: $PROJECT_ROOT
+Harness: $RPI_HARNESS
+Route: $RPI_ROUTE
+Read the installed lifecycle contract and bind these literal paths safely.
+Generate/review/apply a safe project-scoped update plan and verify actual results.
+Preserve custom content, unknown ownership, conflicts and recovery journals.
+Do not change user-scope installations, plugin caches, model defaults or schedules.
+Do not fetch/pull source, push, create PRs, deploy, trigger hosted runs or change remote settings.
+Never create Vercel Previews. Required unavailable permissions remain blocked.
+Return concrete changes, conflicts and verification; never claim success from prose alone."
+cd -- "$PROJECT_ROOT"
+native_status=0
+"${native_args[@]}" -p "$PROMPT" --permission-mode dontAsk \
+  --permission-prompts none --output-format text > "$REPORT_FILE" 2>&1 || native_status=$?
+check_status=0
+python3 "$ENGINE" check --source "$CC_RPI_PATH" --target "$PROJECT_ROOT" \
+  --harness "$RPI_HARNESS" --route "$RPI_ROUTE" > "$RUN_DIR/check.json" 2>&1 || check_status=$?
+printf 'native_exit=%s check_exit=%s report=%s\n' "$native_status" "$check_status" "$REPORT_FILE" | tee "$RUN_DIR/status.txt"
+[[ $native_status -eq 0 ]] || exit "$native_status"
+exit "$check_status"

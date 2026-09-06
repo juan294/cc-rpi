@@ -1,6 +1,7 @@
 """Publishable working candidate inventory shared by local verification tools."""
 import hashlib
 import importlib.metadata
+import json
 import os
 from pathlib import Path
 import platform
@@ -13,7 +14,10 @@ def environment(environ=None):
     """Fingerprint the gate runtime without executing tools or recording secrets.
 
     Executable metadata detects tool replacement; it is not an attestation of
-    every machine setting. Package versions belong to this Python interpreter.
+    every machine setting. Locale, timezone and Python execution settings bind
+    environment-sensitive checks; only their digest is recorded. Project-specific
+    external inputs remain the declared check's responsibility. Package versions
+    belong to this Python interpreter.
     """
     environ = os.environ if environ is None else environ
     executables = {}
@@ -35,11 +39,17 @@ def environment(environ=None):
     system = os.uname() if hasattr(os, 'uname') else None
     platform_id = ("-".join((system.sysname, system.release, system.version, system.machine))
                    if system else sys.platform + '-' + os.name)
+    settings = {name: environ[name] for name in sorted(environ)
+                if name.startswith('LC_') or name in (
+                    'LANG', 'LANGUAGE', 'TZ', 'PYTHONUTF8', 'PYTHONIOENCODING',
+                    'PYTHONCOERCECLOCALE', 'PYTHONHASHSEED')}
     return {"python": platform.python_version(),
             "implementation": platform.python_implementation(),
             "executable": str(Path(sys.executable).absolute()),
             "platform": platform_id, "packages": packages,
-            "executables": executables}
+            "executables": executables,
+            "execution_settings_sha256": hashlib.sha256(
+                json.dumps(settings, sort_keys=True, ensure_ascii=True).encode()).hexdigest()}
 
 
 def inventory(root, extra=()):

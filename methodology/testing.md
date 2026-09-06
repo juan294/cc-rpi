@@ -83,6 +83,7 @@ Test-Driven Development is mandatory for all code changes. No exceptions — not
 - **Refactors need existing tests.** Before refactoring, ensure tests cover the current behavior. If they don't, write them first.
 - **No "I'll add tests later."** There is no later. Tests are written in the same worktree, in the same commit sequence, before the implementation.
 - **Tests are the spec.** A failing test IS the specification for what the code should do. Write the test as if the feature already works, then make it true.
+- **An assertion that cannot fail is not a test.** Ordering alone does not make a test behavioral. See [the testing rule](../templates/rules/testing.md) for the mocking boundary, the can-this-fail check and coverage honesty.
 
 ### In the RPI Workflow
 

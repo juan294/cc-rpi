@@ -33,6 +33,20 @@ class PolicyReviewTests(unittest.TestCase):
         self.assertIn('BLOCKED / WHY:', result.stderr)
         self.assertFalse(self.fixture.sentinel.exists(), command)
 
+    def test_command_lookup_does_not_execute_named_transport_but_chains_still_block(self):
+        for command in ('command -v git', 'command -V gh', 'command -v git gh'):
+            with self.subTest(command=command):
+                result = self.invoke(command)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                subprocess.run(['bash', '-c', command], cwd=self.fixture.project,
+                               env=self.fixture.environment, check=True, capture_output=True)
+                self.assertFalse(self.fixture.sentinel.exists())
+        for command in ('command -v git; git push --tags',
+                        'command -v "$(git push --tags)"',
+                        'command git push --tags'):
+            with self.subTest(command=command):
+                self.deny(command)
+
     def test_static_shell_spelling_cannot_hide_guarded_executable(self):
         for executable in ("g'it'", 'g"it"', r'g\it'):
             with self.subTest(executable=executable):
@@ -83,6 +97,31 @@ class PolicyReviewTests(unittest.TestCase):
             with self.subTest(prefix=prefix):
                 self.deny(prefix + ' git push origin develop')
         self.assertEqual(self.invoke('env TEST=1 git status --short').returncode, 0)
+
+    def test_configured_git_aliases_cannot_hide_guarded_commands(self):
+        self.fixture.git('config', 'alias.fixture-chain', '!vercel deploy')
+        for expansion in ('!vercel deploy', 'push --tags', '!git fixture-chain'):
+            self.fixture.git('config', 'alias.fixture-publish', expansion)
+            for harness in ('claude', 'codex'):
+                with self.subTest(expansion=expansion, harness=harness):
+                    self.fixture.sentinel.unlink(missing_ok=True)
+                    result = self.fixture.invoke('git fixture-publish', harness)
+                    if result.returncode == 0 and expansion.startswith('!'):
+                        subprocess.run(['git', 'fixture-publish'], cwd=self.fixture.project,
+                                       env=self.fixture.environment, check=True)
+                    self.assertEqual(result.returncode, 2, result.stderr)
+                    self.assertIn('alias', result.stderr.lower())
+                    self.assertFalse(self.fixture.sentinel.exists())
+        self.assertEqual(self.invoke('git status --short').returncode, 0)
+
+    def test_changed_locale_cannot_reuse_passing_publication_receipt(self):
+        self.fixture.environment['LC_ALL'] = 'C'
+        self.fixture.evidence()
+        self.assertEqual(self.invoke('git push origin develop').returncode, 0)
+        changed = {**self.fixture.environment, 'LC_ALL': 'C.UTF-8'}
+        result = self.fixture.invoke('git push origin develop', environment=changed)
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertFalse(self.fixture.sentinel.exists())
 
 
 if __name__ == '__main__':

@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import sys
 
 HARNESSES = ("claude", "codex")
@@ -552,6 +553,17 @@ def load_sibling(name):
     return module
 
 
+def blocked_fix(error):
+    """Corrective hint for a top-level failure. An unrepresentable path is a
+    runtime encoding fault, so it must not send the owner to edit healthy source."""
+    if isinstance(error, UnicodeError):
+        return ("a path or name cannot be represented in this runtime's "
+                f"{sys.getfilesystemencoding()} encoding; rerun under a UTF-8 locale, for example "
+                "LC_ALL=C.UTF-8 or PYTHONUTF8=1. The candidate source is not at fault")
+    return ("correct templates/distribution.json or its declared sources; "
+            "rerun python3 templates/scripts/rpi-distribution.py validate")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("validate", "render", "check-generated", "check-native", "check-local-skills", "check-self", "self-paths", "counts", "plan", "apply", "check", "rollback", "detach", "diagnose"))
@@ -587,6 +599,10 @@ def main():
             lifecycle = load_sibling("rpi-lifecycle")
             try:
                 return lifecycle.cli(sys.modules[__name__], args)
+            except lifecycle.TargetSettingsError as error:
+                rerun = shlex.join([sys.executable, str(Path(__file__).resolve()), *sys.argv[1:]])
+                print(f"BLOCKED / WHY: {error} / FIX: repair the JSON object in {error.path}, preserving owner settings; rerun {rerun}", file=sys.stderr)
+                return 1
             except lifecycle.Conflict as error:
                 print(json.dumps({"status": "conflict", "reason": str(error), "fix": lifecycle.blocked_hint(args, str(error))}))
                 return 2
@@ -623,7 +639,7 @@ def main():
         print(json.dumps({"checked_components": len(manifest["components"]), "files": len(tree), "counts": counts(manifest), "managed_root_bytes": {h: len(tree[h + '/AGENTS.md']) for h in HARNESSES if h + '/AGENTS.md' in tree}}, sort_keys=True))
         return 0
     except (OSError, ValueError, KeyError, TypeError) as error:
-        print(f"BLOCKED / WHY: {error} / FIX: correct templates/distribution.json or its declared sources; rerun python3 templates/scripts/rpi-distribution.py validate", file=sys.stderr)
+        print(f"BLOCKED / WHY: {error} / FIX: {blocked_fix(error)}", file=sys.stderr)
         return 1
 
 

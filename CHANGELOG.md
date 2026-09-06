@@ -4,7 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [2.0.0] - 2026-09-06
+
+### Added
+
+- Shared portable sources for 20 namespaced RPI workflows, 12 domain skills and
+  the Codex-only simplify helper, with deterministic Claude and Codex packages.
+- Ownership-aware install, update, conflict reporting, rollback and detach;
+  separate user/project state and explicit native capability setup.
+- Candidate-bound local verification, measured Python line/branch coverage,
+  loopback coverage-delivery tests and read-only native diagnostics.
+- Durable triage checkpoints and bounded assignment/audit handoff validation.
+  Eight core audit domains remain required, with conditional agent-surface coverage.
+- Test-quality rules #93-#95: a positive mocking boundary (mock only what you
+  do not own), an assertion must-be-able-to-fail check covering tautological,
+  disjunctive, registration-only and over-broad assertions, and coverage as
+  evidence rather than a defended target. `rpi-validate` now reviews test
+  quality alongside test results and reports its findings, and error #13 gains
+  a criterion for judging a test that already exists.
 
 ### Changed
 
@@ -17,6 +34,48 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
   tiers and generation pins from current guidance. Economy choices use explicit
   native launches/profiles, respecting owner selection and native persistence.
   New installations leave Agent Teams opt-in and preserve existing user opt-ins.
+
+- Workflow names use `rpi-*`; native `/plan` remains a harness mode. Retained
+  legacy aliases are explicit-only rename notices; custom files stay owner-owned.
+- AGENTS.md contains shared project intelligence and policy; CLAUDE.md imports
+  it. Native adapter fields, resource layouts and conditional rule routes are explicit.
+- Research remains descriptive; `rpi-assess` handles requested evaluation.
+  Assignments stay within the current phase, with independent review, TDD,
+  complete finding dispositions and revalidated durable handoffs.
+- Working branches stay local, with full local gates before one authorized
+  integration push. No Vercel Preview or hosted debugging loop is permitted.
+
+### Fixed
+
+- Safer shell, Git/GitHub, PostgreSQL authorization and module-mode recipes.
+- Installer ownership/path escapes, configuration collisions, interrupted
+  recovery and stale verification evidence now fail with actionable diagnostics.
+- Forced termination releases lifecycle locks; partial detach and scoped updates
+  preserve shared resources still needed by another installed harness.
+- New verification attempts supersede prior receipts, locale changes invalidate
+  evidence, and configured Git aliases cannot conceal guarded operations.
+- Scheduler query failures report unknown state with a failing exit; help and
+  discovery no longer require a home directory, and unsupported options fail
+  before any installation action. Failed unload, including unload before reinstall, preserves the saved job
+  configuration and native error instead of reporting removal.
+- A path that cannot be represented in the runtime's filesystem encoding now
+  reports the locale as the cause and names the UTF-8 recovery, instead of
+  advising the owner to edit healthy `templates/distribution.json`.
+- Scheduler paths are shell-quoted end to end: the generated launchd job and the
+  printed uninstall command both survive project directories containing spaces,
+  quotes or shell metacharacters. Previously the emitted `ProgramArguments`
+  failed with exit 127 and the printed command could not be copied.
+- The opted-in scheduled updater resolves the actual native workflow and bundled
+  contract, preserves permission boundaries, rejects unignored report paths and
+  retains native/check failures without blind mutation retries.
+- Failed, backdated, partial-scope and late-arriving reports remain discoverable;
+  unreadable directories cannot appear as a successful empty triage inventory.
+- Historical harness claims are scoped to actual evidence. No additional rule
+  or error ID is retired, and no model-capability safeguard is removed.
+
+See [migration](docs/migrations/v2.md), [compatibility](docs/compatibility.md) and
+[the guide](GUIDE.md) before adopting this major release. No real adopter fleet
+migration or benchmark cost savings are claimed.
 
 ## [1.29.0] - 2026-09-01
 

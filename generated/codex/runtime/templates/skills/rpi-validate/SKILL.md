@@ -28,6 +28,10 @@ Process:
    - Verify marked-complete items are actually done.
    - Run every applicable automated verification command, or reuse valid
      evidence when candidate inputs and check selection are unchanged.
+   - Review test quality, not only test results. For each changed or added
+     test, name the production change that would make it fail. Flag
+     tautological, disjunctive, registration-only and over-broad assertions,
+     mocks of owned code, and coverage exclusions that defend a threshold.
    - Think about edge cases.
 5. Save `docs/agents/validation-report.md` with:
    - Implementation status per phase
@@ -35,6 +39,8 @@ Process:
    - Code review findings (matches, deviations, issues), every confirmed finding's
      disposition and evidence-backed false-positive rejections
    - Missing review/coverage results and any unresolved architectural decision
+   - Test-quality findings: assertions that cannot fail, owned-code mocks,
+     threshold-defending exclusions, and any narrowed assertion's remaining invariant
    - Manual testing required (only if automation impossible — explain WHY)
    - Recommendations
 6. Return findings to the authorized implementation owner for repair, simplify

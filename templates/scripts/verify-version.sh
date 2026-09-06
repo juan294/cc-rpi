@@ -114,6 +114,12 @@ check_version "README.md" 'Version[-: ]+v?[0-9]+\.[0-9]+\.[0-9]+|releases/tag/v[
 check_version ".claude-plugin/plugin.json" '"version": *"[0-9]+\.[0-9]+\.[0-9]+"' "Plugin manifest version" 1
 check_version ".claude-plugin/marketplace.json" '"version": *"[0-9]+\.[0-9]+\.[0-9]+"' "Marketplace manifest version" 1
 
+check_version "templates/distribution.json" '"version": *"[0-9]+\.[0-9]+\.[0-9]+"' "Distribution version" 1
+check_version "templates/adapters/codex-plugin.json" '"version": *"[0-9]+\.[0-9]+\.[0-9]+"' "Codex plugin version" 1
+check_version "templates/adapters/codex-marketplace.json" '"version": *"[0-9]+\.[0-9]+\.[0-9]+"' "Codex marketplace version" 1
+
+# Migration fixtures intentionally preserve old receipt versions; they are
+# inputs to compatibility tests, not declarations of the current product.
 # --- Check 2: the previous version lingers nowhere ---------------------------
 # This is the check that catches a partial bump. After releasing X, any file
 # still naming X-1 outside CHANGELOG history was missed. Illustrative versions
@@ -130,7 +136,8 @@ check_version ".claude-plugin/marketplace.json" '"version": *"[0-9]+\.[0-9]+\.[0
 if [[ -n "$PREV_VERSION" ]]; then
   STALE="$(git grep -n -F "$PREV_VERSION" -- \
              ':!CHANGELOG.md' ':!.claude/rules/contributing.md' \
-             ':!docs/' ':!*.lock' 2>/dev/null || true)"
+             ':!docs/' ':!*.lock' ':!tests/test_lifecycle_adopters.py' \
+             ':!tests/fixtures/lifecycle-adopters.json' ':!tests/test_acceptance_matrix.py' 2>/dev/null || true)"
   if [[ -n "$STALE" ]]; then
     emit_block "Previous version $PREV_VERSION still appears outside $CHANGELOG:
 $(printf '%s' "$STALE" | sed 's/^/  /')" \
@@ -178,12 +185,12 @@ if [[ "$FAILED" -ne 0 ]]; then
 fi
 
 if [[ -n "${PENDING:-}" ]]; then
-  echo "PASS: version $VERSION agrees across README badge and both plugin manifests;"
-  echo "      $PREV_VERSION appears nowhere outside CHANGELOG."
+  echo "PASS: version $VERSION agrees across README badge, plugin manifests and distribution adapters;"
+  echo "      $PREV_VERSION has no stale references outside documented history fixtures."
   echo "NOTE: Retirement Ledger pre-commits to unreleased $PENDING -- if the next"
   echo "      release ships under a different number, update $LEDGER to match."
 else
-  echo "PASS: version $VERSION agrees across README badge and both plugin manifests;"
-  echo "      no stale prior version outside CHANGELOG; ledger versions all released."
+  echo "PASS: version $VERSION agrees across README badge, plugin manifests and distribution adapters;"
+  echo "      no stale prior version outside documented history fixtures; ledger versions all released."
 fi
 exit 0

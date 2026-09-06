@@ -28,8 +28,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 PROJECT_NAME="$(basename "${PROJECT_DIR}")"
-LAUNCH_AGENTS_DIR="${HOME}/Library/LaunchAgents"
-SYSTEM_LOGS_DIR="${HOME}/Library/Logs/${PROJECT_NAME}"
 
 # Plist label prefix — all agents for this project share it
 LABEL_PREFIX="com.${PROJECT_NAME}"
@@ -89,10 +87,16 @@ parse_schedule() {
 }
 
 # Generate a launchd plist for an agent script
+xml_text() {
+  printf '%s' "$1" | sed -e 's/\&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
+}
+
 generate_plist() {
   local script_path="$1"
   local agent_name="$2"
   local label="${LABEL_PREFIX}.${agent_name}"
+  local quoted_script
+  printf -v quoted_script '%q' "$script_path"
   local schedule
   schedule=$(parse_schedule "$script_path") || return 1
 
@@ -123,13 +127,13 @@ generate_plist() {
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>${label}</string>
+  <string>$(xml_text "$label")</string>
 
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
     <string>-c</string>
-    <string>exec /bin/bash ${script_path}</string>
+    <string>$(xml_text "exec /bin/bash $quoted_script")</string>
   </array>
 
   <key>StartCalendarInterval</key>
@@ -138,10 +142,10 @@ ${calendar_interval}
   </dict>
 
   <key>StandardOutPath</key>
-  <string>${SYSTEM_LOGS_DIR}/${agent_name}.log</string>
+  <string>$(xml_text "${SYSTEM_LOGS_DIR}/${agent_name}.log")</string>
 
   <key>StandardErrorPath</key>
-  <string>${SYSTEM_LOGS_DIR}/${agent_name}.error.log</string>
+  <string>$(xml_text "${SYSTEM_LOGS_DIR}/${agent_name}.error.log")</string>
 
   <key>HardResourceLimits</key>
   <dict>
@@ -158,11 +162,11 @@ ${calendar_interval}
   <key>EnvironmentVariables</key>
   <dict>
     <key>HOME</key>
-    <string>${HOME}</string>
+    <string>$(xml_text "$HOME")</string>
     <key>TERM</key>
     <string>xterm-256color</string>
     <key>PATH</key>
-    <string>/opt/homebrew/bin:/usr/local/bin:${HOME}/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <string>$(xml_text "/opt/homebrew/bin:/usr/local/bin:${HOME}/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin")</string>
   </dict>
 </dict>
 </plist>
@@ -188,7 +192,17 @@ discover_agents() {
 # Commands
 # ---------------------------------------------------------------------------
 
+setup_mutation_paths() {
+  if [[ ${HOME:-} != /* ]]; then
+    echo 'BLOCKED / WHY: scheduler installation requires an absolute HOME / FIX: use the owner-supported scheduler environment' >&2
+    return 1
+  fi
+  LAUNCH_AGENTS_DIR="${HOME}/Library/LaunchAgents"
+  SYSTEM_LOGS_DIR="${HOME}/Library/Logs/${PROJECT_NAME}"
+}
+
 cmd_install() {
+  setup_mutation_paths
   echo "Installing ${PROJECT_NAME} scheduled agents..."
   echo "Project: ${PROJECT_DIR}"
   echo ""
@@ -205,7 +219,7 @@ cmd_install() {
 
     # Unload if already loaded
     if [ -f "${target}" ]; then
-      launchctl bootout "gui/$(id -u)/${label}" 2>/dev/null || true
+      unload_if_loaded "$label"
     fi
 
     # Generate and install plist
@@ -231,10 +245,13 @@ cmd_install() {
   echo "  launchctl start ${LABEL_PREFIX}.<agent-name>"
   echo ""
   echo "To uninstall all:"
-  echo "  bash ${SCRIPT_DIR}/install-agents.sh --unload"
+  local quoted_installer
+  printf -v quoted_installer '%q' "${SCRIPT_DIR}/install-agents.sh"
+  echo "  bash ${quoted_installer} --unload"
 }
 
 cmd_unload() {
+  setup_mutation_paths
   echo "Unloading ${PROJECT_NAME} agents..."
 
   local count=0
@@ -242,7 +259,7 @@ cmd_unload() {
     [ -f "$plist" ] || continue
     local label
     label=$(basename "$plist" .plist)
-    launchctl bootout "gui/$(id -u)/${label}" 2>/dev/null || true
+    unload_if_loaded "$label"
     rm -f "$plist"
     echo "  Removed ${label}"
     count=$((count + 1))
@@ -255,19 +272,52 @@ cmd_unload() {
   fi
 }
 
+scheduler_inventory() {
+  # A successful all-jobs inventory confirms absence. A failed per-label lookup
+  # cannot distinguish an unloaded job from an unavailable scheduler. Keep one
+  # snapshot for every row and retain signed signal exits (launchctl(1) list).
+  local query_status=0
+  SCHEDULER_INVENTORY=$(launchctl list 2>&1) || query_status=$?
+  if [ "$query_status" -ne 0 ]; then
+    printf 'UNKNOWN: scheduler query failed (exit %s)\n%s\n' "$query_status" "$SCHEDULER_INVENTORY" >&2
+    return "$query_status"
+  fi
+  if ! printf '%s\n' "$SCHEDULER_INVENTORY" | awk '
+    NR == 1 { if (NF != 3 || $1 != "PID" || $2 != "Status" || $3 != "Label") exit 1; next }
+    NF != 3 || ($1 != "-" && $1 !~ /^[0-9]+$/) || $2 !~ /^-?[0-9]+$/ { exit 1 }
+    END { if (NR == 0) exit 1 }
+  '; then
+    printf 'UNKNOWN: unrecognized scheduler inventory\n%s\n' "$SCHEDULER_INVENTORY" >&2
+    return 1
+  fi
+}
+
+unload_if_loaded() {
+  local label="$1"
+  scheduler_inventory
+  if printf '%s\n' "$SCHEDULER_INVENTORY" | awk -v label="$label" '
+    NR > 1 && $3 == label { found=1 }
+    END { exit !found }
+  '; then
+    # Preserve the plist and native diagnostic on failure. A later explicit
+    # retry can reconcile it; deleting/replacing it is not proof of unloading.
+    launchctl bootout "gui/$(id -u)/${label}"
+  fi
+}
+
 cmd_status() {
   echo "${PROJECT_NAME} scheduled agents:"
   echo ""
-
+  scheduler_inventory
   local found=false
   while IFS='|' read -r agent_name script_path; do
     local label="${LABEL_PREFIX}.${agent_name}"
     local schedule
     schedule=$(parse_schedule "${script_path}")
     local status="NOT LOADED"
-    if launchctl list "${label}" >/dev/null 2>&1; then
-      local exit_code
-      exit_code=$(launchctl list "${label}" 2>/dev/null | grep '"LastExitStatus"' | grep -o '[0-9]*' || echo "?")
+    local exit_code
+    exit_code=$(printf '%s\n' "$SCHEDULER_INVENTORY" | awk -v label="$label" 'NR > 1 && $3 == label { print $2 }')
+    if [ -n "$exit_code" ]; then
       status="LOADED (last exit: ${exit_code})"
     fi
     printf "  %-25s %-20s %s\n" "${agent_name}" "${schedule}" "${status}"
@@ -293,6 +343,11 @@ cmd_list() {
 # Main
 # ---------------------------------------------------------------------------
 
+if [ "$#" -gt 1 ]; then
+  echo "Usage: $(basename "$0") [--unload|--status|--list|--help]" >&2
+  exit 2
+fi
+
 case "${1:-}" in
   --unload|--remove|--uninstall)
     cmd_unload
@@ -312,7 +367,11 @@ case "${1:-}" in
     echo "  --list      List discoverable agent scripts"
     echo "  --help      Show this help"
     ;;
-  *)
+  '')
     cmd_install
+    ;;
+  *)
+    echo "Usage: $(basename "$0") [--unload|--status|--list|--help]" >&2
+    exit 2
     ;;
 esac

@@ -130,6 +130,9 @@ ledger in `.claude/rules/contributing.md`.
 ## Testing
 
 13. Write tests before implementation (TDD) -> rules/testing.md
+93. Mock only what you do not own -> rules/testing.md
+94. Every assertion must be able to fail -> rules/testing.md
+95. Coverage is evidence, not a target -> rules/testing.md
 
 ## Findings
 

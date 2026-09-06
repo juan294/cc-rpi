@@ -13,6 +13,21 @@ CHECKS = SCRIPT.with_name("verification-checks.py")
 
 
 class EnvironmentTests(unittest.TestCase):
+    def test_locale_timezone_and_python_settings_bind_receipts_without_recording_values(self):
+        spec = importlib.util.spec_from_file_location("candidate_settings_test", SCRIPT.with_name("candidate.py"))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        baseline = module.environment({"PATH": os.defpath})
+        for name in ("LANG", "LANGUAGE", "LC_ALL", "LC_CTYPE", "LC_COLLATE", "LC_MESSAGES",
+                     "LC_MONETARY", "LC_NUMERIC", "LC_TIME", "TZ", "PYTHONUTF8",
+                     "PYTHONIOENCODING", "PYTHONCOERCECLOCALE", "PYTHONHASHSEED"):
+            with self.subTest(name=name):
+                changed = module.environment({"PATH": os.defpath, name: "private-setting-value"})
+                self.assertNotEqual(baseline, changed)
+                self.assertNotIn("private-setting-value", json.dumps(changed))
+                self.assertNotEqual(baseline, module.environment({"PATH": os.defpath, name: ""}))
+        self.assertEqual(baseline, module.environment({"PATH": os.defpath, "UNRELATED_SECRET": "private"}))
+
     def test_tool_replacement_changes_fingerprint_without_executing_it(self):
         spec = importlib.util.spec_from_file_location("candidate_test", SCRIPT.with_name("candidate.py"))
         module = importlib.util.module_from_spec(spec)

@@ -1,142 +1,139 @@
 # cc-rpi — Claude Code Reference & Project Intelligence
 
 [![CI](https://github.com/juan294/cc-rpi/actions/workflows/validate.yml/badge.svg)](https://github.com/juan294/cc-rpi/actions/workflows/validate.yml)
-[![Version: v1.29.0](https://img.shields.io/badge/Version-v1.29.0-orange.svg)](https://github.com/juan294/cc-rpi/releases/tag/v1.29.0)
+[![Version: v2.0.0](https://img.shields.io/badge/Version-v2.0.0-orange.svg)](https://github.com/juan294/cc-rpi/releases/tag/v2.0.0)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Status: Active](https://img.shields.io/badge/Status-Active-brightgreen.svg)]()
 [![Claude Code](https://img.shields.io/badge/Built%20for-Claude%20Code-blueviolet.svg)](https://docs.anthropic.com/en/docs/claude-code)
 
 ![Chapa Badge](https://chapa.thecreativetoken.com/u/juan294/badge.svg)
 
-A blueprint repository for setting up and running projects with [Claude Code](https://docs.anthropic.com/en/docs/claude-code), with a Codex compatibility layer via `AGENTS.md`. Contains the RPI (Research-Plan-Implement) methodology, a catalog of known agent errors, and operational rules learned from hundreds of real sessions.
-
----
-
-## Local work and publication
-
-Working branches/worktrees stay local. Complete all applicable checks with
-`bash scripts/verify-local.sh`, integrate locally, and inspect hosted triggers
-before one explicitly authorized completed integration push. Never create
-Vercel Previews or use hosted CI as a debugging loop. Production remains a
-separate authorized release. Preserve plans and handoffs before safe cleanup.
+A shared RPI (Research-Plan-Implement) blueprint for Claude Code and Codex.
+One authored workflow corpus produces native skills and bundled resources for
+both clients. Shared project intelligence lives in `AGENTS.md`; `CLAUDE.md`
+imports it and adds Claude-specific guidance.
 
 ## Requirements
 
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI installed and configured
-- Git
+- Git and Python 3.11 or newer for installation and lifecycle operations.
+- Claude Code, Codex, or both, configured for the chosen native route.
+- For contributing: the tools and pinned Python dependencies listed in
+  [CONTRIBUTING.md](CONTRIBUTING.md).
+
+See [compatibility evidence](docs/compatibility.md) for tested versions, route
+limitations and checks that remain unavailable. A generated file alone does not
+prove native discovery, trust or execution.
 
 ## Quick Start
 
-Clone the repository and install the user-level commands:
+Clone a local source checkout:
 
 ```bash
 git clone https://github.com/juan294/cc-rpi.git
-cd cc-rpi && ./scripts/install.sh
+cd cc-rpi
+bash scripts/install.sh --check
 ```
 
-That puts `/bootstrap`, `/adopt`, `/update`, and `/detach` in
-`~/.claude/commands/` so they work in every project, with the path to your
-clone filled in and verified. Re-run it after each `git pull`; check with
-`./scripts/install.sh --check`.
+Choose direct installation when you need a selected set of domain skills. Generate
+an explicit plan for the four user-scope lifecycle skills:
 
-Then, in your target project, run `/bootstrap` for a new project or `/adopt`
-for an existing one. Or just tell Claude Code:
+```bash
+bash scripts/install.sh --scope user --harness both --route direct \
+  --output "$PWD/.rpi/local/user-install.json"
+```
 
-> Go read the cc-rpi repository and set up this project following all the best practices. Read the quick reference and methodology first, use the error-patterns skill or full error catalog only if needed, then configure CLAUDE.md, AGENTS.md, and slash commands for this project.
+Read the plan and resolve any conflicts. Apply that exact file within your setup
+request, then check the selected installation:
 
-Bootstrapped and adopted projects now also get an `AGENTS.md`
-compatibility layer so the same methodology can be operated from Codex without changing the workflow.
+```bash
+bash scripts/install.sh --apply "$PWD/.rpi/local/user-install.json"
+bash scripts/install.sh --check --scope user --harness both --route direct
+```
 
-If you also use Codex, the blueprint ships a Codex-only
-`codex-simplify` skill at `cc-rpi/.codex/skills/codex-simplify/`.
-Copy it into `~/.codex/skills/codex-simplify/` if you want a reusable
-equivalent of Claude Code's native `/simplify` without creating a
-project skill named `simplify`.
+Select `--harness claude` or `--harness codex` when using only one client. Direct
+user installations default to `~/.claude/skills/` and `~/.agents/skills/`, with
+separate state under `~/.config/cc-rpi/installations/user`. The installer no longer
+copies four unnamespaced commands or updates user files merely because it ran.
 
-Model and effort inherit the owner pane. See [native model profiles](docs/model-profiles.md)
-for explicit Claude launches and optional user-local Codex profiles, and the
-[v2 migration note](docs/migrations/v2.md) for policy compatibility changes.
+In the target project, invoke `rpi-bootstrap` for a new project or `rpi-adopt` for
+an existing project. Claude direct skills use `/rpi-bootstrap` and `/rpi-adopt`;
+Codex uses `$rpi-bootstrap` and `$rpi-adopt`. These workflows resolve an explicit
+source/target and review the project installation plan before applying it.
+Project scope owns the remaining workflows and selected domain modules; it does
+not own the separate user lifecycle installation.
 
-## Harness Scope
+Native plugin installation is another route. Claude's package is this repository
+root; Codex's self-contained package is `generated/codex/`. Native managers own
+plugin installation, updates, removal and trust. Plugin selectors are namespaced,
+for example Claude `/cc-rpi:rpi-research` and Codex `cc-rpi:rpi-research` in its
+native skill selector. Use one registration route per harness and scope, and
+verify discovery before invocation. Claude whole-package plugins cannot exclude
+individual domain skills on the tested client; use the direct route for that
+selection. See [GUIDE.md](GUIDE.md) and [compatibility](docs/compatibility.md).
 
-**Principle: one harness per blueprint.** cc-rpi is authored for Claude
-Code and maintained for a single author syncing 15+ downstream
-projects. Every additional harness is ongoing sync surface --
-parallel command trees, parallel wrappers, extra work in `/update` on
-every blueprint bump -- so by default new harness support lives
-outside this repo.
+## Updates, recovery and migration
 
-**Codex is the one exception.** `AGENTS.md` is a widely adopted
-cross-agent markdown convention that Codex reads natively, so the
-compatibility layer is a single file and a handful of translations,
-not a parallel command tree. The ongoing cost is low enough to carry
-upstream without dragging on `/update` across every project.
+Use `rpi-update` to compare installed files with their recorded baselines and an
+explicit local source. Generate a new plan after source or target changes;
+`ready`, `noop` and `conflict` are different outcomes. Review file, block and
+settings-key ownership before applying. Permission/hook changes require the
+engine's explicit capability selection and native setup review; a successful
+copy is not permission approval.
 
-Other harnesses (OpenCode, GitHub Copilot, etc.) are better served by
-sibling projects or community-maintained overlays. [copilot-rpi][] is
-maintained as a separate repository rather than layered on top of
-cc-rpi for exactly this reason. For an ad-hoc harness such as
-OpenCode, the recommended path is a small overlay repo with a
-generator script that derives the harness-specific command directory
-from `.claude/commands/`, a long-lived downstream fork, or a minimal
-`AGENTS.md` + harness config file with no command wrappers at all.
+`rpi-detach` removes only proven-owned unchanged content in the selected scope.
+Custom instructions, edited/unknown files, research, plans and decisions are
+preserved. Interrupted transactions retain journals; `scripts/install.sh --rollback`
+takes the recorded journal path and refuses to overwrite concurrent
+edits. Native plugin recovery remains the native manager's operation.
 
-[copilot-rpi]: https://github.com/juan294/copilot-rpi
+Read the [v2 migration guide](docs/migrations/v2.md) before adopting an existing
+v1 installation. Legacy filenames and sync metadata do not establish ownership.
+Native `/plan` and `/status` are not the RPI workflows: use `rpi-plan` and
+`rpi-status`. Compatibility aliases are rename notices, not automatic forwarding.
 
-## Guide
+## Workflow and model selection
 
-New here? Read **[GUIDE.md](GUIDE.md)** — a human-readable walkthrough of the philosophy, the workflow, and every command. It covers everything you need to know without diving into every file. Also works great as source material for NotebookLM podcasts or articles.
+Use descriptive `rpi-research`, evaluative `rpi-assess` when requested, then
+`rpi-plan`, `rpi-implement` and `rpi-validate`. Implementation preserves TDD,
+independent review, repair, simplify and complete applicable local verification.
+A narrow task may stay with the parent; delegate bounded independent work when
+useful, with at most three simultaneous implementers and lower resource limits
+when needed. Pre-launch audits require eight core domains plus applicable agent
+surfaces, not eight model instances.
+
+Model and effort inherit the owner's active pane. [Optional native profiles](docs/model-profiles.md)
+are explicit choices; installation does not rewrite global model defaults or
+silently switch the parent to an economy model. Claude keeps native `/simplify`;
+Codex receives the separate `codex-simplify` helper through its selected route.
+
+Keep working branches/worktrees local. Run `bash scripts/verify-local.sh`, integrate
+completed work locally, inspect hosted triggers and publish completed integration
+only within explicit authorization. Never create Vercel Previews or use hosted
+CI as a debugging loop. Production remains a separately authorized release.
 
 ## What's Inside
 
-### Methodology (`methodology/`)
+| Location | Purpose |
+| --- | --- |
+| [templates/distribution.json](templates/distribution.json) | Component identity, selection, ownership and bundled resources |
+| `templates/skills/` | Canonical workflows and domain knowledge |
+| `templates/adapters/` | Native metadata and configuration adapters |
+| `generated/claude/`, `generated/codex/` | Deterministic complete native packages; never hand-edit |
+| `templates/scripts/` | Renderer, transactional lifecycle, diagnostics and verification helpers |
+| [methodology/](methodology/README.md) | Research, planning, implementation, testing and operational practices |
+| [patterns/quick-reference.md](patterns/quick-reference.md) | Rule index; detailed recurring errors live in `patterns/agent-errors.md` |
+| `examples/` | Research, phased plans and logging examples |
+| [templates/setup-checklist.md](templates/setup-checklist.md) | Project setup and adaptation checks |
+| `.claude/skills/`, `.agents/skills/` | This repository's self-applied native registrations |
 
-The full Research-Plan-Implement pattern adapted for Claude Code, based on HumanLayer's opencode-rpi and ACE-FCA framework. Organized by topic (12 files, in reading order):
+The manifest supplies inventory counts. Shared universal policies render into
+managed `AGENTS.md` blocks; conditional rules remain reachable through native
+Claude path rules and Codex's explicit root task/path map. Local extensions such
+as this repository's Drawio skill retain their own ownership.
 
-- **Philosophy** — Core tenets, error amplification principle, mental alignment
-- **Context Engineering** — The foundational discipline: compaction, context quality, settings & permissions
-- **Four Phases** — Research, Plan, Implement, Validate with detailed processes
-- **Agent Design** — Documentarian rule, tool restrictions, subagent catalog, Anthropic-native commands (`/simplify`, `/batch`), agent teams, autonomy principles
-- **Pseudocode Notation** — Compact notation for writing implementation plans
-- **Testing** — Automated-first verification hierarchy, TDD protocol
-- **Push Accountability** — Local gates, one authorized integration push, exact-candidate CI observation
-- **CI & Guardrails** — Pre-commit hooks, CI workflows, development guardrails, enforcement stack
-- **Scheduled Agents** — Recurring quality agents on cron/launchd, shared context system
-- **Cost Monitoring** — Session inheritance, explicit economy choices, and cost per outcome
-- **Error & Success Logging** — Framework for systematic improvement
-- **WebMCP Tool Design** — Agent-facing tool design as an RPI application: the WebMCP/server-MCP boundary, the role-play-then-eval obligation (conditional reading, for projects that expose tools to an agent)
-
-### Known Error Patterns (`patterns/`)
-
-A catalog of recurring Claude Code agent errors documented from real sessions. Each entry includes the symptom, root cause, correct approach, and what to avoid:
-
-- Shell behavior (parallel calls, cwd resets, tilde paths)
-- Git operations (worktrees, pre-commit hooks, push rejections)
-- GitHub CLI (`gh` field names, CI status checking)
-- Node.js/TypeScript (ESM shebangs, Buffer vs string)
-- CI & workflow (push-and-forget, skipping TDD, suggesting manual steps)
-
-### Examples (`examples/`)
-
-Sample documents illustrating the methodology in practice — a research document, implementation plan with phase files, error/success log entries, and additional pseudocode notation examples. Use these as reference when producing your own RPI artifacts.
-
-### Templates (`templates/`)
-
-Ready-to-use starting points for new projects:
-
-- **CLAUDE.md template** — Slim project configuration (~70 lines) with universal instructions
-- **AGENTS.md template** — Codex compatibility layer that teaches Codex how to interpret the cc-rpi `.claude/` layout
-- **Codex-only skills** — `.codex/skills/` holds personal Codex helpers
-  that intentionally stay outside `.claude/skills/`; currently includes
-  `codex-simplify`
-- **Rule templates** — `.claude/rules/` files with conditional loading (deployment, Supabase, testing, WebMCP) and universal rules (RPI details, push accountability)
-- **settings.json template** — `.claude/settings.json` with native permissions and hooks; Agent Teams remains opt-in
-- **Setup checklist** — Step-by-step guide including rules, skills, hooks, CI, and scheduled agents
-- **Slash commands** — `/bootstrap`, `/adopt`, `/update`, `/brainstorm`, `/tool-design`, `/research`, `/plan`, `/implement`, `/validate`, `/describe-pr`, `/pre-launch`, `/remediate`, `/triage`, `/status`, `/fix-ci`, `/explore-release` — plus Anthropic-native `/simplify` and `/batch`
-- **E2E Pro release-verification playbook** — Copy-and-adapt template that turns release verification into auditable evidence (Wave A truthful-gate floor + structural waves by risk)
-- **Scheduled agent scripts** — Nightly blueprint sync and multi-project morning triage with launchd/cron templates
-- **Repo-invariant scripts** — `verify-counts.sh` (stated counts match the catalogs), `verify-version.sh` (version strings match CHANGELOG, including the badge that repeats it 3x), `verify-skills.sh` (skill frontmatter and the 500-line ceiling), `check-tree-drift.sh` (`templates/` vs `.claude/`) — each reports a runnable fix and runs in CI
-- **Installer** — `scripts/install.sh` puts the four user-level commands in place with the blueprint path filled in; `--check` reports when your installed copies have drifted from the clone
+Read [GUIDE.md](GUIDE.md) for the full workflow guide. Optional scheduled work is
+configured separately; neither installation nor a source update creates a fleet
+rollout, hosted schedule or global automatic sync.
 
 ## Adding New Patterns
 
@@ -158,7 +155,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for full guidelines.
 ## Credits
 
 - [HumanLayer](https://humanlayer.dev/) — ACE-FCA framework and opencode-rpi implementation
-- Adapted for Claude Code's native capabilities (CLAUDE.md, Task tool, slash commands)
+- Adapted to native Claude Code and Codex workflows through one shared authored corpus
 
 ## License
 

@@ -25,6 +25,33 @@ class Conflict(ValueError):
     """A valid request needs reconciliation before it can mutate files."""
 
 
+class TargetSettingsError(ValueError):
+    """Malformed owner settings need target repair, not source regeneration."""
+
+    def __init__(self, path, reason):
+        self.path = path
+        super().__init__('invalid target settings ' + str(path) + ': ' + str(reason))
+
+
+def has_direct_content(path):
+    """Empty directory trees are inert; never follow or remove owner entries."""
+    try:
+        if path.is_symlink():
+            return True
+        if not path.exists():
+            return False
+        pending = [path]
+        while pending:
+            with os.scandir(pending.pop()) as entries:
+                for entry in entries:
+                    if not entry.is_dir(follow_symlinks=False):
+                        return True
+                    pending.append(entry.path)
+        return False
+    except OSError:
+        return True  # Unreadable or non-directory roots cannot prove absence.
+
+
 def encoded(data):
     return base64.b64encode(data).decode('ascii')
 
@@ -109,6 +136,12 @@ def load_state(state):
         key = (entry['root_id'], entry['destination'], entry.get('block'), entry.get('config_record', {}).get('id'))
         if key in seen or entry.get('ownership') != 'cc-rpi' or not re.fullmatch('[0-9a-f]{64}', entry.get('base_hash', '')):
             raise ValueError('invalid or duplicate owned entry')
+        consumers = entry.get('consumers')
+        if 'consumers' in entry and (not isinstance(consumers, list) or not consumers or
+                any(h not in ('claude', 'codex') for h in consumers) or
+                len(consumers) != len(set(consumers)) or
+                entry.get('adapter', {}).get('harness') not in consumers):
+            raise ValueError('invalid component consumers')
         seen.add(key)
     return value
 
@@ -180,7 +213,8 @@ def desired_entries(engine, source, manifest, request, domains):
         root_id = 'project' if request['scope'] == 'project' else harness + '-user-skills'
         validate_component_destination(root_id, destination)
         entry = {'component_id': component, 'root_id': root_id, 'destination': destination,
-                 'ownership': 'cc-rpi', 'adapter': {'harness': harness, 'sha256': digest(serialized(engine.load_adapter(source, harness)))}, 'data': data}
+                 'ownership': 'cc-rpi', 'consumers': [harness],
+                 'adapter': {'harness': harness, 'sha256': digest(serialized(engine.load_adapter(source, harness)))}, 'data': data}
         declaration = next((item for item in manifest['components'] if item['id'] == component), {})
         if declaration.get('capability'):
             entry['capability'] = True
@@ -189,6 +223,8 @@ def desired_entries(engine, source, manifest, request, domains):
         key = (root_id, destination, block)
         if key in desired and desired[key]['data'] != data:
             raise ValueError('conflicting harness output: ' + destination)
+        if key in desired:
+            entry['consumers'] = sorted(set(desired[key]['consumers']) | set(entry['consumers']))
         desired[key] = entry
     for component in engine.selected_components(manifest, domains):
         if component['scope'] != request['scope'] or component.get('distribution_only'):
@@ -336,7 +372,7 @@ def make_plan(engine, request):
                 if not isinstance(json.loads(node_bytes(settings_node), object_pairs_hook=configuration.unique_object, parse_constant=configuration.invalid_constant), dict):
                     raise ValueError('settings root must be an object')
             except ValueError as error:
-                raise ValueError('invalid .claude/settings.json: ' + str(error)) from error
+                raise TargetSettingsError(settings, error) from error
         elif settings_node['kind'] != 'missing':
             raise Conflict('settings must be a regular JSON file')
     previous = load_state(state)
@@ -367,14 +403,29 @@ def make_plan(engine, request):
     if request['action'] != 'detach':
         for harness in request['harnesses']:
             selected_request = {**request, 'harnesses': [harness], 'route': routes[harness]}
-            desired.update(desired_entries(engine, source, manifest, selected_request, domains_by_harness[harness]))
+            for key, entry in desired_entries(engine, source, manifest, selected_request, domains_by_harness[harness]).items():
+                if key in desired:
+                    if desired[key]['data'] != entry['data']:
+                        raise ValueError('conflicting harness output: ' + entry['destination'])
+                    entry['consumers'] = sorted(set(desired[key]['consumers']) | set(entry['consumers']))
+                desired[key] = entry
     old = {(e['root_id'], e['destination'], e.get('block')): e for e in previous['entries'] if 'config_record' not in e} if previous else {}
+    # Older receipts attributed shared files to the last rendered adapter. Exact
+    # remaining output keys recover those consumers without a path-prefix guess.
+    legacy_remaining = {}
+    if remaining_harnesses and any('consumers' not in entry for entry in old.values()):
+        for harness in remaining_harnesses:
+            selected = installations[harness]
+            remaining_request = {**request, 'harnesses': [harness], 'route': selected['route']}
+            for key in desired_entries(engine, source, manifest, remaining_request, selected['domains']):
+                legacy_remaining.setdefault(key, set()).add(harness)
     authorized = set(request.get('allow_capabilities', []))
     capability_ids = {c['id'] for c in manifest['components'] if c.get('capability')}
     conflicts, retained, operations, baselines, next_entries = [], [], [], {}, []
     file_changes = {}
     observations = {}
-    identity = source_identity(source, manifest)
+    source_provenance = source_identity(source, manifest)
+    identity = dict(source_provenance)
     identity['rendered_sha256'] = digest(serialized({str(key): digest(value['data']) for key, value in sorted(desired.items(), key=lambda item: str(item[0]))}))
 
     def observe(root_id, destination):
@@ -401,10 +452,15 @@ def make_plan(engine, request):
     for key in sorted(set(old) | set(desired), key=lambda key: tuple(part or '' for part in key)):
         root_id, destination, block = key
         prior, proposed = old.get(key), desired.get(key)
-        if (prior and proposed is None and request['action'] == 'detach' and remaining_harnesses and
-                (destination == 'AGENTS.md' or destination.startswith('.rpi/rules/'))):
+        prior_consumers = (set(prior.get('consumers', [prior['adapter']['harness']])) |
+                           legacy_remaining.get(key, set())) if prior else set()
+        surviving_consumers = prior_consumers & set(remaining_harnesses)
+        if prior and proposed is None and surviving_consumers:
             retained_entry = dict(prior)
-            retained_entry['adapter'] = {'harness': remaining_harnesses[0], 'sha256': digest(serialized(engine.load_adapter(source, remaining_harnesses[0])))}
+            retained_entry['consumers'] = sorted(surviving_consumers)
+            if retained_entry['adapter']['harness'] not in surviving_consumers:
+                harness = retained_entry['consumers'][0]
+                retained_entry['adapter'] = {'harness': harness, 'sha256': digest(serialized(engine.load_adapter(source, harness)))}
             next_entries.append(retained_entry)
             continue
         if prior and proposed is None and prior.get('adapter', {}).get('harness') not in request['harnesses']:
@@ -481,9 +537,15 @@ def make_plan(engine, request):
                 raise Conflict('native capability file addition/change/removal requires --allow-capabilities ' + cid)
             if proposed:
                 entry = {k: v for k, v in proposed.items() if k != 'data'}
+                entry['consumers'] = sorted(set(entry['consumers']) | surviving_consumers)
+                harness = entry['consumers'][0]
+                entry['adapter'] = {'harness': harness, 'sha256': digest(serialized(engine.load_adapter(source, harness)))}
                 if capability:
                     entry['capability'] = True
-                entry.update({'base_hash': digest(upstream), 'source': identity,
+                byte_source = (prior['source'] if prior and prior.get('base_hash') == digest(upstream)
+                               and prior.get('component_id') == entry['component_id'] and prior.get('source')
+                               else {**identity, 'rendered_sha256': digest(upstream)})
+                entry.update({'base_hash': digest(upstream), 'source': byte_source,
                               'status': 'clean' if result == upstream else 'local-only'})
                 baselines[digest(upstream)] = upstream
                 next_entries.append(entry)
@@ -515,7 +577,7 @@ def make_plan(engine, request):
                         continue
                     destination = ('.claude/skills/' if harness == 'claude' else '.agents/skills/') + component['name']
                     direct = bound_path(roots['project'], destination)
-                    if (direct.exists() or direct.is_symlink()) and not any(e['destination'].startswith(destination + '/') for e in old.values()):
+                    if not any(e['destination'].startswith(destination + '/') for e in old.values()) and has_direct_content(direct):
                         conflicts.append({'destination': destination, 'reason': 'unknown direct registration competes with requested plugin route'})
         for component in manifest['components']:
             for destination in component.get('former_paths', []):
@@ -601,7 +663,8 @@ def make_plan(engine, request):
                 baselines[digest(base)] = base
                 next_entries.append({'root_id': root_id, 'destination': destination, 'component_id': cid,
                     'ownership': 'cc-rpi', 'adapter': {'harness': harness, 'sha256': digest(serialized(engine.load_adapter(source, harness)))},
-                    'config_record': record, 'base_hash': digest(base), 'source': identity, 'status': 'entry-owned'})
+                    'config_record': record, 'base_hash': digest(base),
+                    'source': {**identity, 'rendered_sha256': digest(base)}, 'status': 'entry-owned'})
         except Conflict as error:
             conflicts.append({'destination': destination, 'reason': str(error)})
 
@@ -622,10 +685,14 @@ def make_plan(engine, request):
         if request['action'] == 'detach':
             installations.pop(harness, None)
         else:
-            installations[harness] = {'route': routes[harness], 'domains': sorted(domains_by_harness[harness])}
+            installations[harness] = {'route': routes[harness], 'domains': sorted(domains_by_harness[harness]),
+                                      'source': source_provenance}
             if routes[harness] == 'plugin':
+                package = engine.render_tree(source, [harness], domains_by_harness[harness], include_runtime=False)
+                package_source = {**identity, 'rendered_sha256': digest(serialized({
+                    name: digest(data) for name, data in sorted(package.items())}))}
                 installations[harness]['expected_package'] = {'name': 'cc-rpi', 'version': manifest['version'],
-                    'source': identity, 'adapter': digest(serialized(engine.load_adapter(source, harness)))}
+                    'source': package_source, 'adapter': digest(serialized(engine.load_adapter(source, harness)))}
                 installations[harness]['native_discovery'] = 'unverified; verify through the native manager without editing its cache'
     route_summary = {selection['route'] for selection in installations.values()}
     next_manifest = {'schema_version': 1, 'scope': request['scope'], 'root_ids': sorted(roots),
@@ -705,15 +772,32 @@ def validate_plan(engine, plan):
 
 
 def acquire_lock(state):
+    try:
+        import fcntl
+    except ImportError as error:
+        raise ValueError('lifecycle mutation requires POSIX advisory locks; use the tested macOS or Linux runtime') from error
+    if not hasattr(os, 'O_NOFOLLOW'):
+        raise ValueError('lifecycle mutation requires safe no-follow file opens; use the tested macOS or Linux runtime')
     path = bound_path(state, 'local/lock')
     path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
     try:
-        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    except FileExistsError as error:
-        raise Conflict('installation locked; inspect local/lock and transaction journals') from error
-    os.write(descriptor, (str(os.getpid()) + '\n').encode())
-    os.close(descriptor)
-    return path
+        node = os.fstat(descriptor)
+        if not stat.S_ISREG(node.st_mode) or node.st_nlink != 1 or node.st_size:
+            raise Conflict('legacy or unsafe installation lock; preserve local/lock and inspect its owner and transaction journals')
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            raise Conflict('installation actively locked; wait for the other lifecycle operation, then retry') from error
+        current = os.stat(path, follow_symlinks=False)
+        if (current.st_dev, current.st_ino) != (node.st_dev, node.st_ino) or current.st_nlink != 1 or current.st_size:
+            raise Conflict('installation lock changed during acquisition; preserve state and inspect concurrent writers')
+        # Keep this inode: unlinking it would let a new opener bypass a waiter.
+        # The kernel releases the held descriptor even after SIGKILL.
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
 
 
 def apply_plan(engine, plan, fail_after=None, fail_after_rename=None):
@@ -767,7 +851,7 @@ def apply_plan(engine, plan, fail_after=None, fail_after_rename=None):
         atomic_node(bound_path(plan['state_root'], 'local/source-receipt.json'), file_node(serialized(plan['request']), 0o600))
         return {'status': 'applied', 'journal': str(journal_path)}
     finally:
-        lock.unlink()
+        os.close(lock)
 
 
 def rollback(journal_path):
@@ -775,7 +859,8 @@ def rollback(journal_path):
     if journal_path.is_symlink():
         raise ValueError('journal cannot be a symlink')
     journal_path = journal_path.resolve()
-    journal = json.loads(journal_path.read_text())
+    journal_node = snapshot(journal_path)
+    journal = json.loads(node_bytes(journal_node))
     if (not isinstance(journal, dict) or journal.get('schema_version') != 1 or
             not isinstance(journal.get('transaction'), str) or
             not re.fullmatch('[0-9a-f]{32}', journal['transaction'])):
@@ -792,7 +877,9 @@ def rollback(journal_path):
     expected = bound_path(journal['state_root'], 'local/transactions/' + journal['transaction'] + '/journal.json')
     if expected != journal_path:
         raise ValueError('journal does not match its bound state root')
-    binding = node_bytes(snapshot(bound_path(journal['state_root'], 'local/root-binding.json')))
+    binding_path = bound_path(journal['state_root'], 'local/root-binding.json')
+    binding_node = snapshot(binding_path)
+    binding = node_bytes(binding_node)
     if binding != serialized(journal['roots']):
         raise Conflict('journal roots differ from recorded installation bindings')
     if journal.get('scope') == 'project' and journal['roots'] != {'project': str(Path(journal['state_root']).parent)}:
@@ -800,7 +887,8 @@ def rollback(journal_path):
     if journal.get('scope') == 'project' and Path(journal['state_root']).name != '.rpi':
         raise ValueError('project journal state must be named .rpi')
     receipt_path = journal_path.with_name('receipt.json')
-    receipt = json.loads(node_bytes(snapshot(receipt_path)))
+    receipt_node = snapshot(receipt_path)
+    receipt = json.loads(node_bytes(receipt_node))
     expected_receipt = {'roots': journal['roots'], 'state_root': journal['state_root'],
                         'scope': journal['scope'], 'operations_sha256': digest(serialized(journal['operations']))}
     if receipt != expected_receipt:
@@ -817,6 +905,9 @@ def rollback(journal_path):
         return {'status': 'noop'}
     lock = acquire_lock(journal['state_root'])
     try:
+        for path, validated in ((journal_path, journal_node), (receipt_path, receipt_node), (binding_path, binding_node)):
+            if snapshot(path) != validated:
+                raise Conflict('recovery inputs changed before lock acquisition; reread the journal and retry rollback')
         completed = journal['operations'][:journal['completed']]
         if journal.get('pending') is not None:
             pending = journal['operations'][journal['pending']]
@@ -838,7 +929,7 @@ def rollback(journal_path):
         atomic_node(journal_path, file_node(serialized(journal), 0o600))
         return {'status': 'rolled-back'}
     finally:
-        lock.unlink()
+        os.close(lock)
 
 
 def blocked_hint(args, reason):
