@@ -283,6 +283,43 @@ def deployment(args, cwd, harness, event, canonical):
     return 'production-requires-native-approval'
 
 
+def issue_create(args, cwd, canonical):
+    """Issue creation reports work; it publishes no code and triggers no build.
+
+    It is therefore allowed without candidate verification, but the target stays
+    the configured repository and the body stays a reviewed local file.
+    """
+    options, index = {}, 0
+    while index < len(args):
+        option = args[index]
+        if option in options or option not in ('--title', '--body', '--body-file', '--label', '--assignee'):
+            fail('Unsupported or duplicate GitHub issue option.',
+                 'Use gh issue create --title TITLE with --body TEXT or --body-file LOCAL_FILE; repository, web and template overrides are unsupported.', 'issue-shape')
+        if index + 1 >= len(args) or args[index + 1].startswith('-'):
+            fail('A GitHub issue option requires a literal value.',
+                 'Provide each option with one literal value, for example --title TITLE.', 'issue-shape')
+        options[option] = args[index + 1]
+        index += 2
+    if '--title' not in options or not options['--title'].strip():
+        fail('Issue creation requires one literal title.',
+             'Use gh issue create --title TITLE with --body TEXT or --body-file LOCAL_FILE.', 'issue-shape')
+    if ('--body' in options) == ('--body-file' in options):
+        fail('Issue creation requires exactly one reviewed body source.',
+             'Provide either --body TEXT or --body-file LOCAL_FILE, not both and not neither.', 'issue-shape')
+    if any(os.environ.get(name) for name in ('GH_REPO', 'GH_HOST')) or any(re.match(r'(?:GH_REPO|GH_HOST)=', word) for word in canonical):
+        fail('GitHub repository overrides are outside the supported issue target.',
+             'Use the configured repository without GH_REPO/GH_HOST overrides.', 'issue-shape')
+    root = repository(cwd)
+    if '--body-file' in options:
+        body_path = Path(os.path.abspath(Path(cwd) / options['--body-file']))
+        body = body_path.resolve()
+        redirected = any(path.is_symlink() for path in (body_path, *body_path.parents) if path.is_relative_to(root))
+        if redirected or not body.is_relative_to(root) or not body.is_file():
+            fail('An issue body file must be an existing local file inside the repository.',
+                 'Write the issue body locally and provide its project-relative path.', 'issue-body')
+    return 'issue-create'
+
+
 def release_create(args, cwd, harness, event, canonical):
     if not args or not re.fullmatch(r'v?\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?', args[0]):
         fail('Release creation requires one literal named version tag.', 'Use gh release create VERSION --verify-tag --title TITLE --notes-file LOCAL_FILE.', 'release-shape')
@@ -522,13 +559,15 @@ def inspect_command(command, cwd, harness, event, depth=0):
             decision = deployment(args, cwd, harness, event, original)
         elif args[:2] in (['pr', 'create'], ['pr', 'merge'], ['workflow', 'run'], ['run', 'rerun']):
             fail('Remote pull-request/build experimentation is forbidden by the local-compute workflow.', 'Complete local integration and use the reviewed publication path only.', 'remote-compute')
+        elif args[:2] == ['issue', 'create']:
+            decision = issue_create(args[2:], cwd, original)
         elif args[:2] == ['release', 'create']:
             decision = release_create(args[2:], cwd, harness, event, original)
         elif args[:2] in (['release', 'edit'], ['release', 'upload']):
             fail('GitHub release mutations require a separately reviewed owner command; repository/tag/asset options are outside this adapter contract.',
                  'Review the verified annotated tag and exact gh release command with the owner; this hook never supplies consent.', 'release-shape')
         elif name == 'gh':
-            readonly = {('run', 'view'), ('run', 'list'), ('run', 'watch'), ('pr', 'view'), ('pr', 'list'), ('pr', 'diff'), ('pr', 'checks'), ('release', 'view'), ('release', 'list'), ('workflow', 'view'), ('workflow', 'list'), ('repo', 'view'), ('auth', 'status')}
+            readonly = {('run', 'view'), ('run', 'list'), ('run', 'watch'), ('pr', 'view'), ('pr', 'list'), ('pr', 'diff'), ('pr', 'checks'), ('release', 'view'), ('release', 'list'), ('workflow', 'view'), ('workflow', 'list'), ('repo', 'view'), ('auth', 'status'), ('issue', 'list'), ('issue', 'view'), ('issue', 'status'), ('label', 'list')}
             if tuple(args[:2]) not in readonly and args not in (['--version'], ['--help']):
                 fail('Unsupported GitHub CLI command may mutate remote state or trigger compute.',
                      'Use a supported read-only gh command, or have the owner review and execute the exact remote action.', 'remote-compute')

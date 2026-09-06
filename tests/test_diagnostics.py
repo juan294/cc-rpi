@@ -64,7 +64,7 @@ class DiagnosticTests(unittest.TestCase):
         self.write('.rpi/baselines/' + digest(content.encode()), content)
         value = {'destination': destination, 'root_id': 'project', 'component_id': component,
                  'ownership': 'cc-rpi', 'base_hash': digest(content.encode()),
-                 'adapter': {'harness': 'codex'}, 'source': {'version': '2.0.0'}}
+                 'adapter': {'harness': 'codex'}, 'source': {'version': '9.9.9'}}
         if block:
             value['block'] = block
         return value
@@ -192,7 +192,7 @@ class DiagnosticTests(unittest.TestCase):
 
     def test_plugin_receipt_is_unverified_and_legacy_duplicates_visible(self):
         self.install_receipt([], {'codex': {'route': 'plugin', 'domains': [],
-            'expected_package': {'name': 'cc-rpi', 'version': '2.0.0'}, 'native_discovery': 'verified'}})
+            'expected_package': {'name': 'cc-rpi', 'version': '9.9.9'}, 'native_discovery': 'verified'}})
         self.write('.agents/skills/rpi-plan/SKILL.md', '---\nname: rpi-plan\n---\n')
         self.write('.agents/skills/group/rpi-plan/SKILL.md', '---\nname: rpi-plan\n---\n')
         self.write('.claude/commands/plan.md', 'Unproven v1 command')

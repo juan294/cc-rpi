@@ -43,11 +43,11 @@ class RecipeTests(unittest.TestCase):
     def test_json_recipe_in_bash_and_zsh_without_grep_p(self):
         recipe = fence('templates/skills/macos-rules/SKILL.md', 'For JSON, parse JSON:', 'bash')
         with tempfile.TemporaryDirectory() as tmp:
-            (Path(tmp) / 'package.json').write_text(json.dumps({'version': '2.0.0', 'other': '!=()'}))
+            (Path(tmp) / 'package.json').write_text(json.dumps({'version': '9.9.9', 'other': '!=()'}))
             shells = ['bash'] + (['zsh'] if shutil.which('zsh') else [])
             for shell in shells:
                 result = subprocess.run([shell, '-c', recipe], cwd=tmp, capture_output=True, text=True, check=True)
-                self.assertEqual(result.stdout.strip(), '2.0.0')
+                self.assertEqual(result.stdout.strip(), '9.9.9')
 
     def test_drawio_path_with_spaces_is_data_not_command_substitution(self):
         recipe = fence('.claude/skills/drawio/SKILL.md', 'On WSL2, use', 'bash')

@@ -46,7 +46,7 @@ class PolicyDecisionTests(unittest.TestCase):
         path.write_text(json.dumps(value))
         return path
 
-    def tag(self, name='v2.0.0'):
+    def tag(self, name='v9.9.9'):
         self.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
                  'tag', '-a', name, '-m', 'Decision fixture')
 
@@ -55,7 +55,7 @@ class PolicyDecisionTests(unittest.TestCase):
         notes = self.project / '.rpi/local/notes.md'
         notes.parent.mkdir(parents=True, exist_ok=True)
         notes.write_text('Reviewed local notes.\n')
-        return 'gh release create v2.0.0 --verify-tag --title v2.0.0 --notes-file .rpi/local/notes.md'
+        return 'gh release create v9.9.9 --verify-tag --title v9.9.9 --notes-file .rpi/local/notes.md'
 
     def codex(self, version='codex-cli 0.153.4', decision='prompt', exit_code=0):
         path = self.fakebin / 'codex'
@@ -138,7 +138,7 @@ class PolicyDecisionTests(unittest.TestCase):
         self.tag()
         self.commit()
         self.evidence()
-        self.deny('git push origin v2.0.0', 'ref being published differs')
+        self.deny('git push origin v9.9.9', 'ref being published differs')
         self.git('checkout', '-qb', 'other')
         self.evidence()
         self.deny('git push origin develop', 'completed documented integration branch')
@@ -224,10 +224,10 @@ class PolicyDecisionTests(unittest.TestCase):
     def test_release_shapes_refuse_unbound_or_missing_option_values(self):
         for command, reason in (('gh release create', 'one literal named version tag'),
                                 ('gh release create random', 'one literal named version tag'),
-                                ('gh release create v2.0.0 --title', 'requires a literal value'),
-                                ('gh release create v2.0.0 --title --verify-tag', 'requires a literal value'),
-                                ('gh release upload v2.0.0 asset', 'release mutations require'),
-                                ('gh release edit v2.0.0 --draft=false', 'release mutations require')):
+                                ('gh release create v9.9.9 --title', 'requires a literal value'),
+                                ('gh release create v9.9.9 --title --verify-tag', 'requires a literal value'),
+                                ('gh release upload v9.9.9 asset', 'release mutations require'),
+                                ('gh release edit v9.9.9 --draft=false', 'release mutations require')):
             self.deny(command, reason)
 
     def test_release_requires_integration_annotated_tag_and_matching_commit(self):
@@ -236,7 +236,7 @@ class PolicyDecisionTests(unittest.TestCase):
         self.git('checkout', '-qb', 'other')
         self.deny(command, 'completed integration checkout')
         self.git('checkout', 'develop')
-        self.git('tag', '-d', 'v2.0.0')
+        self.git('tag', '-d', 'v9.9.9')
         self.deny(command, 'existing annotated version tag')
         self.tag()
         self.commit()

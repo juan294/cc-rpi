@@ -244,7 +244,7 @@ class WorkflowContracts(unittest.TestCase):
 
     def test_supplied_version_and_authorized_docs_do_not_create_duplicate_decisions(self):
         document = narrow()
-        document['context'] = {'supplied_version': '2.0.0', 'docs_authorized': True}
+        document['context'] = {'supplied_version': '9.9.9', 'docs_authorized': True}
         document['decisions_requested'] = []
         self.assertEqual(self.errors(document), [])
         for decision in ['release_version', 'docs_authorization']:

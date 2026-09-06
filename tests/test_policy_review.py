@@ -79,9 +79,9 @@ class PolicyReviewTests(unittest.TestCase):
 
     def test_explicit_tag_source_cannot_publish_a_branch_namespace(self):
         self.fixture.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
-                         'tag', '-a', 'v2.0.0', '-m', 'Release fixture')
+                         'tag', '-a', 'v9.9.9', '-m', 'Release fixture')
         self.fixture.evidence()
-        self.deny('git push origin v2.0.0:refs/heads/v2.0.0')
+        self.deny('git push origin v9.9.9:refs/heads/v9.9.9')
 
     def test_git_config_cannot_silently_expand_one_ref_to_tags(self):
         self.fixture.git('config', 'push.followTags', 'true')

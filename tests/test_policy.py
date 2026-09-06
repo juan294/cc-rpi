@@ -163,9 +163,9 @@ Path(os.environ['RPI_SENTINEL']).write_text(name+' executed')
         self.assertTrue(self.sentinel.exists())
 
     def test_named_tag_at_verified_head_can_reach_claude_native_permission(self):
-        self.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'tag', '-a', 'v2.0.0', '-m', 'Release fixture')
+        self.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'tag', '-a', 'v9.9.9', '-m', 'Release fixture')
         self.evidence()
-        self.assertEqual(self.execute('git push origin v2.0.0').returncode, 0)
+        self.assertEqual(self.execute('git push origin v9.9.9').returncode, 0)
         self.assertTrue(self.sentinel.exists())
 
     def test_codex_remote_automation_stays_blocked_without_trusted_ask(self):
@@ -289,21 +289,21 @@ Path(os.environ['RPI_SENTINEL']).write_text(name+' executed')
             self.assertEqual(self.invoke(event=event).returncode, 2)
 
     def test_lightweight_tag_is_not_a_release_candidate(self):
-        self.git('tag', 'v2.0.0')
+        self.git('tag', 'v9.9.9')
         self.evidence()
-        self.assert_blocked('git push origin v2.0.0')
+        self.assert_blocked('git push origin v9.9.9')
 
     def test_ordinary_packages_groups_and_assignment_literals_remain_local(self):
         for command in ('npm test', 'npx eslint .', '(printf local)', 'echo GIT_DIR=x git', 'gh run watch 123 --exit-status'):
             self.assertEqual(self.invoke(command).returncode, 0, command)
 
     def test_canonical_release_creation_preserves_native_approval(self):
-        self.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'tag', '-a', 'v2.0.0', '-m', 'Release fixture')
+        self.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'tag', '-a', 'v9.9.9', '-m', 'Release fixture')
         notes = self.project / '.rpi/local/release-notes.md'
         notes.parent.mkdir(parents=True, exist_ok=True)
         notes.write_text('Verified fixture release.\n')
         self.evidence()
-        command = "gh release create v2.0.0 --verify-tag --title 'v2.0.0' --notes-file .rpi/local/release-notes.md"
+        command = "gh release create v9.9.9 --verify-tag --title 'v9.9.9' --notes-file .rpi/local/release-notes.md"
         result = self.execute(command, native_authorized=False)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn('allow', result.stdout)
@@ -332,8 +332,31 @@ Path(os.environ['RPI_SENTINEL']).write_text(name+' executed')
         self.assert_blocked(command)
 
     def test_sensitive_remote_gh_entries_are_classified(self):
-        for command in ('gh pr create', 'gh workflow run validate.yml', 'gh release create v2.0.0'):
+        for command in ('gh pr create', 'gh workflow run validate.yml', 'gh release create v9.9.9'):
             self.assert_blocked(command)
+
+    def test_readonly_issue_and_label_inspection_is_allowed(self):
+        for command in ('gh issue list', 'gh issue view 12', 'gh issue status', 'gh label list'):
+            self.assertEqual(self.invoke(command).returncode, 0, command)
+
+    def test_issue_creation_needs_a_literal_title_and_local_body(self):
+        body = self.project / 'issue-body.md'
+        body.write_text('Reproduction and expected behavior.\n')
+        allowed = 'gh issue create --title "Guard rejects inert gh reads" --body-file issue-body.md'
+        self.assertEqual(self.invoke(allowed).returncode, 0, allowed)
+
+    def test_issue_creation_cannot_retarget_another_repository_or_escape_the_project(self):
+        body = self.project / 'issue-body.md'
+        body.write_text('Reproduction and expected behavior.\n')
+        for command in ('gh issue create --title T --body-file issue-body.md --repo other/repo',
+                        'gh issue create --title T --body-file ../outside.md',
+                        'gh issue create --title T',
+                        'gh issue create --body-file issue-body.md',
+                        'gh issue create --title T --body-file issue-body.md --web'):
+            self.assert_blocked(command)
+        environment = dict(self.environment, GH_REPO='other/repo')
+        result = self.invoke('gh issue create --title T --body-file issue-body.md', environment=environment)
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
 
 
 if __name__ == '__main__':

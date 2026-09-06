@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.1] - 2026-09-06
+
+### Fixed
+
+- **Restored GitHub issue workflows.** v2.0.0 replaced the fail-open v1 hook with
+  a policy that allowed only 13 read-only `gh` pairs, so `gh issue create`,
+  `gh issue list` and `gh label list` were refused in every permission mode. That
+  blocked the issue filing `rpi-remediate` and `rpi-triage` depend on. `gh issue`
+  list/view/status and `gh label list` are read-only and now pass, and
+  `gh issue create` has a reviewed shape: a literal `--title`, exactly one of
+  `--body` or `--body-file`, an existing body file inside the repository, and no
+  `--repo`, `--web`, `GH_REPO` or `GH_HOST` retarget. Issue creation publishes no
+  code and starts no build, so it does not require candidate verification.
+
 ## [2.0.0] - 2026-09-06
 
 ### Added

@@ -22,7 +22,7 @@ class DistributionTests(unittest.TestCase):
         self.write("templates/instructions/rule-map.md", "Read .rpi/rules/testing.md for tests.\n")
         self.write("templates/rules/testing.md", "# Testing\nUse TDD.\n")
         self.manifest = {
-            "schema_version": 1, "version": "2.0.0", "managed_root_budget_bytes": 8192,
+            "schema_version": 1, "version": "9.9.9", "managed_root_budget_bytes": 8192,
             "components": [
                 {"id": "skill:rpi-example", "kind": "skill", "category": "workflow", "name": "rpi-example",
                  "source": "templates/skills/rpi-example", "harnesses": ["claude", "codex"], "scope": "project",

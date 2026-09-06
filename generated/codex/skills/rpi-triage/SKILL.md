@@ -55,7 +55,7 @@ Find EVERY report, agent failure, and GitHub security/quality alert. No assumpti
      --json number,title,headRefName,mergeable,mergeStateStatus,statusCheckRollup,labels
    ```
 
-   For each PR, classify the update type from the title (e.g., `Bump foo from 1.2.3 to 1.2.4` -> patch; `1.2.x -> 1.3.0` -> minor; `1.x -> 2.0.0` -> major) and the CI status:
+   For each PR, classify the update type from the title (e.g., `Bump foo from 1.2.3 to 1.2.4` -> patch; `1.2.x -> 1.3.0` -> minor; `1.x -> 9.0.0` -> major) and the CI status:
 
    - **patch + CI green** -> ready for local batch verification
    - **minor + CI green** -> ready for local batch verification
