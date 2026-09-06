@@ -133,6 +133,25 @@ def verified_candidate(root):
     return actual
 
 
+def publication_trust(root):
+    """Standing owner authorization for publication in a non-prompting mode.
+
+    The owner records consent once, locally, instead of approving a native prompt
+    for every action. This file is ignored evidence, so it authorizes the
+    checkout that holds it and never travels with the product. It replaces the
+    prompt boundary alone: candidate verification, topology, refspec, remote and
+    branch checks all still apply.
+    """
+    if any(path.is_symlink() for path in (root / '.rpi', root / '.rpi/local')):
+        return False
+    path = root / '.rpi/local/publication-trust.json'
+    if path.is_symlink() or not path.is_file():
+        return False
+    record = read_json(path.read_text())
+    return (isinstance(record, dict) and record.get('schema_version') == 1
+            and record.get('publication_without_prompt') is True)
+
+
 def native_boundary(harness, event, canonical):
     mode = event.get('permission_mode')
     raw = event['tool_input']['command'].strip()
@@ -141,8 +160,9 @@ def native_boundary(harness, event, canonical):
         fail('Remote approval requires one separately issued canonical executable command.',
              'Issue the reviewed command separately: ' + shlex.join(canonical), 'native-approval')
     if harness == 'claude':
-        if mode not in ('default', 'acceptEdits', 'plan'):
-            fail('This execution mode cannot supply the required native publication approval.', 'Use a trusted Claude permission mode with the shipped ask rules, or have the owner execute the reviewed command.', 'native-approval')
+        if mode not in ('default', 'acceptEdits', 'plan') and not publication_trust(repository(Path(event['cwd']))):
+            fail('This execution mode cannot supply the required native publication approval.',
+                 'Use a trusted Claude permission mode with the shipped ask rules, record standing consent in .rpi/local/publication-trust.json, or have the owner execute the reviewed command.', 'native-approval')
         # Only separately issued literal forms covered by shipped native ask rules.
         supported = canonical and (canonical[0] in ('git', 'gh', 'vercel', 'vc') or
                     canonical[0] in ('npx', 'pnpm') and 'vercel' in canonical)
@@ -154,9 +174,14 @@ def native_boundary(harness, event, canonical):
     # An applicable prompt rule yields NeedsApproval, or Forbidden when that
     # policy disables prompting. It never becomes Skip. Intended project hook
     # invocation requires the same trusted project layer that loads these rules.
-    if mode != 'default' or not canonical or canonical[0] not in ('git', 'gh', 'vercel', 'vc'):
+    if not canonical or canonical[0] not in ('git', 'gh', 'vercel', 'vc'):
         fail('This Codex execution mode/command shape lacks a verified native prompt boundary.',
              'Use the trusted project rules and a canonical command in a native approval mode; otherwise the owner executes: ' + shlex.join(canonical), 'native-approval')
+    if mode != 'default':
+        if not publication_trust(repository(Path(event['cwd']))):
+            fail('This Codex execution mode lacks a verified native prompt boundary.',
+                 'Use a native approval mode, record standing consent in .rpi/local/publication-trust.json, or have the owner execute: ' + shlex.join(canonical), 'native-approval')
+        return
     root = repository(Path(event['cwd']))
     rules = root / '.codex/rules/rpi.rules'
     if any(path.is_symlink() for path in (root / '.codex', root / '.codex/rules', rules)) or not rules.is_file():

@@ -358,6 +358,54 @@ Path(os.environ['RPI_SENTINEL']).write_text(name+' executed')
         result = self.invoke('gh issue create --title T --body-file issue-body.md', environment=environment)
         self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
 
+    def trust(self, payload=None):
+        path = self.project / '.rpi/local/publication-trust.json'
+        path.parent.mkdir(parents=True, exist_ok=True)
+        record = {'schema_version': 1, 'publication_without_prompt': True,
+                  'authorized_on': '2026-09-06'} if payload is None else payload
+        path.write_text(json.dumps(record) if isinstance(record, dict) else record)
+        return path
+
+    def publication_event(self, command, mode):
+        return dict(self.event(command), permission_mode=mode)
+
+    def test_non_prompting_mode_cannot_publish_without_standing_authorization(self):
+        self.evidence()
+        for mode in ('bypassPermissions', 'dontAsk', 'auto'):
+            result = self.invoke(event=self.publication_event('git push origin develop', mode))
+            self.assertEqual(result.returncode, 2, mode)
+
+    def test_standing_authorization_lets_a_non_prompting_mode_publish(self):
+        self.evidence()
+        self.trust()
+        for mode in ('bypassPermissions', 'dontAsk', 'auto'):
+            result = self.invoke(event=self.publication_event('git push origin develop', mode))
+            self.assertEqual(result.returncode, 0, mode + ': ' + result.stdout + result.stderr)
+
+    def test_malformed_or_redirected_authorization_never_grants_publication(self):
+        self.evidence()
+        path = self.trust()
+        for payload in ('not json', {'schema_version': 2, 'publication_without_prompt': True},
+                        {'schema_version': 1, 'publication_without_prompt': False},
+                        {'schema_version': 1}):
+            self.trust(payload)
+            result = self.invoke(event=self.publication_event('git push origin develop', 'bypassPermissions'))
+            self.assertEqual(result.returncode, 2, str(payload))
+        path.unlink()
+        outside = self.workspace / 'trust.json'
+        outside.write_text(json.dumps({'schema_version': 1, 'publication_without_prompt': True}))
+        path.symlink_to(outside)
+        result = self.invoke(event=self.publication_event('git push origin develop', 'bypassPermissions'))
+        self.assertEqual(result.returncode, 2, 'a redirected authorization must not grant publication')
+
+    def test_standing_authorization_does_not_bypass_candidate_verification(self):
+        self.evidence()
+        self.trust()
+        (self.project / 'uncommitted.txt').write_text('dirty candidate\n')
+        result = self.invoke(event=self.publication_event('git push origin develop', 'bypassPermissions'))
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertIn('clean completed integration candidate', result.stderr)
+
 
 if __name__ == '__main__':
     unittest.main()

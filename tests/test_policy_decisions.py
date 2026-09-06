@@ -193,7 +193,9 @@ class PolicyDecisionTests(unittest.TestCase):
         self.codex()
         self.evidence()
         self.allow('git push origin develop', harness='codex')
-        self.deny('git push origin develop', 'execution mode/command shape lacks', harness='codex',
+        # A non-prompting Codex mode is denied on its own reason, and standing
+        # consent is the only alternative to a native approval mode.
+        self.deny('git push origin develop', 'Codex execution mode lacks', harness='codex',
                   event={**self.event('git push origin develop'), 'permission_mode': 'bypassPermissions'})
 
     def test_native_permission_file_symlink_never_claims_trust(self):

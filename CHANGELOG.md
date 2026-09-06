@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.2] - 2026-09-06
+
+### Added
+
+- **Standing publication authorization for non-prompting modes.** v2.0.0 required
+  an interactive native approval for every publication, so an owner who works in
+  a non-prompting mode could not push, tag or release at all. An owner may now
+  record consent once in the ignored `.rpi/local/publication-trust.json`
+  (`{"schema_version": 1, "publication_without_prompt": true}`). The file
+  authorizes only the checkout that holds it and never travels with the product.
+  It replaces the prompt boundary alone: candidate verification, clean-tree,
+  topology, refspec, remote and branch checks all still apply, and a missing,
+  malformed or symlinked file grants nothing.
+
 ## [2.0.1] - 2026-09-06
 
 ### Fixed

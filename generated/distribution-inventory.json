@@ -13,7 +13,7 @@
   },
   "claude/.rpi/distribution.json": {
     "bytes": 39513,
-    "sha256": "924f08acc12471e879628d86ba300c0db345217add054744929a78d7dac2c8a7"
+    "sha256": "258e038b793588a8aa4c6293c8ae24c7d63fec3a4786b7bc1d2f3557bc77db64"
   },
   "claude/.rpi/scripts/rpi-candidate.py": {
     "bytes": 3913,
@@ -44,8 +44,8 @@
     "sha256": "0e4dc8aa15b48980d7b789c574e84ab85acf22f26b940ba97f76a8b3d4cb75b6"
   },
   "claude/.rpi/scripts/rpi-policy.py": {
-    "bytes": 39383,
-    "sha256": "c21f552cfcc4c15f27e3d696193c38ad1970df7e066bf233670ba169fc16920e"
+    "bytes": 40748,
+    "sha256": "aa00139ccc080ce33de89c1534ef28fb0104caee3a69bfd00541e9a4fcba579d"
   },
   "claude/.rpi/scripts/rpi-verify.py": {
     "bytes": 10944,
@@ -381,11 +381,11 @@
   },
   "codex/.claude-plugin/marketplace.json": {
     "bytes": 236,
-    "sha256": "0d6c1de7d228f68538eb4d0bc0b55e20655489f6a91aa4eb8fceb7478c1fbb1e"
+    "sha256": "6ad44f16d47a0691c9f9d2b33a0aca513e38c7a98b4b2a447f7c1367fb43b3fe"
   },
   "codex/.codex-plugin/plugin.json": {
     "bytes": 202,
-    "sha256": "5602d9da07e39c5be47330f8b5804e67895c51d4df14b949b1ab10608eaeed52"
+    "sha256": "6a1db204bf272e4b2813e2af43625bfb42cfb10fa49bf5e122a119ffa581943f"
   },
   "codex/.codex/rules/rpi.rules": {
     "bytes": 724,
@@ -405,7 +405,7 @@
   },
   "codex/.rpi/distribution.json": {
     "bytes": 39513,
-    "sha256": "924f08acc12471e879628d86ba300c0db345217add054744929a78d7dac2c8a7"
+    "sha256": "258e038b793588a8aa4c6293c8ae24c7d63fec3a4786b7bc1d2f3557bc77db64"
   },
   "codex/.rpi/scripts/rpi-candidate.py": {
     "bytes": 3913,
@@ -436,8 +436,8 @@
     "sha256": "0e4dc8aa15b48980d7b789c574e84ab85acf22f26b940ba97f76a8b3d4cb75b6"
   },
   "codex/.rpi/scripts/rpi-policy.py": {
-    "bytes": 39383,
-    "sha256": "c21f552cfcc4c15f27e3d696193c38ad1970df7e066bf233670ba169fc16920e"
+    "bytes": 40748,
+    "sha256": "aa00139ccc080ce33de89c1534ef28fb0104caee3a69bfd00541e9a4fcba579d"
   },
   "codex/.rpi/scripts/rpi-verify.py": {
     "bytes": 10944,
@@ -509,7 +509,7 @@
   },
   "codex/runtime/templates/adapters/codex-marketplace.json": {
     "bytes": 236,
-    "sha256": "0d6c1de7d228f68538eb4d0bc0b55e20655489f6a91aa4eb8fceb7478c1fbb1e"
+    "sha256": "6ad44f16d47a0691c9f9d2b33a0aca513e38c7a98b4b2a447f7c1367fb43b3fe"
   },
   "codex/runtime/templates/adapters/codex-permissions.rules": {
     "bytes": 724,
@@ -517,7 +517,7 @@
   },
   "codex/runtime/templates/adapters/codex-plugin.json": {
     "bytes": 202,
-    "sha256": "5602d9da07e39c5be47330f8b5804e67895c51d4df14b949b1ab10608eaeed52"
+    "sha256": "6a1db204bf272e4b2813e2af43625bfb42cfb10fa49bf5e122a119ffa581943f"
   },
   "codex/runtime/templates/adapters/codex.json": {
     "bytes": 178,
@@ -529,7 +529,7 @@
   },
   "codex/runtime/templates/distribution.json": {
     "bytes": 39513,
-    "sha256": "924f08acc12471e879628d86ba300c0db345217add054744929a78d7dac2c8a7"
+    "sha256": "258e038b793588a8aa4c6293c8ae24c7d63fec3a4786b7bc1d2f3557bc77db64"
   },
   "codex/runtime/templates/e2e-pro-playbook-template.md": {
     "bytes": 52054,
@@ -616,8 +616,8 @@
     "sha256": "0e4dc8aa15b48980d7b789c574e84ab85acf22f26b940ba97f76a8b3d4cb75b6"
   },
   "codex/runtime/templates/scripts/rpi-policy.py": {
-    "bytes": 39383,
-    "sha256": "c21f552cfcc4c15f27e3d696193c38ad1970df7e066bf233670ba169fc16920e"
+    "bytes": 40748,
+    "sha256": "aa00139ccc080ce33de89c1534ef28fb0104caee3a69bfd00541e9a4fcba579d"
   },
   "codex/runtime/templates/scripts/rpi-triage-state.py": {
     "bytes": 11199,

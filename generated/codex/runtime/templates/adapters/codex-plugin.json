@@ -1,6 +1,6 @@
 {
   "name": "cc-rpi",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "RPI for Claude Code and Codex: native Codex workflows, selected domain knowledge and the Codex simplify helper.",
   "skills": "./skills/"
 }
