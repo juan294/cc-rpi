@@ -345,6 +345,70 @@ def issue_create(args, cwd, canonical):
     return 'issue-create'
 
 
+def github_api(args, cwd, canonical):
+    """Allow bounded, repository-local GETs for required alert inventories."""
+    endpoint = None
+    method_option = None
+    seen = set()
+    index = 0
+    while index < len(args):
+        option = args[index]
+        if option in ('--paginate', '--include'):
+            if option in seen:
+                fail('Duplicate GitHub API output option.',
+                     'Use each of --paginate and --include at most once.', 'github-api-shape')
+            seen.add(option)
+            index += 1
+        elif option in ('-X', '--method'):
+            if method_option is not None or index + 1 >= len(args):
+                fail('GitHub API method requires one literal value.',
+                     'Use no method flag or one literal --method GET.', 'github-api-shape')
+            value = args[index + 1]
+            if value != 'GET':
+                fail('Only GitHub API GET requests are allowed.',
+                     'Use gh api with no method flag or one literal --method GET.', 'github-api-method')
+            method_option = option
+            index += 2
+        elif option == '--jq':
+            if option in seen or index + 1 >= len(args):
+                fail('GitHub API option requires one literal value.',
+                     'Use at most one literal --jq FILTER.', 'github-api-shape')
+            value = args[index + 1]
+            if not value or any(mark in value for mark in ('$', '`', '\n', '__RPI_DYNAMIC__')):
+                fail('GitHub API option value must be literal.',
+                     'Use a static GET request and literal jq output filter.', 'github-api-shape')
+            seen.add(option)
+            index += 2
+        elif option.startswith('-'):
+            fail('Unsupported GitHub API option.',
+                 'Use only --paginate, --include, --method GET and --jq with a required alert endpoint.', 'github-api-shape')
+        else:
+            if endpoint is not None:
+                fail('GitHub API requests require exactly one endpoint.',
+                     'Use one repository alert endpoint per command.', 'github-api-shape')
+            endpoint = option
+            index += 1
+    if endpoint is None:
+        fail('GitHub API request must be one explicit GET endpoint.',
+             'Use one repository alert endpoint with the default method or --method GET.', 'github-api-shape')
+    if any(os.environ.get(name) for name in ('GH_REPO', 'GH_HOST')) or any(re.match(r'(?:GH_REPO|GH_HOST)=', word) for word in canonical):
+        fail('GitHub API repository overrides are outside the supported read-only target.',
+             'Use the configured repository without GH_REPO/GH_HOST overrides.', 'github-api-target')
+    root = repository(cwd)
+    policy = topology(root)
+    remote_url = git(root, 'remote', 'get-url', policy['remote'], required=False)
+    match = re.fullmatch(r'(?:https://github\.com/|git@github\.com:)([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?', remote_url or '')
+    if not match:
+        fail('The configured remote is not one unambiguous GitHub repository.',
+             'Use the documented GitHub remote without a repository override.', 'github-api-target')
+    suffixes = ('code-scanning/alerts', 'dependabot/alerts', 'secret-scanning/alerts')
+    expected = {f'repos/{match.group(1)}/{suffix}?state=open' for suffix in suffixes}
+    if endpoint not in expected:
+        fail('GitHub API endpoint is outside the required open-alert inventories.',
+             'Query the configured repository code-scanning, Dependabot, or secret-scanning alerts with state=open.', 'github-api-target')
+    return None
+
+
 def release_create(args, cwd, harness, event, canonical):
     if not args or not re.fullmatch(r'v?\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?', args[0]):
         fail('Release creation requires one literal named version tag.', 'Use gh release create VERSION --verify-tag --title TITLE --notes-file LOCAL_FILE.', 'release-shape')
@@ -573,7 +637,8 @@ def inspect_command(command, cwd, harness, event, depth=0):
             if any(POLICY_WORD.search(arg) for arg in words):
                 fail('Unsupported executable wrapper around a policy-sensitive command.')
             continue
-        if any(any(mark in arg for mark in ('$', '`', '\n', '(', ')', '__RPI_DYNAMIC__')) for arg in args):
+        github_api_request = name == 'gh' and args[:1] == ['api']
+        if not github_api_request and any(any(mark in arg for mark in ('$', '`', '\n', '(', ')', '__RPI_DYNAMIC__')) for arg in args):
             fail('Dynamic shell expansion prevents reliable policy-sensitive classification.')
         if name == 'git':
             if any(re.match(r'GIT_[A-Za-z0-9_]*=', word) for word in original):
@@ -591,6 +656,8 @@ def inspect_command(command, cwd, harness, event, depth=0):
         elif args[:2] in (['release', 'edit'], ['release', 'upload']):
             fail('GitHub release mutations require a separately reviewed owner command; repository/tag/asset options are outside this adapter contract.',
                  'Review the verified annotated tag and exact gh release command with the owner; this hook never supplies consent.', 'release-shape')
+        elif github_api_request:
+            decision = github_api(args[1:], cwd, original)
         elif name == 'gh':
             readonly = {('run', 'view'), ('run', 'list'), ('run', 'watch'), ('pr', 'view'), ('pr', 'list'), ('pr', 'diff'), ('pr', 'checks'), ('release', 'view'), ('release', 'list'), ('workflow', 'view'), ('workflow', 'list'), ('repo', 'view'), ('auth', 'status'), ('issue', 'list'), ('issue', 'view'), ('issue', 'status'), ('label', 'list')}
             if tuple(args[:2]) not in readonly and args not in (['--version'], ['--help']):

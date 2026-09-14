@@ -45,7 +45,7 @@ Path(os.environ['RPI_SENTINEL']).write_text(name+' executed')
             'remote': 'origin', 'verification_checks': self.expected_checks(), 'verification_command': ['bash', 'scripts/verify-local.sh']}))
         self.git('add', '.')
         self.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'Fixture')
-        self.git('remote', 'add', 'origin', 'https://example.invalid/never-contacted.git')
+        self.git('remote', 'add', 'origin', 'https://github.com/fixture/project.git')
 
     def git(self, *arguments):
         result = subprocess.run([self.environment['RPI_REAL_GIT'], '-C', str(self.project), *arguments], capture_output=True, text=True)
@@ -296,6 +296,44 @@ Path(os.environ['RPI_SENTINEL']).write_text(name+' executed')
     def test_ordinary_packages_groups_and_assignment_literals_remain_local(self):
         for command in ('npm test', 'npx eslint .', '(printf local)', 'echo GIT_DIR=x git', 'gh run watch 123 --exit-status'):
             self.assertEqual(self.invoke(command).returncode, 0, command)
+
+    def test_readonly_github_alert_api_queries_are_allowed(self):
+        commands = (
+            "gh api --paginate 'repos/fixture/project/code-scanning/alerts?state=open' "
+            "--jq '.[] | {severity: (.rule.security_severity_level // .rule.severity)}'",
+            "gh api 'repos/fixture/project/dependabot/alerts?state=open' --paginate "
+            "--jq '.[] | {package: .dependency.package.name}'",
+            "gh api --method GET 'repos/fixture/project/secret-scanning/alerts?state=open' "
+            "--jq '.[] | {secret_type, state}'",
+            "gh api -X GET 'repos/fixture/project/code-scanning/alerts?state=open'",
+        )
+        for command in commands:
+            with self.subTest(command=command):
+                self.assertEqual(self.invoke(command).returncode, 0, command)
+
+    def test_github_alert_api_rejects_mutation_and_unbounded_shapes(self):
+        endpoint = 'repos/fixture/project/code-scanning/alerts?state=open'
+        commands = (
+            f'gh api -X POST {endpoint}',
+            f'gh api --method PATCH {endpoint}',
+            f'gh api --method GET -X GET {endpoint}',
+            f'gh api {endpoint} -f state=open',
+            f'gh api {endpoint} --input request.json',
+            f'gh api {endpoint} --hostname github.example.com',
+            'gh api repos/fixture/project/actions/workflows',
+            'gh api repos/other/project/code-scanning/alerts?state=open',
+            f"gh api {endpoint} --jq '$(git push origin develop)'",
+            'gh api "repos/fixture/project/code-scanning/alerts?state=$(printf open)"',
+        )
+        for command in commands:
+            with self.subTest(command=command):
+                self.assert_blocked(command)
+        for name in ('GH_REPO', 'GH_HOST'):
+            with self.subTest(environment=name):
+                result = self.invoke(f'gh api {endpoint}', environment={**self.environment, name: 'other/project'})
+                self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                self.assertFalse(self.sentinel.exists())
+                self.assert_blocked(f'{name}=other/project gh api {endpoint}')
 
     def test_canonical_release_creation_preserves_native_approval(self):
         self.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'tag', '-a', 'v9.9.9', '-m', 'Release fixture')
