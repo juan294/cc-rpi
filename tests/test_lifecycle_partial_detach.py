@@ -1,6 +1,5 @@
 """Partial lifecycle actions preserve resources still owned by another harness."""
 import json
-import shutil
 import unittest
 
 import test_lifecycle_adopters as adopters
@@ -11,6 +10,7 @@ class PartialDetachTests(unittest.TestCase):
     make_source = adopters.LifecycleAdopterTests.make_source
     git = adopters.LifecycleAdopterTests.git
     commit_source = adopters.LifecycleAdopterTests.commit_source
+    copy_source = adopters.LifecycleAdopterTests.copy_source
     invoke = adopters.LifecycleAdopterTests.invoke
     plan = adopters.LifecycleAdopterTests.plan
     apply_ready = adopters.LifecycleAdopterTests.apply_ready
@@ -127,7 +127,7 @@ class PartialDetachTests(unittest.TestCase):
     def test_single_harness_update_cannot_retire_another_harness_resource(self):
         self.apply_ready()
         prior_source = self.workspace / 'untouched Claude source'
-        shutil.copytree(self.source, prior_source)
+        self.copy_source(prior_source)
         manifest_path = self.source / 'templates/distribution.json'
         manifest = json.loads(manifest_path.read_text())
         for component in manifest['components']:
@@ -142,7 +142,7 @@ class PartialDetachTests(unittest.TestCase):
     def test_source_retirement_preserves_untouched_harness_installed_baseline(self):
         self.apply_ready()
         prior_source = self.workspace / 'untouched Claude source'
-        shutil.copytree(self.source, prior_source)
+        self.copy_source(prior_source)
         manifest_path = self.source / 'templates/distribution.json'
         manifest = json.loads(manifest_path.read_text())
         manifest['components'] = [component for component in manifest['components']

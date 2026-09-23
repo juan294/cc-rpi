@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -18,6 +19,26 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 ENGINE = ROOT / "templates/scripts/rpi-distribution.py"
 FIXTURES = json.loads((ROOT / "tests/fixtures/lifecycle-adopters.json").read_text())
+
+
+def _ignore_sockets(directory, names):
+    """shutil.copytree `ignore=` callback: drop local Unix-socket files.
+
+    A live `git fsmonitor` daemon (`core.fsmonitor=true`) leaves a socket at
+    `.git/fsmonitor--daemon.ipc` in every git working tree it watches, on
+    whichever machine runs these tests. shutil.copytree cannot copy sockets
+    (`OSError: [Errno 102] Operation not supported on socket`). A socket is a
+    runtime IPC handle, never tracked git data, so skipping it changes
+    nothing the tests assert about the copied fixture.
+    """
+    skip = []
+    for name in names:
+        try:
+            if stat.S_ISSOCK(os.lstat(os.path.join(directory, name)).st_mode):
+                skip.append(name)
+        except OSError:
+            continue
+    return skip
 
 
 class LifecycleAdopterTests(unittest.TestCase):
@@ -87,6 +108,12 @@ class LifecycleAdopterTests(unittest.TestCase):
         self.git("add", ".")
         self.git("-c", "user.name=RPI Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", message)
         return self.git("rev-parse", "HEAD")
+
+    def copy_source(self, destination):
+        """Copy self.source to destination, skipping any local socket files
+        (see _ignore_sockets) so a live git fsmonitor daemon cannot break the
+        copy. Preserves the fixture's tracked content and .git history."""
+        shutil.copytree(self.source, destination, ignore=_ignore_sockets)
 
     def invoke(self, *arguments):
         return subprocess.run([sys.executable, str(ENGINE), *map(str, arguments)],
