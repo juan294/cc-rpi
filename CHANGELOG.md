@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **`rpi-plan` requires a Stuck states and recovery section and a Consumer
+  sweep section.** A real adopter incident motivated both: a fail-closed
+  token-refresh barrier was designed and had a passing safety test, but no
+  path ever told the blocked user how to get unblocked, and a separate
+  fallback fix covered one consumer of a shared failure path while missing a
+  second one entirely. A safety test proves a bad state cannot leak through;
+  it does not prove anyone can get out of that state, and a plan that changes
+  a shared contract without enumerating its callers can silently miss one.
+  `rpi-plan` now requires, for every fail-closed/blocking/degraded state, who
+  sees it, how it ends without insider knowledge, and a
+  recovery-or-disclosure test distinct from the safety test; and, for every
+  altered shared function/type/cache/fixture, a searched list of every
+  caller/writer marked covered or explicitly excluded. `rpi-validate` checks
+  both exist and pass before accepting a phase; `rpi-research` records a
+  documented failure mode's current recovery and visibility when it finds
+  one, as an observed fact, not a proposal.
+
 ## [2.0.2] - 2026-09-06
 
 ### Added

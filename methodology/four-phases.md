@@ -259,6 +259,17 @@ Research is **NOT done** if:
    - Write main plan file + separate file per phase.
    - Use pseudocode notation (see [pseudocode-notation.md](pseudocode-notation.md)).
    - Separate automated vs. manual success criteria.
+   - Write a **Stuck states and recovery** section: for every state the change
+     can enter that fails closed, blocks work, or degrades output (a barrier,
+     lock, fallback, disabled path, cached error), state who sees it and what
+     they see, how it ends without insider knowledge, and the
+     recovery-or-disclosure test that proves it. A safety test alone does not
+     close a stuck state.
+   - Write a **Consumer sweep** section whenever the change alters what a
+     shared function, type, cache format or fixture returns or stores: list
+     every caller/writer found by search (test fixtures, E2E helpers and
+     scripts included), with the search command used, and mark each one
+     covered by a phase or explicitly excluded with a reason.
    - Maximum 3 `[NEEDS CLARIFICATION]` markers; resolve all before finalizing.
 
 5. **Review & iteration:**
@@ -278,6 +289,10 @@ A plan is **done** when:
 - [ ] Every phase has automated success criteria with exact commands to run
 - [ ] Pseudocode notation is used for non-trivial logic changes
 - [ ] The scope exclusion list is explicit ("NOT doing: ...")
+- [ ] Every fail-closed, blocking or degraded state the change can enter has a
+      stuck-states entry with a recovery-or-disclosure test
+- [ ] Every shared function/type/cache/fixture the change alters has a
+      consumer-sweep entry covering every caller/writer found by search
 - [ ] Zero `[NEEDS CLARIFICATION]` markers remain
 - [ ] The user has reviewed and approved the plan
 - [ ] Phase files exist for every phase (separate files, not inline)
@@ -288,6 +303,8 @@ A plan is **NOT done** if:
 - Dependencies between phases are not documented
 - Manual testing is listed without explaining why automation is impossible
 - Independent phases exist but aren't marked `[batch-eligible]` (check for `/batch` opportunities)
+- A stuck state has only a safety test and no recovery-or-disclosure test
+- A shared-contract change lists callers/writers without the search command used, or omits a found caller/writer without a stated reason
 
 ---
 
@@ -397,6 +414,8 @@ An implementation phase is **NOT done** if:
 2. Gather evidence: git log, git diff, run test suites.
 3. For each phase:
    - Verify completion status matches reality.
+   - Confirm the plan's stuck-state recovery-or-disclosure tests and
+     consumer-sweep coverage exist and pass.
    - Run every automated verification command.
    - Assess manual criteria.
    - Think about edge cases.
@@ -431,12 +450,15 @@ An implementation phase is **NOT done** if:
 Validation is **done** when:
 - [ ] Every plan phase has been checked against the actual code
 - [ ] All automated verification commands have been run and results recorded
+- [ ] The plan's stuck-state recovery-or-disclosure tests and consumer-sweep
+      coverage were checked and pass
 - [ ] Deviations from the plan are documented with explanations
 - [ ] The validation report is complete with a clear verdict
 - [ ] Manual testing items (if any) are listed with justification for why automation is impossible
 
 Validation is **NOT done** if:
 - Any automated check was skipped
+- A stuck state's recovery-or-disclosure test, or a plan's consumer-sweep coverage, was not checked
 - Deviations were found but not explained
 - The report omits phases or success criteria from the original plan
 
