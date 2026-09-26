@@ -745,10 +745,91 @@ def make_plan(engine, request):
     after = file_node(serialized(next_manifest)) if next_manifest else {'kind': 'missing'}
     if node_bytes(before) != node_bytes(after):
         operations.append({'root_id': 'state', 'destination': 'manifest.json', 'before': before, 'after': after})
+    notices = receipt_gate_notices(request, roots, operations)
     return {'schema_version': 1, 'request': request, 'roots': roots, 'state_root': state,
             'source': identity, 'status': 'conflict' if conflicts else 'ready' if operations else 'noop',
-            'operations': operations, 'conflicts': conflicts, 'retained': retained,
+            'operations': operations, 'conflicts': conflicts, 'retained': retained, **({'notices': notices} if notices else {}),
             'observations': [{'root_id': root, 'destination': name, 'node': node} for (root, name), node in sorted(observations.items())]}
+
+
+GATE_DOC = 'docs/native-policy.md ("Optional verification receipt gate")'
+
+
+def pre_push_hook(root):
+    """(path, state) of the pre-push hook Git would run for root; None without Git. Never writes .git."""
+    try:
+        process = subprocess.run(['git', '-C', str(root), 'rev-parse', '--git-path', 'hooks'],
+                                 capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if process.returncode or not process.stdout.strip():
+        return None
+    path = (Path(root) / process.stdout.strip() / 'pre-push').resolve()
+    try:
+        invokes = path.is_file() and b'rpi-prepush.py' in path.read_bytes()
+    except OSError:
+        invokes = False
+    return str(path), 'present' if invokes else 'does not invoke rpi-prepush.py' if path.exists() else 'missing'
+
+
+def receipt_gate_notices(request, roots, operations):
+    """Informational receipt-gate notices; they never change a plan's status."""
+    if request['scope'] != 'project':
+        return []
+    root = roots['project']
+    if request['action'] == 'detach':
+        removes = any(op['root_id'] == 'project' and op['destination'] == '.rpi/scripts/rpi-prepush.py'
+                      and op['after']['kind'] == 'missing' for op in operations)
+        hook = pre_push_hook(root) if removes else None
+        if not hook or hook[1] != 'present':
+            return []
+        return [{'pre_push_hook': 'present', 'hook_path': hook[0],
+                 'reason': 'this detach removes .rpi/scripts/rpi-prepush.py, which the pre-push hook invokes; later pushes would fail',
+                 'fix': 'after applying, remove ' + hook[0] + ' (or its rpi-prepush.py line); the engine never modifies .git'}]
+    if request['action'] != 'update':
+        return []
+    try:
+        node = snapshot(bound_path(root, '.rpi/policy.json'))
+        policy = json.loads(node_bytes(node)) if node['kind'] == 'file' else None
+    except (Conflict, OSError, ValueError):
+        policy = None
+    if not isinstance(policy, dict):
+        return []
+    if policy.get('require_verification_receipt') is True:
+        hook = pre_push_hook(root)
+        notice = {'receipt_gate': 'on', 'pre_push_hook': hook[1] if hook else 'unavailable; not a Git work tree'}
+        if hook:
+            notice['hook_path'] = hook[0]
+        if notice['pre_push_hook'] != 'present':
+            notice['fix'] = ('.rpi/policy.json requires a verification receipt, but no pre-push hook runs '
+                             '.rpi/scripts/rpi-prepush.py; install it with the one-time command in ' + GATE_DOC)
+        return [notice]
+    if 'verification_checks' in policy or 'verification_command' in policy:
+        return [{'receipt_gate': 'off',
+                 'reason': '.rpi/policy.json declares verification evidence but not require_verification_receipt; '
+                           'the v2.0 pre-action hook blocked integration pushes without a passing receipt, and '
+                           'from v2.1 that push gate is opt-in, so pushes are no longer gated',
+                 'fix': 'to keep the push gate, add "require_verification_receipt": true to .rpi/policy.json and '
+                        'enable the Git pre-push hook that runs .rpi/scripts/rpi-prepush.py with the one-time '
+                        'command in ' + GATE_DOC + '; to accept an ungated push, no action is needed'}]
+    return []
+
+
+def status_bookkeeping_only(plan):
+    """True when the only pending write relabels owned entries clean/local-only.
+
+    A deliberate owner customization is retained and reported, not action-needed;
+    the next real update records the label with its other changes."""
+    operations = plan.get('operations') or []
+    if plan.get('conflicts') or [(op['root_id'], op['destination']) for op in operations] != [('state', 'manifest.json')]:
+        return False
+    def unlabeled(node):
+        value = json.loads(node_bytes(node) or b'null')
+        for entry in (value or {}).get('entries', []):
+            entry.pop('status', None)
+        return value
+    before, after = unlabeled(operations[0]['before']), unlabeled(operations[0]['after'])
+    return before is not None and before == after
 
 
 def atomic_node(path, node):
@@ -802,7 +883,8 @@ def validate_plan(engine, plan):
     # Reconstruct all authority from the explicitly bound request. Untrusted plan
     # operations cannot introduce ownership, permissions or arbitrary destinations.
     fresh = make_plan(engine, plan['request'])
-    if fresh != plan:
+    informational = lambda value: {key: item for key, item in value.items() if key != 'notices'}
+    if informational(fresh) != informational(plan):  # A hook edit after planning never invalidates it.
         raise Conflict('plan changed or source/installation preimages changed; create a new plan')
     if plan.get('status') == 'conflict':
         raise Conflict('unresolved plan conflicts')
@@ -969,7 +1051,7 @@ def rollback(journal_path):
         # undoing it would silently remove newer work, so only the latest applies.
         ordered = journals(journal['state_root'])
         position = next((index for index, item in enumerate(ordered) if item[2] == journal_path), -1)
-        # Journals from v2.0.2 and earlier carry no sequence; the file order
+        # Journals written before sequencing (pre-2.1) carry no sequence; the file order
         # (modification time) is then the only evidence of what came later.
         newer = [path for index, (order, status, path) in enumerate(ordered)
                  if (order > sequence if 'sequence' in journal else index > position)
@@ -1240,6 +1322,8 @@ def cli(engine, args):
             atomic_node(output, file_node(serialized(result), 0o600))
             saved = output
         else:
+            if result['status'] == 'ready' and status_bookkeeping_only(result):
+                result['status'], result['operations'] = 'noop', []  # Retained customization is healthy.
             result['status'] = 'healthy' if result['status'] == 'noop' else 'action-needed'
         try:
             state_root = request_roots(request)[1]
@@ -1256,6 +1340,10 @@ def cli(engine, args):
             output = (saved.with_name(saved.stem + '-' + stamp + saved.suffix) if saved else
                       Path(state_root) / 'local/plans' / (request['action'] + '-' + stamp + '.json'))
             pending_fix = conflict_fix(request, result.get('conflicts', []), saved, output)
+            if pending_fix is None and args.command == 'check' and result['status'] == 'action-needed' and not result.get('conflicts'):
+                pending_fix = ('review the pending operations listed here; create the update plan with ' +
+                               replan_command(request, sorted(request.get('allow_capabilities') or []), output) +
+                               ', review it, then apply it with ' + engine_command('apply', '--plan', output))
     summary = {key: value for key, value in result.items() if key not in ('observations', 'operations', 'request', 'roots')}
     if 'conflicts' in summary:
         summary['conflicts'] = [{key: value for key, value in item.items() if key != 'diffs'} for item in summary['conflicts']]

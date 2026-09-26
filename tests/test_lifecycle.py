@@ -486,7 +486,7 @@ class TransactionTests(unittest.TestCase):
         self.apply_ready()
         journals = sorted((p.resolve() for p in (self.project / '.rpi/local/transactions').glob('*/journal.json')),
                           key=lambda path: json.loads(path.read_text())['sequence'])
-        for order, journal in enumerate(journals):  # Rewrite as v2.0.2 journals: no sequence, mtime order only.
+        for order, journal in enumerate(journals):  # Rewrite as pre-2.1 journals: no sequence, mtime order only.
             for path in (journal, journal.with_name('receipt.json')):
                 value = json.loads(path.read_text())
                 value.pop('sequence')
@@ -575,6 +575,96 @@ class TransactionTests(unittest.TestCase):
         self.assertFalse((claude / 'rpi-release').exists())
         self.assertFalse((self.project / '.rpi').exists())
         self.assertTrue((state / 'manifest.json').is_file())
+
+    def check(self):
+        result = self.invoke('check', '--source', self.source, '--target', self.project)
+        return result, json.loads(result.stdout)
+
+    def test_retained_owner_customization_is_healthy_without_a_looping_fix(self):
+        self.apply_ready()
+        destination = '.agents/skills/rpi-plan/references/playbook.md'
+        self.write(self.project, destination, 'Owner planning customization.\n')
+        before = self.snapshot(include_local=True)
+        result, summary = self.check()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(summary['status'], 'healthy')
+        self.assertIn({'destination': destination, 'reason': 'local-only customization retained'}, summary['retained'])
+        self.assertEqual(self.snapshot(include_local=True), before)
+
+    def test_check_fix_is_a_runnable_update_plan_then_apply(self):
+        self.apply_ready()
+        self.write(self.source, 'templates/skills/rpi-plan/references/playbook.md', 'New upstream planning resource.\n')
+        result, summary = self.check()
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertEqual(summary['status'], 'action-needed')
+        plan_part, apply_part = summary['fix'].split(' create the update plan with ', 1)[1].split(', review it, then apply it with ', 1)
+        replan, apply = shlex.split(plan_part), shlex.split(apply_part)
+        self.assertEqual(replan[replan.index('--action') + 1], 'update')
+        self.assertEqual(replan[replan.index('--output') + 1], apply[apply.index('--plan') + 1])
+        self.assertEqual(adopters.subprocess.run(replan, capture_output=True, text=True).returncode, 0)
+        applied = adopters.subprocess.run(apply, capture_output=True, text=True)
+        self.assertEqual(applied.returncode, 0, applied.stdout + applied.stderr)
+        result, summary = self.check()
+        self.assertEqual((result.returncode, summary['status']), (0, 'healthy'), result.stdout)
+
+    def receipt_gate(self, summary):
+        return next((item for item in summary.get('notices', []) if 'receipt_gate' in item), None)
+
+    def test_update_and_check_name_the_opt_in_receipt_gate(self):
+        self.apply_ready()
+        policy = {'schema_version': 1, 'integration_branch': 'main', 'verification_checks': ['unit']}
+        self.write(self.project, '.rpi/policy.json', json.dumps(policy))
+        result, summary = self.check()
+        self.assertEqual((result.returncode, summary['status']), (0, 'healthy'), result.stdout)
+        notice = self.receipt_gate(summary)
+        self.assertEqual(notice['receipt_gate'], 'off')
+        for fragment in ('"require_verification_receipt": true', 'pre-push', 'docs/native-policy.md'):
+            self.assertIn(fragment, notice['fix'])
+        plan, _ = self.plan('update')
+        self.assertEqual(plan['status'], 'noop')
+        self.assertEqual(self.receipt_gate(plan)['receipt_gate'], 'off')
+        self.assertIsNone(self.receipt_gate(self.plan('install')[0]))
+        adopters.subprocess.run(['git', 'init', '-q', str(self.project)], check=True)
+        self.write(self.project, '.rpi/policy.json', json.dumps({**policy, 'require_verification_receipt': True}))
+        hooks = self.project / '.git/hooks'
+        before = sorted(p.name for p in hooks.iterdir())
+        notice = self.receipt_gate(self.check()[1])
+        self.assertEqual((notice['receipt_gate'], notice['pre_push_hook']), ('on', 'missing'))
+        self.assertEqual(notice['hook_path'], str((hooks / 'pre-push').resolve()))
+        self.assertIn('docs/native-policy.md', notice['fix'])
+        self.assertEqual(sorted(p.name for p in hooks.iterdir()), before)
+        self.write(hooks, 'pre-push', '#!/bin/sh\nexec python3 "$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py" "$@"\n')
+        notice = self.receipt_gate(self.check()[1])
+        self.assertEqual((notice['receipt_gate'], notice['pre_push_hook']), ('on', 'present'))
+        self.assertNotIn('fix', notice)
+        self.write(hooks, 'pre-push', '#!/bin/sh\nexec other-hook "$@"\n')
+        self.assertEqual(self.receipt_gate(self.check()[1])['pre_push_hook'], 'does not invoke rpi-prepush.py')
+        (self.project / '.rpi/policy.json').unlink()
+        self.assertIsNone(self.receipt_gate(self.check()[1]))
+
+    def test_detach_names_a_pre_push_hook_that_invokes_the_removed_gate(self):
+        manifest_path = self.source / 'templates/distribution.json'
+        manifest = json.loads(manifest_path.read_text())
+        self.write(self.source, 'templates/scripts/rpi-prepush.py', 'print("gate")\n')
+        manifest['components'].append({'id': 'resource:prepush-gate', 'kind': 'resource', 'scope': 'project',
+            'selection': 'default', 'harnesses': ['claude', 'codex'], 'dependencies': [],
+            'source': 'templates/scripts/rpi-prepush.py',
+            'outputs': {'claude': '.rpi/scripts/rpi-prepush.py', 'codex': '.rpi/scripts/rpi-prepush.py'},
+            'ownership': {'direct': 'cc-rpi', 'plugin': 'cc-rpi'}})
+        manifest_path.write_text(json.dumps(manifest))
+        self.apply_ready()
+        self.assertTrue((self.project / '.rpi/scripts/rpi-prepush.py').is_file())
+        plan, _ = self.plan('detach')
+        self.assertFalse(any('pre_push_hook' in item for item in plan.get('notices', [])))
+        adopters.subprocess.run(['git', 'init', '-q', str(self.project)], check=True)
+        hook = self.write(self.project / '.git/hooks', 'pre-push', '#!/bin/sh\nexec python3 .rpi/scripts/rpi-prepush.py "$@"\n')
+        plan, path = self.plan('detach')
+        notice = next(item for item in plan['notices'] if 'pre_push_hook' in item)
+        self.assertEqual(notice['hook_path'], str(hook.resolve()))
+        self.assertIn(str(hook.resolve()), notice['fix'])
+        self.assertEqual(self.invoke('apply', '--plan', path).returncode, 0)
+        self.assertTrue(hook.is_file())
+        self.assertFalse((self.project / '.rpi/scripts/rpi-prepush.py').exists())
 
 
 if __name__ == '__main__':

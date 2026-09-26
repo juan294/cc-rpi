@@ -57,13 +57,19 @@ their guidance is unchanged, and the hook no longer enforces #33 or #48.
   shell parser cannot reliably tell which refs a push publishes, so the gate
   left the pre-action hook. Set `"require_verification_receipt": true` in
   `.rpi/policy.json` and enable `.rpi/scripts/rpi-prepush.py` as the clone's
-  `pre-push` hook (one documented command; nothing writes into `.git`). Git
-  hands it the exact refs, so every integration-branch or version-tag update in
-  a push, including `--all`, `--tags` and globs, needs a clean tree and a
-  passing `verification.json` for that commit, and deleting the integration
-  branch is refused. When only the Python interpreter differs from the
-  receipt's, the refusal names both. In an opted-in project any gate error
-  refuses the push. `gh release create` and Vercel production deploys are no
+  `pre-push` hook (one documented command; the engine writes nothing into
+  `.git`). The wrapper goes into the common hooks directory shared by linked
+  worktrees, or is committed when `core.hooksPath` is relative, and refuses with
+  `BLOCKED / WHY / FIX` in a checkout without the gate. Git hands it the exact
+  refs, so every integration-branch or version-tag update in a push, including
+  `--all`, `--tags` and globs, needs a clean tree (ignoring `.rpi/local/`, which
+  the runner now ignores itself) and a passing `verification.json` for that
+  commit, and deleting the integration branch is refused. Opt-in is read from
+  both the pushing checkout and the policy committed in the pushed commit, and
+  `integration_branch` may carry a `refs/heads/` prefix. Refusals name the
+  differing interpreter, runtime keys or locale settings, and a mismatched tag
+  gets a tag-specific fix. In an opted-in project any gate error refuses the
+  push. `gh release create` and Vercel production deploys are no
   longer gated. Projects without the key, or without `.rpi/policy.json`, are
   not gated. cc-rpi opts itself in.
 - **Native rules no longer ask for `git push`, `gh pr create` or
@@ -92,7 +98,15 @@ their guidance is unchanged, and the hook no longer enforces #33 or #48.
   transaction is unfinished and name the rollbacks, newest first, that clear it.
   Rollback refuses an older journal once a newer transaction exists, including
   journals written before this release. A moved or renamed project prints the
-  command that rebinds it. The owner's JSON indentation is preserved.
+  command that rebinds it. The owner's JSON indentation is preserved. `check`
+  reports a retained owner customization of an owned file as healthy instead
+  of looping on an action-needed FIX, and any other action-needed `check`
+  without conflicts prints the exact update `plan` and `apply` commands. An
+  update or `check` of a project that declares verification checks without
+  `"require_verification_receipt": true` reports a `receipt_gate: "off"`
+  notice naming the steps to keep the push gate; with the key set, `check`
+  reports whether the pre-push hook invokes `rpi-prepush.py`, and a detach
+  that removes the gate names the hook to remove.
 - **Stale "hook enforced" claims.** Index rules #33 and #48 now point to the
   `git-workflow` skill that holds their bodies, since the hook no longer blocks
   dirty pulls or `--tags`. Rule #44 now points to `python-rules`; no hook ever

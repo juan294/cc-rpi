@@ -101,41 +101,80 @@ pre-action shell parser. A parser cannot reliably know which refs a push
 publishes (`--all`, globs, `remote.<name>.push`, `push.default`, aliases,
 `cd "$(...)"` and `git -C "$VAR"` all hide them); Git hands the pre-push hook the
 exact local and remote refs and commits. The engine installs the script but
-never writes into `.git`. Enable it once per clone, from the repository root.
-`git rev-parse --git-path hooks` honors `core.hooksPath`, and linked worktrees
-share the clone's hooks directory; the wrapper runs the pushing worktree's own
-gate:
+never writes into `.git`. Enable it once per clone, from the repository root of
+the integration checkout:
 
 ```bash
-hooks=$(git rev-parse --git-path hooks) && mkdir -p "$hooks"
-printf '#!/bin/sh\nexec python3 "$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py" "$@"\n' > "$hooks/pre-push"
+hooks=$(git config --type=path --get core.hooksPath || echo "$(git rev-parse --path-format=absolute --git-common-dir)/hooks")
+mkdir -p "$hooks" && cat > "$hooks/pre-push" <<'EOF'
+#!/bin/sh
+top=$(git rev-parse --show-toplevel 2>/dev/null)
+gate="$top/.rpi/scripts/rpi-prepush.py"
+if [ ! -f "$gate" ]; then
+  echo "BLOCKED / WHY: this checkout has no .rpi/scripts/rpi-prepush.py receipt gate. / FIX: push from a checkout that contains it, such as the integration worktree; or restore it with a reviewed update (RPI_SOURCE is your cc-rpi checkout): bash \"\$RPI_SOURCE/scripts/install.sh\" --target \"$top\" --action update --output \"$top/.rpi/local/plans/restore.json\"; review it, then bash \"\$RPI_SOURCE/scripts/install.sh\" --apply \"$top/.rpi/local/plans/restore.json\"; or, if this project no longer opts in, remove this hook: rm \"$0\"" >&2
+  exit 1
+fi
+exec python3 "$gate" "$@"
+EOF
 chmod +x "$hooks/pre-push"
 ```
 
+Where the wrapper lands depends on `core.hooksPath`:
+
+- Unset: the clone's common `hooks` directory
+  (`git rev-parse --git-common-dir`), outside every working tree. All linked
+  worktrees of that clone share this one wrapper; each fresh clone runs the
+  command again.
+- Absolute: that directory. Worktrees and clones that use the same setting
+  share it.
+- Relative, such as `.githooks`: Git resolves it inside each worktree, so the
+  command writes an untracked `.githooks/pre-push`. Commit it with the
+  integration branch (`git add .githooks/pre-push`) so every clone and worktree
+  checked out from that commit has it. A worktree checked out from an older
+  commit without the wrapper runs no hook at all.
+
+The wrapper runs the pushing worktree's own gate. When that checkout has no
+`.rpi/scripts/rpi-prepush.py` (a worktree checked out before adoption, or after
+`detach`), every push from it is refused with `BLOCKED / WHY / FIX`, and the
+printed fix names the three ways out: push from a checkout that has the gate,
+restore it with a reviewed update, or, when the project no longer opts in,
+remove the hook file at its printed path.
 When a `pre-push` hook already exists (for example one managed by a hook
 tool), add the wrapper's command to it instead of replacing it. `git push --no-verify` skips every
 pre-push hook, so the gate is a guard against mistakes, not a security boundary.
 
-With the key on, each pushed update of `refs/heads/<integration_branch>` or of a
-version tag (`vX.Y.Z` or `X.Y.Z`, optionally with a suffix) requires a clean tree
-and a passing `.rpi/local/verification.json` whose commit is the pushed commit;
-an annotated tag is peeled to its commit. A bulk push such as `--all`, `--tags`
+A pushed update is gated when the pushing checkout's `.rpi/policy.json` or the
+policy committed in the pushed commit opts in; the stricter wins, so a worktree
+on a pre-opt-in branch cannot publish an opted-in integration branch.
+`integration_branch` may be written `main` or `refs/heads/main`. Each gated
+update of `refs/heads/<integration_branch>` or of a version tag (`vX.Y.Z` or
+`X.Y.Z`, optionally with a suffix) requires a clean tree and a passing
+`.rpi/local/verification.json` whose commit is the pushed commit; an annotated
+tag is peeled to its commit. The clean-tree check ignores `.rpi/local/`, and the
+runner creates `.rpi/local/.gitignore` (`*`) when it is absent, so receipts never
+dirty a fresh clone or linked worktree. A mismatched tag is refused with a fix
+that checks out the tag, verifies it and pushes it. A bulk push such as `--all`, `--tags`
 or a glob is checked line by line, so it passes only when every gated ref points
 at the verified commit. Deleting the integration branch is refused. Working
 branches, other tags and tag deletions pass. The receipt must cover every
 declared `verification_checks` name/argv pair, the exact candidate identity and
 the runtime identity. The runtime binds the resolved interpreter, so `python3`
 and `python3.13` naming one binary match; when only the interpreter differs,
-the refusal names both. The gate ignores the Git exec-path entry that Git
+the refusal names both. Other runtime differences name the changed keys, and a
+locale, timezone or Python settings difference prints the gate's current
+`LANG`, `LC_*`, `TZ` and `PYTHON*` values. The gate ignores the Git exec-path entry that Git
 prepends to `PATH` for hooks. It validates local evidence, not user
 authorization. `gh release create` and Vercel production deploys are not gated;
 push the verified tag first.
 
-Projects without the key, or without `.rpi/policy.json`, exit 0 at once. In an
+Pushes where neither the checkout nor the pushed commit opts in (no key, or no
+`.rpi/policy.json`) exit 0 at once. In an
 opted-in project the gate requires a declared `integration_branch` and a valid
 verification declaration, and any error, including an invalid
 `.rpi/policy.json` or a missing `rpi-candidate.py`, refuses the push with
-`BLOCKED / WHY / FIX`. See [migration setup](migrations/v2.md).
+`BLOCKED / WHY / FIX`; an installation fault prints the
+`bash "$RPI_SOURCE/scripts/install.sh" --check` command, where `RPI_SOURCE` is
+your verified cc-rpi checkout. See [migration setup](migrations/v2.md).
 
 The runner executes the declared inventory sequentially. Starting a new
 verification attempt supersedes the prior success before checks execute.

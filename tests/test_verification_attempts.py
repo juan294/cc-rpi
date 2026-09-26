@@ -114,6 +114,27 @@ class VerificationAttemptTests(unittest.TestCase):
         (self.local / 'check-exit').write_text('0')
         self.seed_success()
 
+    def test_verifier_keeps_its_evidence_out_of_the_candidate_tree(self):
+        # Without a project .gitignore rule, the receipt must not make the tree dirty.
+        (self.project / '.gitignore').write_text('')
+        self.fixture.git('add', '.')
+        self.fixture.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'No ignore rule')
+        self.local.rmdir()
+        self.seed_success()
+        ignore = self.local / '.gitignore'
+        self.assertEqual(ignore.read_text(), '*\n')
+        self.assertEqual(self.fixture.git('status', '--porcelain', '--untracked-files=all'), '')
+        ignore.write_text('verification.json\n')  # An owner file is never overwritten.
+        self.seed_success()
+        self.assertEqual(ignore.read_text(), 'verification.json\n')
+        owner = self.fixture.workspace / 'owner-ignore'
+        owner.write_text('owner\n')
+        ignore.unlink()
+        ignore.symlink_to(owner)  # Nor is a symlink followed.
+        self.seed_success()
+        self.assertEqual(owner.read_text(), 'owner\n')
+        self.assertTrue(ignore.is_symlink())
+
     def test_competing_run_cannot_execute_or_overwrite_active_attempt(self):
         self.seed_success()
         first = self.paused()

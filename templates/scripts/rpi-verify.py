@@ -133,6 +133,16 @@ def attempt_lock(root):
         os.close(descriptor)
 
 
+def ignore_local(root):
+    """Keep evidence out of Git status in every clone and worktree; an existing entry is the owner's."""
+    try:
+        descriptor = os.open(root / '.rpi/local/.gitignore', os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
+    except FileExistsError:
+        return  # Never overwrite, and never follow, what is already there.
+    with os.fdopen(descriptor, 'w', encoding='utf-8') as handle:
+        handle.write('*\n')
+
+
 def run(root, checks, evidence, suite):
     root = root.resolve()
     evidence = safe_output(root, evidence)
@@ -150,6 +160,7 @@ def run(root, checks, evidence, suite):
             raise ValueError("checks require unique names and nonempty argv arrays")
         names.add(check["name"])
     with attempt_lock(root):
+        ignore_local(root)
         attempt = {'schema_version': 1, 'suite': suite, 'attempt_id': uuid.uuid4().hex,
                    'status': 'running', 'passed': False, 'checks': [],
                    'started_at': datetime.now(timezone.utc).isoformat()}

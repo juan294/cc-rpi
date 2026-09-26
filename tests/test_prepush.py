@@ -12,8 +12,22 @@ import test_policy
 
 PREPUSH = test_policy.ROOT / 'templates/scripts/rpi-prepush.py'
 ZERO = '0' * 40
-# The documented installation: a wrapper that runs the pushing worktree's own gate.
-WRAPPER = '#!/bin/sh\nexec python3 "$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py" "$@"\n'
+DOCS = test_policy.ROOT / 'docs/native-policy.md'
+# The documented enable command, verbatim: a shared (or committed) wrapper that runs the
+# pushing worktree's own gate and refuses with BLOCKED / WHY / FIX when that checkout has none.
+INSTALL = r'''hooks=$(git config --type=path --get core.hooksPath || echo "$(git rev-parse --path-format=absolute --git-common-dir)/hooks")
+mkdir -p "$hooks" && cat > "$hooks/pre-push" <<'EOF'
+#!/bin/sh
+top=$(git rev-parse --show-toplevel 2>/dev/null)
+gate="$top/.rpi/scripts/rpi-prepush.py"
+if [ ! -f "$gate" ]; then
+  echo "BLOCKED / WHY: this checkout has no .rpi/scripts/rpi-prepush.py receipt gate. / FIX: push from a checkout that contains it, such as the integration worktree; or restore it with a reviewed update (RPI_SOURCE is your cc-rpi checkout): bash \"\$RPI_SOURCE/scripts/install.sh\" --target \"$top\" --action update --output \"$top/.rpi/local/plans/restore.json\"; review it, then bash \"\$RPI_SOURCE/scripts/install.sh\" --apply \"$top/.rpi/local/plans/restore.json\"; or, if this project no longer opts in, remove this hook: rm \"$0\"" >&2
+  exit 1
+fi
+exec python3 "$gate" "$@"
+EOF
+chmod +x "$hooks/pre-push"
+'''
 
 
 class PrePushFixture(test_policy.PolicyFixture):
@@ -97,9 +111,55 @@ class PrePushTests(PrePushFixture):
         self.assert_passes(self.line('refs/tags/2.0.0-rc.1'))
         self.commit('Moves HEAD past the tag')
         self.evidence()
-        self.assert_refused(self.line('refs/tags/v9.9.9', tag_object), reason='differs from the verified candidate')
+        result = self.assert_refused(self.line('refs/tags/v9.9.9', tag_object), reason='differs from the verified candidate')
+        fix = result.stderr.split('/ FIX:')[1]
+        self.assertIn('git switch --detach v9.9.9', fix)
+        self.assertIn('git push origin refs/tags/v9.9.9', fix)
+        self.assertNotIn('git push origin develop', fix)
         self.assert_passes(self.line('refs/tags/v9.9.9', ZERO))  # Deleting a remote tag publishes nothing.
         self.assert_passes(self.line('refs/tags/release-candidate', tag_object))
+
+    def test_receipt_directory_never_dirties_the_candidate(self):
+        # A clone whose own .gitignore does not ignore .rpi/local/ must not loop on its receipt.
+        (self.project / '.gitignore').write_text('')
+        self.opt_in()
+        self.evidence()
+        self.assertIn('.rpi/local/', self.git('status', '--porcelain', '--untracked-files=all'))
+        self.assert_passes(self.line('refs/heads/develop'))
+        (self.project / 'scratch.txt').write_text('unfinished\n')
+        result = self.assert_refused(self.line('refs/heads/develop'), reason='clean')
+        self.assertIn('scratch.txt', result.stderr)
+        self.assertNotIn('.rpi/local', result.stderr.split('/ FIX:')[0])
+
+    def test_refs_heads_prefix_names_the_same_integration_branch(self):
+        self.policy(integration_branch='refs/heads/develop')
+        self.opt_in()
+        self.assert_refused(self.line('refs/heads/develop'), reason='verification evidence is missing')
+        self.assert_refused(self.line('refs/heads/develop', ZERO, '(delete)'), reason='Deleting the integration branch (develop)')
+        self.evidence()
+        self.assert_passes(self.line('refs/heads/develop'), self.line('refs/heads/refs/heads/develop'))
+        self.policy(integration_branch='refs/heads/')
+        self.commit('Empty branch name')
+        self.assert_refused(self.line('refs/heads/feature/work'), reason='integration_branch')
+
+    def test_policy_committed_in_the_pushed_commit_opts_in(self):
+        self.opt_in()
+        opted = self.git('rev-parse', 'HEAD')
+        self.policy(require_verification_receipt=False)
+        self.commit('Checkout that predates the opt-in')
+        self.evidence()
+        result = self.assert_refused(self.line('refs/heads/develop', opted), reason='differs from the verified candidate')
+        self.assertIn(opted[:12], result.stderr)
+        self.assert_refused(self.line('refs/tags/v2.0.0', opted), reason='differs from the verified candidate')
+        self.assert_passes(self.line('refs/heads/develop'), self.line('refs/heads/feature/work', opted))
+        (self.project / '.rpi/local/verification.json').unlink()
+        self.assert_refused(self.line('refs/heads/develop', opted), reason='verification evidence is missing')
+        self.policy(require_verification_receipt=True, integration_branch=7)
+        self.commit('Broken committed policy')
+        broken = self.git('rev-parse', 'HEAD')
+        self.policy(require_verification_receipt=False, integration_branch='develop')
+        self.commit('Repaired checkout')
+        self.assert_refused(self.line('refs/heads/develop', broken), reason='committed in ' + broken[:12])
 
     def test_deleting_the_integration_branch_is_refused(self):
         self.opt_in()
@@ -158,13 +218,24 @@ class PrePushTests(PrePushFixture):
         script = self.runtime('def identity(root):\n    raise RuntimeError\n\ndef environment(*_):\n    return {}\n')
         self.opt_in()
         self.evidence()
-        self.assert_refused(self.line('refs/heads/develop'), script=script, reason='Receipt verification failed')
+        result = self.assert_refused(self.line('refs/heads/develop'), script=script, reason='Receipt verification failed')
+        self.assertIn('bash "$RPI_SOURCE/scripts/install.sh" --check --target', result.stderr)
+        self.assertNotIn('rpi-distribution.py check --target .', result.stderr)
 
     def test_changed_settings_cannot_reuse_a_passing_receipt(self):
         self.opt_in()
         self.evidence()
         changed = {**self.environment, 'LC_ALL': 'C.UTF-8', 'TZ': 'Etc/GMT+3'}
-        self.assert_refused(self.line('refs/heads/develop'), environment=changed, reason='locale, timezone or Python')
+        result = self.assert_refused(self.line('refs/heads/develop'), environment=changed, reason='locale, timezone or Python')
+        self.assertIn('LC_ALL=C.UTF-8', result.stderr)
+        self.assertIn('TZ=Etc/GMT+3', result.stderr)
+        path = self.project / '.rpi/local/verification.json'
+        report = json.loads(path.read_text())
+        for key in ('environment', 'environment_after'):
+            report[key] = dict(report[key], executables=dict(report[key]['executables'], gh={'path': '/opt/old/gh', 'size': 1, 'mtime_ns': 1}))
+        path.write_text(json.dumps(report))
+        result = self.assert_refused(self.line('refs/heads/develop'), reason='executables.gh')
+        self.assertNotIn('LC_ALL', result.stderr)
 
     def test_interpreter_only_difference_names_both_interpreters(self):
         self.opt_in()
@@ -205,13 +276,20 @@ class InstalledHookTests(PrePushFixture):
         subprocess.run([self.environment['RPI_REAL_GIT'], 'init', '-q', '--bare', str(self.remote)], check=True)
         scripts = self.project / '.rpi/scripts'
         scripts.mkdir()
-        for name in ('rpi-prepush.py', 'rpi-candidate.py'):
+        for name in ('rpi-prepush.py', 'rpi-candidate.py', 'rpi-verify.py'):
             shutil.copyfile(test_policy.ROOT / 'templates/scripts' / name, scripts / name)
-        hooks = Path(self.git('rev-parse', '--path-format=absolute', '--git-path', 'hooks'))  # As documented.
-        hooks.mkdir(exist_ok=True)
-        (hooks / 'pre-push').write_text(WRAPPER)
-        (hooks / 'pre-push').chmod(0o755)
         self.opt_in()
+
+    def install(self):
+        """Run the documented enable command from the repository root."""
+        subprocess.run(['bash', '-c', INSTALL], cwd=self.project, env=self.environment, check=True)
+
+    def git_in(self, cwd, *arguments):
+        subprocess.run([self.environment['RPI_REAL_GIT'], '-C', str(cwd), '-c', 'user.name=Fixture',
+                        '-c', 'user.email=fixture@example.invalid', *arguments], check=True, capture_output=True)
+
+    def test_documented_command_is_the_tested_command(self):
+        self.assertIn('```bash\n' + INSTALL + '```', DOCS.read_text())
 
     def push(self, *arguments, cwd=None):
         return subprocess.run([self.environment['RPI_REAL_GIT'], 'push', '--porcelain', str(self.remote), *arguments],
@@ -223,6 +301,7 @@ class InstalledHookTests(PrePushFixture):
         return result.stdout.strip() or None
 
     def test_real_pushes_are_gated_by_the_refs_git_reports(self):
+        self.install()
         self.git('branch', 'feature/work')
         self.assertEqual(self.push('feature/work').returncode, 0)
         for arguments in (('develop',), ('--all',), ('HEAD:refs/heads/develop',), ('refs/heads/*:refs/heads/*',)):
@@ -237,6 +316,7 @@ class InstalledHookTests(PrePushFixture):
         self.assertEqual(self.remote_ref('refs/heads/develop'), self.git('rev-parse', 'HEAD'))
 
     def test_bulk_tag_push_checks_each_version_tag(self):
+        self.install()
         self.tag('v1.0.0')
         self.commit('After the old tag')
         self.evidence()
@@ -249,6 +329,9 @@ class InstalledHookTests(PrePushFixture):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_worktree_push_uses_that_worktree_candidate(self):
+        self.install()  # core.hooksPath unset: the clone's common hooks directory, outside every worktree.
+        self.assertTrue((Path(self.git('rev-parse', '--path-format=absolute', '--git-common-dir')) / 'hooks/pre-push').is_file())
+        self.assertEqual(self.git('status', '--porcelain'), '')
         self.evidence()
         linked = self.workspace / 'linked'
         self.git('worktree', 'add', '-q', '-b', 'feature/linked', str(linked))
@@ -256,6 +339,82 @@ class InstalledHookTests(PrePushFixture):
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('verification evidence is missing', result.stderr)
         self.assertEqual(self.push('feature/linked', cwd=linked).returncode, 0)
+
+    def verify(self, cwd):
+        return subprocess.run([sys.executable, '.rpi/scripts/rpi-verify.py'], cwd=cwd, env=self.environment,
+                              capture_output=True, text=True, timeout=60)
+
+    def test_verified_push_succeeds_without_a_project_ignore_rule(self):
+        # Fresh clones and linked worktrees whose .gitignore does not list .rpi/local/.
+        self.install()
+        (self.project / '.gitignore').write_text('')
+        self.policy(verification_checks=[{'name': 'ok', 'argv': ['python3', '-c', 'pass']}])
+        self.commit('Real checks, no project ignore rule')
+        result = self.verify(self.project)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual((self.project / '.rpi/local/.gitignore').read_text(), '*\n')
+        self.assertEqual(self.git('status', '--porcelain', '--untracked-files=all'), '')
+        result = self.push('develop')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        linked = self.workspace / 'linked'
+        self.git('worktree', 'add', '-q', '-b', 'feature/linked', str(linked))
+        (linked / 'change.txt').write_text('Integrated in a linked worktree.\n')
+        self.git_in(linked, 'add', '.')
+        self.git_in(linked, 'commit', '-qm', 'Linked')
+        result = self.verify(linked)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        result = self.push('HEAD:refs/heads/develop', cwd=linked)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.remote_ref('refs/heads/develop'), self.git('rev-parse', 'feature/linked'))
+
+    def test_pre_opt_in_worktree_cannot_publish_the_opted_in_branch(self):
+        self.install()
+        stale = self.workspace / 'stale'
+        self.git('worktree', 'add', '-q', '-b', 'old', str(stale))
+        stale_policy = stale / '.rpi/policy.json'
+        stale_policy.write_text(json.dumps(dict(json.loads(stale_policy.read_text()), require_verification_receipt=False)))
+        self.git_in(stale, 'commit', '-qam', 'Pre-opt-in policy')
+        for arguments in (('develop',), ('--all',)):
+            with self.subTest(arguments=arguments):
+                result = self.push(*arguments, cwd=stale)
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn('verification evidence is missing', result.stderr)
+                self.assertIsNone(self.remote_ref('refs/heads/develop'))
+        self.assertEqual(self.push('old', cwd=stale).returncode, 0)
+
+    def test_checkout_without_the_gate_refuses_with_a_runnable_fix(self):
+        self.install()
+        hook = Path(self.git('rev-parse', '--path-format=absolute', '--git-common-dir')) / 'hooks/pre-push'
+        old = self.workspace / 'no-scripts'
+        self.git('worktree', 'add', '-q', '-b', 'ancient', str(old), 'HEAD~1')
+        self.assertFalse((old / '.rpi/scripts/rpi-prepush.py').exists())
+        for arguments in (('HEAD:refs/heads/develop',), ('ancient',)):
+            with self.subTest(arguments=arguments):
+                result = self.push(*arguments, cwd=old)
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn('BLOCKED / WHY: this checkout has no .rpi/scripts/rpi-prepush.py', result.stderr)
+                self.assertIn('/ FIX:', result.stderr)
+                self.assertIn('bash "$RPI_SOURCE/scripts/install.sh" --target "' + str(old) + '" --action update', result.stderr)
+                self.assertIn('rm "' + str(hook) + '"', result.stderr)
+                self.assertNotIn("can't open file", result.stderr)
+        self.assertIsNone(self.remote_ref('refs/heads/develop'))
+        subprocess.run(['sh', '-c', 'rm "' + str(hook) + '"'], check=True)  # The printed way out works.
+        self.assertEqual(self.push('ancient', cwd=old).returncode, 0)
+
+    def test_relative_hooks_path_wrapper_is_committed_for_every_worktree(self):
+        self.git('config', 'core.hooksPath', '.githooks')
+        self.install()
+        self.assertTrue((self.project / '.githooks/pre-push').is_file())
+        self.assertIn('.githooks/', self.git('status', '--porcelain'))
+        self.commit('Commit the shared pre-push wrapper')  # As documented for a relative core.hooksPath.
+        self.assertEqual(self.git('status', '--porcelain'), '')
+        linked = self.workspace / 'linked'
+        self.git('worktree', 'add', '-q', '-b', 'feature/linked', str(linked))
+        self.assertTrue((linked / '.githooks/pre-push').is_file())
+        result = self.push('HEAD:refs/heads/develop', cwd=linked)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('verification evidence is missing', result.stderr)
+        self.assertIsNone(self.remote_ref('refs/heads/develop'))
 
 
 if __name__ == '__main__':
