@@ -121,7 +121,9 @@ class PrePushTests(PrePushFixture):
         result = self.assert_refused(self.line('refs/heads/develop', integration, 'refs/heads/develop'),
                                      reason='differs from the verified candidate')
         fix = result.stderr.split('/ FIX:')[1].strip()
-        self.assertTrue(fix.startswith('Publish the verified HEAD: git push origin HEAD:refs/heads/develop;'), fix)
+        self.assertTrue(fix.startswith('Publish the verified HEAD: git push origin HEAD:refs/heads/develop (if Git rejects'), fix)
+        self.assertIn('git pull --rebase origin develop', fix)  # The non-fast-forward exit is printed too.
+        self.assertNotIn('--no-verify', fix)  # Only an opt-out push names the owner bypass.
         self.assertIn('git switch develop, run bash scripts/verify-local.sh, then git push origin develop', fix)
         self.assertNotIn('Push the verified commit: git push origin develop', fix)
 
@@ -160,14 +162,19 @@ class PrePushTests(PrePushFixture):
         published = self.git('rev-parse', 'HEAD')
         self.policy(require_verification_receipt=False)
         self.commit('Opt out without verification')
-        self.assert_refused(self.line('refs/heads/develop', remote_sha=published), reason='verification evidence is missing')
+        result = self.assert_refused(self.line('refs/heads/develop', remote_sha=published), reason='verification evidence is missing')
+        self.assertIn('"require_verification_receipt": false', result.stderr)
         self.assert_passes(self.line('refs/heads/develop', remote_sha='1' * 40))  # An unfetched remote object cannot be read.
         self.evidence()
         self.assert_passes(self.line('refs/heads/develop', remote_sha=published))  # One verified push turns it off.
         (self.project / '.rpi/local/verification.json').unlink()
         (self.project / '.rpi/policy.json').unlink()
         self.commit('Remove the policy')
-        self.assert_refused(self.line('refs/heads/develop', remote_sha=published), reason='verification evidence is missing')
+        result = self.assert_refused(self.line('refs/heads/develop', remote_sha=published), reason='verification evidence is missing')
+        # The verifier cannot run without the policy file, so the refusal must print the ways out.
+        fix = result.stderr.split('/ FIX:')[1]
+        self.assertIn('keep .rpi/policy.json with "require_verification_receipt": false', fix)
+        self.assertIn('git push --no-verify', fix)
 
     def test_receipt_directory_never_dirties_the_candidate(self):
         # A clone whose own .gitignore does not ignore .rpi/local/ must not loop on its receipt.

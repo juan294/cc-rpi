@@ -290,7 +290,8 @@ def gated_updates(root, checkout, lines):
             continue
         if commit is None:
             fail('The pushed object for ' + remote_ref + ' is not a local commit.', 'Push a ref that names a local commit.')
-        updates.append((remote_ref, commit, gate))
+        opting_out = not tag and committed_policy(root, commit) is None  # The pushed commit turns the gate off.
+        updates.append((remote_ref, commit, gate, opting_out))
     return updates
 
 
@@ -307,6 +308,18 @@ def evaluate(argv, lines, cwd):
         return
     if len(argv) != 2:
         fail('The pre-push gate expects the remote name and URL as its two arguments.', 'Install it as the repository pre-push hook.')
+    try:
+        check_updates(root, checkout, updates, argv)
+    except Blocked as error:
+        if any(update[3] for update in updates):  # Without this exit the verifier's own refusal would loop.
+            error.fix += (' This push turns the receipt gate off (the pushed commit no longer sets '
+                          '"require_verification_receipt": true). To turn it off, keep .rpi/policy.json with '
+                          '"require_verification_receipt": false, commit, run the verifier and push that verified commit; '
+                          'or the owner pushes once with git push --no-verify.')
+        raise
+
+
+def check_updates(root, checkout, updates, argv):
     # The receipt attests this checkout, so only an identical committed policy can pass with it.
     policy = checkout or updates[0][2]
     runner = verification_contract(policy)[1]
@@ -317,7 +330,7 @@ def evaluate(argv, lines, cwd):
     except Exception as error:  # The opted-in gate must not fail open.
         fail('Receipt verification failed (' + type(error).__name__ + ').',
              'Check the installation with ' + REPAIR + '; then run ' + runner + '.')
-    for remote_ref, commit, gate in updates:
+    for remote_ref, commit, gate, _ in updates:
         if commit == verified:
             continue
         if remote_ref.startswith('refs/tags/'):
@@ -333,7 +346,8 @@ def evaluate(argv, lines, cwd):
                          commit + ':refs/heads/' + branch)
             if verified == git(root, 'rev-parse', 'HEAD'):
                 fix = ('Publish the verified HEAD: git push ' + remote + ' HEAD:refs/heads/' + branch +
-                       '; or, to publish ' + commit[:12] + ': ' + other + '.')
+                       ' (if Git rejects it as non-fast-forward, integrate first: git pull --rebase ' + remote + ' ' +
+                       branch + ', run ' + runner + ', then push again); or, to publish ' + commit[:12] + ': ' + other + '.')
             else:
                 fix = 'To publish ' + commit[:12] + ': ' + other + '.'
         fail('The pushed ' + remote_ref + ' (' + commit[:12] + ') differs from the verified candidate commit (' + str(verified)[:12] + ').', fix)

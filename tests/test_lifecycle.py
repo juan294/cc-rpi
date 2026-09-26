@@ -751,6 +751,7 @@ class TransactionTests(unittest.TestCase):
         saved = self.write(self.project, '.rpi/local/plans/update-saved.json', '{}')
         why, fix = self.blocked(self.invoke('apply', '--plan', missing, '--target', self.project))
         self.assertIn(shlex.join(['--plan', str(saved.resolve())]), fix)  # The newest saved plan nearby.
+        self.assertIn('--action update', fix)  # An existing installation is updated, never re-installed or widened.
         broken = self.write(self.plans, 'broken.json', '{"not": "a plan"')
         why, fix = self.blocked(self.invoke('apply', '--plan', broken))
         self.assertIn(str(broken), why)

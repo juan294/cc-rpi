@@ -1352,8 +1352,14 @@ def plan_first(args, reason):
     saved = sorted((path for path in (target / '.rpi/local/plans').glob('*.json') if path.is_file() and path != args.plan),
                    key=lambda path: path.stat().st_mtime_ns) if (target / '.rpi/local/plans').is_dir() else []
     output = target / '.rpi/local/plans' / ('update-' + time.strftime('%Y%m%d-%H%M%S') + '.json')
+    try:  # An existing installation is updated with its recorded harnesses, never widened.
+        recorded = load_state(target.resolve() / '.rpi')
+    except (Conflict, OSError, TypeError, ValueError):
+        recorded = None
+    harnesses = (recorded or {}).get('harnesses') or []
+    scope = (['--action', 'update'] + (['--harness', harnesses[0]] if len(harnesses) == 1 else [])) if recorded else []
     create = ('create a new plan with ' + engine_command('plan', '--source', args.source.absolute(), '--target', target,
-                                                         '--output', output) +
+                                                         *scope, '--output', output) +
               ' (from the project root it installs into), review it, then run ' + engine_command('apply', '--plan', output))
     if saved:
         create = 'apply the newest saved plan with ' + engine_command('apply', '--plan', saved[-1].resolve()) + '; or ' + create
