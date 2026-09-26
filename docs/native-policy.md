@@ -50,12 +50,14 @@ package scripts, Git aliases and deeply nested shells, passes to native
 permissions. A missing working directory or missing Git passes silently. The
 wrapper prefers `python3.14` through `python3.11` over an older default `python3`
 (macOS ships 3.9). With no supported runtime, or a missing policy script, it
-prints `RPI POLICY SKIPPED`; that also skips an opted-in receipt gate. An
+prints `RPI POLICY SKIPPED`. The opt-in receipt gate is a separate Git hook and
+does not depend on this wrapper. An
 unexpected evaluation error prints `POLICY UNAVAILABLE`; both exit 0. This hook
 is not a complete shell security boundary. A defect in it must not block ordinary
 work. Only a malformed native event or an unknown adapter argument, which
 indicate a broken installation, fail closed for every command. An invalid
-`.rpi/policy.json` blocks the commands that read it (see below).
+`.rpi/policy.json` blocks only the commands that read it: force-pushes and
+deleting pushes, and `gh api` DELETE of a branch ref.
 
 ## Native permissions
 
@@ -94,22 +96,46 @@ A project can opt in to exact-candidate publication evidence:
 }
 ```
 
-With the gate on, a push of the integration branch (including a branch glob such
-as `refs/heads/*`) or of an existing version tag,
-`gh release create` for an existing version tag, and a Vercel production deploy
-each require a clean tree and a passing `.rpi/local/verification.json` receipt.
-That receipt must cover every declared `verification_checks` name/argv pair, the
-exact candidate identity and the runtime identity. The pushed ref or tag must
-also point at the verified commit. Bulk tag publication (`--tags`,
-`--follow-tags`, `refs/tags/*`) is refused under the gate because it cannot be
-bound to one verified commit; push the release tag by name. The receipt binds the
-resolved interpreter, so `python3` and `python3.13` naming one binary match.
-Working-branch pushes are never gated. The
-gate validates local evidence, not user authorization. Without the key, or
-without `.rpi/policy.json` at all, there is no receipt gate. A present but
-invalid `.rpi/policy.json` blocks only `git push`, Vercel production and
-`gh release create`, and the repair names the file. See
-[migration setup](migrations/v2.md).
+The gate is a Git `pre-push` hook, `.rpi/scripts/rpi-prepush.py`, not part of the
+pre-action shell parser. A parser cannot reliably know which refs a push
+publishes (`--all`, globs, `remote.<name>.push`, `push.default`, aliases,
+`cd "$(...)"` and `git -C "$VAR"` all hide them); Git hands the pre-push hook the
+exact local and remote refs and commits. The engine installs the script but
+never writes into `.git`. Enable it once per clone, from the repository root.
+`git rev-parse --git-path hooks` honors `core.hooksPath`, and linked worktrees
+share the clone's hooks directory; the wrapper runs the pushing worktree's own
+gate:
+
+```bash
+hooks=$(git rev-parse --git-path hooks) && mkdir -p "$hooks"
+printf '#!/bin/sh\nexec python3 "$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py" "$@"\n' > "$hooks/pre-push"
+chmod +x "$hooks/pre-push"
+```
+
+When a `pre-push` hook already exists (for example one managed by a hook
+tool), add the wrapper's command to it instead of replacing it. `git push --no-verify` skips every
+pre-push hook, so the gate is a guard against mistakes, not a security boundary.
+
+With the key on, each pushed update of `refs/heads/<integration_branch>` or of a
+version tag (`vX.Y.Z` or `X.Y.Z`, optionally with a suffix) requires a clean tree
+and a passing `.rpi/local/verification.json` whose commit is the pushed commit;
+an annotated tag is peeled to its commit. A bulk push such as `--all`, `--tags`
+or a glob is checked line by line, so it passes only when every gated ref points
+at the verified commit. Deleting the integration branch is refused. Working
+branches, other tags and tag deletions pass. The receipt must cover every
+declared `verification_checks` name/argv pair, the exact candidate identity and
+the runtime identity. The runtime binds the resolved interpreter, so `python3`
+and `python3.13` naming one binary match; when only the interpreter differs,
+the refusal names both. The gate ignores the Git exec-path entry that Git
+prepends to `PATH` for hooks. It validates local evidence, not user
+authorization. `gh release create` and Vercel production deploys are not gated;
+push the verified tag first.
+
+Projects without the key, or without `.rpi/policy.json`, exit 0 at once. In an
+opted-in project the gate requires a declared `integration_branch` and a valid
+verification declaration, and any error, including an invalid
+`.rpi/policy.json` or a missing `rpi-candidate.py`, refuses the push with
+`BLOCKED / WHY / FIX`. See [migration setup](migrations/v2.md).
 
 The runner executes the declared inventory sequentially. Starting a new
 verification attempt supersedes the prior success before checks execute.
@@ -118,7 +144,7 @@ locale, timezone and Python execution settings.
 
 ## Evidence
 
-Blocks and gated publications are appended to `.rpi/local/contract-events.jsonl`
+Pre-action blocks are appended to `.rpi/local/contract-events.jsonl`
 at the repository root as `{ts, session_id, hook, decision, rule, file}`, only
 when that repository has an installed `.rpi/` directory. Pass-through commands are not
 recorded. Optional telemetry failure does not change the decision. Direct native

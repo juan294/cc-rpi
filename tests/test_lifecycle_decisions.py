@@ -4,6 +4,8 @@ from contextlib import redirect_stdout
 import importlib.util
 import io
 import json
+import shlex
+import subprocess
 from pathlib import Path
 import sys
 import tempfile
@@ -644,6 +646,48 @@ class LifecycleDecisionTests(unittest.TestCase):
             'ownership': {'direct': 'cc-rpi', 'plugin': 'cc-rpi'}})
         manifest_path.write_text(json.dumps(manifest))
         return source, self.project / '.codex/rules/rpi.rules'
+
+    def overlapping_edit(self, source, destination, old, owner, upstream):
+        destination.write_text(destination.read_text().replace(old, owner))
+        source.write_text(source.read_text().replace(old, upstream))
+        plan, artifact = self.plan('update', *(['--allow-capabilities', 'resource:native'] if 'native' in str(source) else []))
+        relative = str(destination.relative_to(self.project))
+        return next(c for c in plan['conflicts'] if c['destination'] == relative), artifact
+
+    def test_overlapping_file_edit_names_component_and_resolutions_that_succeed(self):
+        source = self.source / 'templates/skills/rpi-plan/references/playbook.md'
+        destination = self.project / '.agents/skills/rpi-plan/references/playbook.md'
+        self.apply_ready()
+        installed = destination.read_bytes()
+        conflict, artifact = self.overlapping_edit(source, destination, 'Required', 'Owner-required', 'Upstream-required')
+        self.assertEqual(conflict['component_id'], 'skill:rpi-plan')
+        self.assertIn('diffs.base_to_upstream', conflict['fix'])
+        self.assertIn('Upstream-required', conflict['diffs']['base_to_upstream'])
+        result = self.invoke('apply', '--plan', artifact)
+        self.assertEqual(result.returncode, 2)
+        planned = self.invoke('plan', '--source', self.source, '--target', self.project, '--action', 'update',
+                              '--output', self.plans / 'overlap-summary.json')
+        fix = json.loads(planned.stdout)['fix']
+        self.assertIn(str((self.plans / 'overlap-summary.json').resolve()), fix)
+        self.assertIn(conflict['restore_command'], fix)
+        self.assertNotIn(' check --source', fix)
+        # Hand-merging the upstream change plus the owner tweak still conflicts;
+        # restoring the recorded previous version is the printed exact repair.
+        destination.write_text(installed.decode().replace('Required', 'Owner Upstream-required'))
+        restored = subprocess.run(shlex.split(conflict['restore_command']), capture_output=True, text=True)
+        self.assertEqual(restored.returncode, 0, restored.stderr)
+        self.assertEqual(destination.read_bytes(), installed)
+        self.apply_ready('update')
+        self.assertEqual(destination.read_bytes(), source.read_bytes())
+
+    def test_overlapping_capability_file_edit_names_the_capability_flag(self):
+        source, destination = self.native_resource()
+        self.apply_ready('install', '--allow-capabilities', 'resource:native')
+        conflict, _ = self.overlapping_edit(source, destination, 'prompt', 'forbidden', 'allow')
+        self.assertEqual(conflict['component_id'], 'resource:native')
+        self.assertIn('--allow-capabilities resource:native', conflict['fix'])
+        destination.write_bytes(source.read_bytes())  # Matching upstream exactly is the other named repair.
+        self.apply_ready('update', '--allow-capabilities', 'resource:native')
 
     def test_native_capability_file_add_change_and_same_version_setup_scope(self):
         source, destination = self.native_resource()

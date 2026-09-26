@@ -12,6 +12,7 @@ import test_policy
 
 
 VERIFY = test_policy.ROOT / 'templates/scripts/rpi-verify.py'
+PREPUSH = test_policy.ROOT / 'templates/scripts/rpi-prepush.py'
 PAUSED = r'''
 import importlib.util, sys
 spec = importlib.util.spec_from_file_location('paused_verifier', sys.argv[1])
@@ -48,7 +49,7 @@ class VerificationAttemptTests(unittest.TestCase):
         declaration = self.project / '.rpi/policy.json'
         value = json.loads(declaration.read_text())
         value['verification_checks'] = self.checks
-        value['require_verification_receipt'] = True  # These attempts exercise the opt-in gate.
+        value['require_verification_receipt'] = True  # These attempts exercise the opt-in pre-push gate.
         declaration.write_text(json.dumps(value))
         self.fixture.git('add', '.')
         self.fixture.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
@@ -59,19 +60,25 @@ class VerificationAttemptTests(unittest.TestCase):
                               cwd=self.project, env=self.environment, capture_output=True,
                               text=True, timeout=20)
 
+    def publish(self):
+        """The Git pre-push gate for an update of the integration branch to HEAD."""
+        line = 'refs/heads/develop ' + self.fixture.git('rev-parse', 'HEAD') + ' refs/heads/develop ' + '0' * 40 + '\n'
+        return subprocess.run([sys.executable, str(PREPUSH), 'origin', 'https://github.com/fixture/project.git'],
+                              input=line, cwd=self.project, env=self.environment, capture_output=True, text=True)
+
     def seed_success(self):
         result = self.run_verifier()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertTrue(json.loads(self.receipt.read_text())['passed'])
-        self.assertEqual(self.fixture.invoke('git push origin develop', environment=self.environment).returncode, 0)
+        self.assertEqual(self.publish().returncode, 0)
 
     def assert_unpublishable(self):
         report = json.loads(self.receipt.read_text())
         self.assertFalse(report['passed'])
         self.assertIn(report['status'], ('running', 'failed'))
-        outcome = self.fixture.invoke('git push origin develop', environment=self.environment)
-        self.assertEqual(outcome.returncode, 2, outcome.stdout + outcome.stderr)
-        self.assertFalse(self.fixture.sentinel.exists())
+        outcome = self.publish()
+        self.assertEqual(outcome.returncode, 1, outcome.stdout + outcome.stderr)
+        self.assertIn('BLOCKED / WHY:', outcome.stderr)
 
     def paused(self, *args):
         process = subprocess.Popen([sys.executable, '-B', '-c', PAUSED, str(VERIFY),
@@ -134,7 +141,7 @@ class VerificationAttemptTests(unittest.TestCase):
         self.assertEqual(process.returncode, 0)
         self.assertEqual(json.loads(output.read_text())['suite'], 'custom')
         self.assertEqual(json.loads(self.receipt.read_text())['suite'], 'custom')
-        self.assertEqual(self.fixture.invoke('git push origin develop', environment=self.environment).returncode, 2)
+        self.assertEqual(self.publish().returncode, 1)
 
     def test_in_root_redirect_cannot_hide_an_output_symlink(self):
         self.seed_success()

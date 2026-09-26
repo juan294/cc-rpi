@@ -192,7 +192,8 @@ trusted and observed states. Missing native observations stay unavailable. A hoo
 can exist yet be skipped or untrusted. Native permissions retain approval
 authority for pushes, pull requests and workflow dispatch; the pre-action hook
 only blocks clearly destructive operations and passes everything else through.
-Opt in to the exact-candidate push gate with `require_verification_receipt`. See
+Opt in to the exact-candidate push gate with `require_verification_receipt` and
+enable its Git pre-push hook, `.rpi/scripts/rpi-prepush.py`, once per clone. See
 [native policy](docs/native-policy.md), [compatibility](docs/compatibility.md) and
 [migration](docs/migrations/v2.md).
 

@@ -141,7 +141,17 @@ class ConfigurationOwnershipTests(unittest.TestCase):
         result = reconcile(local, [old], [new], allow_capabilities=True)
         self.assertEqual(result['content'], local)
         self.assertEqual(result['conflicts'], [{'id': 'hook:guard', 'reason': 'local and template both changed an owned entry',
-                                                'previous': old['value'], 'desired': new['value']}])
+                                                'previous': old['value'], 'desired': new['value'],
+                                                'current': self.hook('old', timeout=20)['value']}])
+
+    def test_both_changed_conflict_names_current_value_only_when_identifiable(self):
+        scalar = {'id': 'flag', 'pointer': ['flag'], 'mode': 'value', 'value': 'old'}
+        result = reconcile(b'{"flag":"owner"}', [scalar], [dict(scalar, value='new')], allow_capabilities=True)
+        self.assertEqual(result['conflicts'][0]['current'], 'owner')
+        old, new = self.hook('old'), self.hook('new')
+        twins = [self.hook('old', timeout=20)['value'], self.hook('old', timeout=30)['value']]
+        ambiguous = reconcile(json.dumps({'hooks': {'PreToolUse': twins}}).encode(), [old], [new], allow_capabilities=True)
+        self.assertNotIn('current', ambiguous['conflicts'][0])
 
     def test_removal_conflict_carries_the_boundary_value(self):
         blocked = reconcile(b'{"permissions":{"ask":["Bash(git push:*)"]}}', [record()], [])

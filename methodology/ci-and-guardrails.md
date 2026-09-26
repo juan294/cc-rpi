@@ -76,7 +76,9 @@ A block must also be worth its false positives. A guard that blocks read-only
 commands it cannot parse trains agents to route around it and costs the owner
 more than the errors it prevents, so ambiguous input passes through. A project
 that wants integration and release publication bound to exact local evidence
-opts in with `require_verification_receipt` in `.rpi/policy.json`.
+opts in with `require_verification_receipt` in `.rpi/policy.json` and a Git
+pre-push hook, which receives the exact refs Git publishes instead of guessing
+them from shell text.
 
 ### Block messages are corrective hints
 

@@ -47,18 +47,25 @@ their guidance is unchanged, and the hook no longer enforces #33 or #48.
   Glob refspecs, configured push destinations, `bash -ec`-style shell
   spellings, common wrappers and `gh api` DELETE of a repository or protected
   branch are covered; each command segment is evaluated independently, and
-  dry-run pushes pass. Under the opt-in gate, bulk tag pushes are refused in
-  favor of named tags. Runtime
+  dry-run pushes pass. Runtime
   failures (missing Python, Git, policy script or cwd, or an unexpected
   evaluation error) pass through instead of blocking every command; a missing
   runtime, missing script or evaluation error also prints a warning. The wrapper
   prefers a supported `python3.1x` over an older default `python3`, and
   telemetry is written at the repository root.
-- **The verification-receipt push gate is opt-in.** Set
-  `"require_verification_receipt": true` in `.rpi/policy.json` to require a
-  clean tree and an exact-candidate `verification.json` for integration-branch,
-  version-tag and production publication. Projects without the key, or without
-  `.rpi/policy.json`, are not gated. cc-rpi opts itself in.
+- **The verification-receipt push gate is an opt-in Git pre-push hook.** A
+  shell parser cannot reliably tell which refs a push publishes, so the gate
+  left the pre-action hook. Set `"require_verification_receipt": true` in
+  `.rpi/policy.json` and enable `.rpi/scripts/rpi-prepush.py` as the clone's
+  `pre-push` hook (one documented command; nothing writes into `.git`). Git
+  hands it the exact refs, so every integration-branch or version-tag update in
+  a push, including `--all`, `--tags` and globs, needs a clean tree and a
+  passing `verification.json` for that commit, and deleting the integration
+  branch is refused. When only the Python interpreter differs from the
+  receipt's, the refusal names both. In an opted-in project any gate error
+  refuses the push. `gh release create` and Vercel production deploys are no
+  longer gated. Projects without the key, or without `.rpi/policy.json`, are
+  not gated. cc-rpi opts itself in.
 - **Native rules no longer ask for `git push`, `gh pr create` or
   `gh workflow run`, and no longer deny `git push --tags`**, in both the Claude
   settings entries and the Codex execpolicy. Release and Vercel ask rules and
@@ -74,11 +81,18 @@ their guidance is unchanged, and the hook no longer enforces #33 or #48.
   entry, its value and the exact `--allow-capabilities` flag. When the owner
   edited an owned entry that the template also changed, the conflict shows the
   previous and new values; replacing the edited entry with the new value, or
-  restoring the previous one, both lead to a clean update. `check` names an
-  owned entry that was edited away, so a missing boundary is visible. Failed or
-  interrupted applies print the exact `rollback --journal` command, `check`
-  reports an unfinished transaction, and rollback refuses an older journal once
-  a newer transaction exists. The owner's JSON indentation is preserved.
+  restoring the previous one, both lead to a clean update; the conflict also
+  shows the owner's current value when it can be identified. `check` lists an
+  owned entry that was edited or removed, with its value, under
+  `owned_entries_not_in_effect`, so a missing boundary is visible. When every
+  conflict names its flag or edit, the plan's FIX is the exact re-plan command.
+  An overlapping edit to an owned file names its component and prints a `cp`
+  command that restores the previous version. Failed or interrupted applies print
+  the exact `rollback --journal` command. Plan, apply and check refuse while a
+  transaction is unfinished and name the rollbacks, newest first, that clear it.
+  Rollback refuses an older journal once a newer transaction exists, including
+  journals written before this release. A moved or renamed project prints the
+  command that rebinds it. The owner's JSON indentation is preserved.
 - **Stale "hook enforced" claims.** Index rules #33 and #48 now point to the
   `git-workflow` skill that holds their bodies, since the hook no longer blocks
   dirty pulls or `--tags`. Rule #44 now points to `python-rules`; no hook ever

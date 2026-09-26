@@ -16,6 +16,9 @@ GitHub CLI and uv. The runner captures every exit and candidate identity in
 `.rpi/local/verification.json`; a changed candidate invalidates that evidence.
 Separate database and actual-harness acceptance receipts are required when the
 plan names them. Coverage counts and measured source coverage are distinct.
+This repository opts in to the receipt gate, a Git pre-push hook that nothing
+installs automatically; enable it once per clone with the command in
+`docs/native-policy.md`.
 
 There is no markdownlint configuration here; do not reflow prose to its default
 80-column rules. Validate internal links and apply the no-emoji documentation

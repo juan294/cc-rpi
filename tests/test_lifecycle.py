@@ -412,6 +412,135 @@ class TransactionTests(unittest.TestCase):
         self.assertIn('\n    "model": "owner-choice"', text)
         self.assertIn('Read(.env)', text)
 
+    def interrupted_update(self):
+        self.apply_ready()
+        self.write(self.source, 'templates/skills/rpi-plan/references/playbook.md', 'Upstream planning change.\n')
+        _, stale = self.plan('update')
+        _, path = self.plan('update')
+        self.assertEqual(self.invoke('apply', '--plan', path, '--fail-after', '1').returncode, 2)
+        journal = next(p for p in (self.project / '.rpi/local/transactions').glob('*/journal.json')
+                       if json.loads(p.read_text())['status'] == 'applying').resolve()
+        return stale, journal
+
+    def test_interrupted_transaction_blocks_plan_apply_and_check_names_a_working_rollback(self):
+        stale, journal = self.interrupted_update()
+        rollback = 'rollback --journal ' + shlex.quote(str(journal))
+        before = self.snapshot(include_local=True)
+        applied = self.invoke('apply', '--plan', stale)
+        self.assertEqual(applied.returncode, 2, applied.stdout + applied.stderr)
+        self.assertIn(rollback, json.loads(applied.stdout)['fix'])
+        plan, path = self.plan('update')
+        self.assertEqual(plan['status'], 'conflict')
+        self.assertTrue(any(rollback in item.get('fix', '') for item in plan['conflicts']), plan['conflicts'])
+        self.assertEqual(self.invoke('apply', '--plan', path).returncode, 2)
+        self.assertEqual(self.snapshot(include_local=True), before)
+        check = json.loads(self.invoke('check', '--source', self.source, '--target', self.project).stdout)
+        self.assertEqual(check['status'], 'action-needed')
+        self.assertIn(rollback, check['fix'])
+        self.assertEqual(self.invoke('rollback', '--journal', journal).returncode, 0)
+        self.apply_ready('update')
+        check = self.invoke('check', '--source', self.source, '--target', self.project)
+        self.assertEqual(check.returncode, 0, check.stdout + check.stderr)
+
+    def test_check_names_newest_first_rollbacks_when_work_followed_an_interruption(self):
+        _, journal = self.interrupted_update()
+        self.assertEqual(self.invoke('rollback', '--journal', journal).returncode, 0)
+        self.apply_ready('update')
+        newer = next(p for p in (self.project / '.rpi/local/transactions').glob('*/journal.json')
+                     if json.loads(p.read_text())['status'] == 'complete' and json.loads(p.read_text())['sequence'] == 3).resolve()
+        value = json.loads(journal.read_text())
+        value['status'] = 'applying'  # State left by older releases that allowed apply over an interruption.
+        journal.write_text(json.dumps(value))
+        fix = json.loads(self.invoke('check', '--source', self.source, '--target', self.project).stdout)['fix']
+        chain = fix.split(' with ', 1)[1].split(', then create a new plan', 1)[0]
+        commands = [shlex.split(part) for part in chain.split(' && ')]
+        self.assertEqual([command[-1] for command in commands], [str(newer), str(journal)])
+        for command in commands:
+            result = adopters.subprocess.run(command, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn('interrupted_transactions', json.loads(self.invoke('check', '--source', self.source, '--target', self.project).stdout))
+
+    def test_moved_project_names_a_runnable_rebind(self):
+        self.apply_ready()
+        moved = self.workspace / 'renamed project'
+        self.project.rename(moved)
+        self.project = moved
+        result = self.invoke('check', '--source', self.source, '--target', self.project)
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        fix = json.loads(result.stdout)['fix']
+        binding = (self.project / '.rpi/local/root-binding.json').resolve()
+        rebind = shlex.join(['rm', str(binding)])
+        self.assertIn(rebind, fix)
+        self.assertNotIn(' check --source', fix)
+        self.assertEqual(adopters.subprocess.run(shlex.split(rebind)).returncode, 0)
+        check = self.invoke('check', '--source', self.source, '--target', self.project)
+        self.assertEqual(check.returncode, 0, check.stdout + check.stderr)
+        self.write(self.source, 'templates/skills/rpi-plan/references/playbook.md', 'Upstream planning change.\n')
+        self.apply_ready('update')
+        self.assertEqual(json.loads(binding.read_text()), {'project': str(self.project.resolve())})
+
+    def test_unsequenced_older_journal_cannot_undo_newer_install(self):
+        before = self.snapshot()
+        self.apply_ready()
+        self.apply_ready('detach')
+        self.apply_ready()
+        journals = sorted((p.resolve() for p in (self.project / '.rpi/local/transactions').glob('*/journal.json')),
+                          key=lambda path: json.loads(path.read_text())['sequence'])
+        for order, journal in enumerate(journals):  # Rewrite as v2.0.2 journals: no sequence, mtime order only.
+            for path in (journal, journal.with_name('receipt.json')):
+                value = json.loads(path.read_text())
+                value.pop('sequence')
+                path.write_text(json.dumps(value))
+            adopters.os.utime(journal, ns=(10 ** 18 + order * 10 ** 9,) * 2)
+        installed = self.snapshot()
+        result = self.invoke('rollback', '--journal', journals[0])
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertEqual(self.snapshot(), installed)
+        self.assertIn('rollback --journal ' + shlex.quote(str(journals[-1])), json.loads(result.stdout)['fix'])
+        for journal in reversed(journals):
+            self.assertEqual(self.invoke('rollback', '--journal', journal).returncode, 0)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_edited_entry_conflict_shows_the_owner_current_value(self):
+        settings_path, settings, previous, desired = self.edited_hook_update()
+        plan, _ = self.plan('update', '--allow-capabilities', 'config:policy')
+        conflict = next(item for item in plan['conflicts'] if item.get('record_id') == 'hook-guard')
+        current = json.loads(settings_path.read_text())['hooks']['PreToolUse'][0]
+        self.assertEqual(conflict['current'], current)
+        self.assertIn('your current value ' + json.dumps(current, sort_keys=True, separators=(',', ':')), conflict['reason'])
+
+    def test_removed_owned_deny_is_listed_by_value_in_healthy_check(self):
+        self.add_policy_component([{'id': 'deny-mirror', 'pointer': ['permissions', 'deny'], 'mode': 'entry',
+                                    'value': 'Bash(git push --mirror:*)'}])
+        self.apply_ready('install', '--allow-capabilities', 'config:policy')
+        settings_path = self.project / '.claude/settings.json'
+        settings = json.loads(settings_path.read_text())
+        settings['permissions']['deny'].remove('Bash(git push --mirror:*)')
+        settings_path.write_text(json.dumps(settings))
+        result = self.invoke('check', '--source', self.source, '--target', self.project)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        summary = json.loads(result.stdout)
+        self.assertEqual(summary['status'], 'healthy')
+        self.assertEqual(summary['owned_entries_not_in_effect'], [
+            {'component_id': 'config:policy', 'destination': '.claude/settings.json',
+             'record_id': 'deny-mirror', 'value': 'Bash(git push --mirror:*)'}])
+
+    def test_flag_only_conflicts_name_an_exact_replan_command(self):
+        ask = {'id': 'ask-push', 'pointer': ['permissions', 'ask'], 'mode': 'entry', 'value': 'Bash(git push:*)'}
+        self.add_policy_component([ask])
+        for command in ('plan', 'check'):
+            with self.subTest(command=command):
+                output = ('--output', self.plans / (command + '-flags.json')) if command == 'plan' else ()
+                result = self.invoke(command, '--source', self.source, '--target', self.project, *output)
+                self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                fix = json.loads(result.stdout)['fix']
+                replan = shlex.split(fix.split(' then create a new plan with ', 1)[1])
+                self.assertEqual(replan[replan.index('--allow-capabilities') + 1], 'config:policy')
+                self.assertIn('--output', replan)
+        replanned = adopters.subprocess.run(replan, capture_output=True, text=True)
+        self.assertEqual(replanned.returncode, 0, replanned.stdout + replanned.stderr)
+        self.assertEqual(json.loads(Path(replan[replan.index('--output') + 1]).read_text())['status'], 'ready')
+
     def test_update_without_harness_keeps_recorded_harnesses(self):
         output = self.plans / 'claude-install.json'
         result = self.invoke('plan', '--source', self.source, '--target', self.project, '--harness', 'claude',

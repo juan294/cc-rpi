@@ -4,10 +4,10 @@
 Shell text is parsed, never executed. Exit 0 emits no native decision: the
 client's permission rules, mode and user decide everything else, including
 ordinary pushes, pull requests and workflow dispatch. Exit 2 blocks only a
-positively identified destructive operation or, when a project opts in with
-require_verification_receipt, an integration publication without exact local
-verification evidence. Shell text the parser cannot classify passes through;
-this is not a shell security boundary.
+positively identified destructive operation. Shell text the parser cannot
+classify passes through; this is not a shell security boundary. The opt-in
+verification receipt gate is a Git pre-push hook (rpi-prepush.py), because only
+Git knows exactly which refs a push publishes.
 """
 import sys
 
@@ -21,9 +21,6 @@ if sys.version_info < (3, 11):
 import json  # noqa: E402
 from pathlib import Path  # noqa: E402
 import re  # noqa: E402
-
-# Hook evaluation must not modify the verified candidate through sibling imports.
-sys.dont_write_bytecode = True
 
 POLICY_WORD = re.compile(r'\b(?:git|gh|vercel|vc)\b')
 SHELL_KEYWORDS = {'{', '}', '!', 'if', 'then', 'else', 'elif', 'do', 'while', 'until'}
@@ -49,13 +46,9 @@ VERCEL_SUBCOMMANDS = {'alias', 'aliases', 'api', 'bisect', 'blob', 'build', 'buy
 VERCEL_VALUE_OPTIONS = {'--token', '-t', '--scope', '-S', '--team', '-T', '--cwd', '-A', '--local-config',
                         '-Q', '--global-config', '--target', '-e', '--env', '-b', '--build-env', '-m', '--meta',
                         '--regions', '--archive'}
-# gh release create options without a value; every other option takes one.
-RELEASE_FLAGS = {'--draft', '-d', '--prerelease', '-p', '--latest', '--generate-notes', '--verify-tag',
-                 '--fail-on-no-commits'}
 LITERAL_TEXT = {'echo', 'printf', 'cat', 'rg', 'grep'}
 PROTECTED = ('main', 'master', 'develop')
 DYNAMIC = '__RPI_DYNAMIC__'
-VERSION_TAG = re.compile(r'v?\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?')
 POLICY_KEYS = {'schema_version', 'integration_branch', 'production_branches', 'remote',
                'require_verification_receipt', 'verification_checks', 'verification_command'}
 PUSH_VALUE_OPTIONS = {'-o', '--push-option', '--repo', '--receive-pack', '--exec'}
@@ -113,11 +106,6 @@ def repository(cwd):
     return Path(top).resolve() if top else None
 
 
-def tag_commit(root, tag):
-    """Commit of an existing local version tag, or None."""
-    return git(root, 'rev-parse', '--verify', '--quiet', 'refs/tags/' + tag + '^{commit}') if VERSION_TAG.fullmatch(tag) else None
-
-
 def skip_options(args, takes_value):
     """Index of the first positional; an option for which takes_value holds consumes the next word."""
     index = 0
@@ -146,9 +134,6 @@ def project_policy(root):
     if not isinstance(value, dict) or value.get('schema_version') != 1 or set(value) - POLICY_KEYS:
         fail('Invalid project policy in .rpi/policy.json.',
              'Use schema_version 1 and only these keys: ' + ', '.join(sorted(POLICY_KEYS)) + '.', 'policy-file')
-    if type(value.get('require_verification_receipt', False)) is not bool:
-        fail('In .rpi/policy.json, require_verification_receipt must be true or false.',
-             'Set "require_verification_receipt": true to gate integration publication, or remove the key.', 'policy-file')
     if 'integration_branch' in value and (not isinstance(value['integration_branch'], str) or not value['integration_branch']):
         fail('In .rpi/policy.json, integration_branch must be one branch name.',
              'Declare "integration_branch": "main" (or the actual branch), or remove the key.', 'policy-file')
@@ -164,78 +149,6 @@ def integration_branch(root, policy):
     if isinstance(declared, str) and declared:
         return declared
     return next((name for name in PROTECTED if git(root, 'rev-parse', '--verify', '--quiet', 'refs/heads/' + name)), None)
-
-
-def verification_contract(policy):
-    import shlex
-    checks, command = policy.get('verification_checks'), policy.get('verification_command')
-    if not isinstance(command, list) or not command or any(not isinstance(arg, str) or not arg for arg in command):
-        fail('The project verification command is missing or malformed.',
-             'Declare verification_command as the local runner argv in .rpi/policy.json.', 'verification-contract')
-    if not isinstance(checks, list) or not checks:
-        fail('The project verification inventory is missing.',
-             'Declare every required local gate in .rpi/policy.json verification_checks.', 'verification-contract')
-    names = set()
-    for check in checks:
-        if (not isinstance(check, dict) or set(check) != {'name', 'argv'} or not isinstance(check['name'], str) or
-                not check['name'] or check['name'] in names or not isinstance(check['argv'], list) or not check['argv'] or
-                any(not isinstance(arg, str) or not arg for arg in check['argv'])):
-            fail('The project verification inventory must contain unique names and literal argv arrays.',
-                 'Review .rpi/policy.json verification_checks against the complete local CI selection.', 'verification-contract')
-        names.add(check['name'])
-    return checks, shlex.join(command)
-
-
-def verified_candidate(root, policy):
-    """Exact local evidence for this clean candidate."""
-    import importlib.util
-    expected, runner = verification_contract(policy)
-    if git(root, 'status', '--porcelain', '--untracked-files=normal'):
-        fail('Publication requires a clean completed integration candidate.', 'Commit the completed integration, then run ' + runner, 'dirty-publication')
-    path = root / '.rpi/local/verification.json'
-    if path.is_symlink() or not path.is_file():
-        fail('Exact-candidate local verification evidence is missing.', 'Run ' + runner + ' in the completed integration checkout.', 'missing-evidence')
-    try:
-        report = read_json(path.read_text())
-    except ValueError:
-        report = None
-    helper = Path(__file__).with_name('rpi-candidate.py')
-    if not helper.is_file():
-        fail('The shared candidate identity helper is missing.', 'Reinstall the declared RPI policy resources (rpi-candidate.py).', 'missing-helper')
-    spec = importlib.util.spec_from_file_location('rpi_policy_candidate', helper)
-    candidate = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(candidate)
-    actual, environment = candidate.identity(root), candidate.environment()
-    checks = report.get('checks') if isinstance(report, dict) else None
-    if (not isinstance(report, dict) or report.get('schema_version') != 1 or report.get('suite') != 'ci-equivalent' or
-            report.get('passed') is not True or report.get('identity_unchanged') is not True or
-            report.get('environment_unchanged') is not True or report.get('environment') != environment or
-            report.get('environment_after') != environment or report.get('identity') != actual or
-            report.get('identity_after') != actual or not isinstance(checks, list) or len(checks) != len(expected) or
-            any(not isinstance(item, dict) or type(item.get('exit_code')) is not int or item['exit_code'] != 0 for item in checks) or
-            [{key: item.get(key) for key in ('name', 'argv')} for item in checks] != expected):
-        fail('Local verification does not attest this exact complete candidate.',
-             'Run ' + runner + '; custom, stale, partial or failed reports do not attest the candidate, and changed '
-             'locale, timezone or Python settings require a fresh run.', 'stale-evidence')
-    return actual
-
-
-def require_receipt(root, policy, commit):
-    """The opt-in receipt gate; commit, when given, must be the verified one."""
-    if root is None or not policy.get('require_verification_receipt'):
-        return None
-    try:
-        evidence = verified_candidate(root, policy)
-    except Blocked:
-        raise
-    except Exception as error:  # The opted-in gate must not fail open.
-        fail('Receipt verification failed (' + type(error).__name__ + ').',
-             'Reinstall the declared RPI policy resources, then rerun the declared verification command.', 'receipt-error')
-    if commit is not None and commit != evidence['commit']:
-        fail('The published ref differs from the verified candidate commit.',
-             'Push the verified commit: git push ' + policy.get('remote', 'origin') + ' ' + str(integration_branch(root, policy)) +
-             ', or run ' + verification_contract(policy)[1] + ' on the commit you are publishing.', 'ref-evidence')
-    return 'verified-publication'
 
 
 def resolved_branch(ref, current):
@@ -275,13 +188,8 @@ def configured_targets(root, remote, current, force, delete):
     return [(current, current, force, delete)]
 
 
-def fail_bulk_tags():
-    fail('Bulk tag publication cannot be bound to the verified candidate.',
-         'Push the one verified release tag by name: git push origin vX.Y.Z.', 'named-tag')
-
-
 def push(args, cwd):
-    force = delete = everything = tags = broad = dry_run = False
+    force = delete = everything = broad = dry_run = False
     remote, values, index = None, [], 0
     while index < len(args):
         arg = args[index]
@@ -298,8 +206,6 @@ def push(args, cwd):
             delete = True
         elif name in ('--all', '--branches'):
             everything = True
-        elif name in ('--tags', '--follow-tags'):
-            tags = True
         elif name == '--dry-run':
             dry_run = True
         elif name in PUSH_VALUE_OPTIONS:
@@ -314,20 +220,19 @@ def push(args, cwd):
         elif not arg.startswith('-'):
             values.append(arg)
     if dry_run:
-        return None  # A dry run changes nothing remotely.
+        return  # A dry run changes nothing remotely.
     if remote is None and values:
         remote, values = values[0], values[1:]  # The first positional names the remote.
     if broad or everything and (force or delete):
         fail_broad_push()
     root = repository(cwd)
-    policy = project_policy(root) if root else {}
     current = git(root, 'symbolic-ref', '--quiet', '--short', 'HEAD') if root else None
     targets = ([parse_refspec(spec, force, delete) for spec in values] if values
                else configured_targets(root, remote, current, force, delete))
     rewritten = [resolved_branch(destination, current) for _, destination, forced, removed in targets if forced or removed]
-    gated = root is not None and policy.get('require_verification_receipt')
-    if not rewritten and not gated:
-        return None
+    if not rewritten:
+        return
+    policy = project_policy(root) if root else {}
     integration = integration_branch(root, policy) if root else None
     protected = set(PROTECTED) | set(policy.get('production_branches', [])) | {integration}
     for branch in rewritten:
@@ -335,27 +240,6 @@ def push(args, cwd):
             fail('Force-pushing or deleting a protected branch (' + (branch or 'unresolved target') + ') rewrites shared history.',
                  'Push without force (git pull --rebase first) or use a working branch; if it is truly intended, the owner runs the exact command.',
                  'protected-branch')
-    if not gated:
-        return None
-    if tags:
-        fail_bulk_tags()
-    decision = None
-    for source, destination, _, _ in targets:
-        if destination and '*' in destination:
-            if not (destination == '*' or destination.startswith('refs/heads/')):
-                fail_bulk_tags()
-            source, destination = 'refs/heads/' + str(integration), integration  # A branch glob publishes the integration branch.
-        if resolved_branch(destination, current) == integration:
-            commit = git(root, 'rev-parse', '--verify', '--quiet', (source or 'HEAD') + '^{commit}')
-            if commit is None:
-                fail('The pushed integration ref cannot be resolved for receipt verification.',
-                     'Push a literal ref: git push ' + (remote or 'origin') + ' ' + str(integration) + '.', 'ref-evidence')
-        else:
-            commit = tag_commit(root, (destination or '').removeprefix('refs/tags/'))
-            if commit is None:
-                continue
-        decision = require_receipt(root, policy, commit)
-    return decision
 
 
 def git_command(args, cwd):
@@ -367,8 +251,7 @@ def git_command(args, cwd):
         elif option in GIT_VALUE_OPTIONS and args:
             args.pop(0)
     if args[:1] == ['push']:
-        return push(args[1:], cwd)
-    return None
+        push(args[1:], cwd)
 
 
 def directory(cwd, target):
@@ -384,20 +267,18 @@ def directory(cwd, target):
     return path if path.is_dir() else cwd
 
 
-def deployment(args, cwd):
+def deployment(args):
     if any(arg in ('--help', '-h', '--version', '-v') for arg in args):
-        return None
+        return
     index = skip_options(args, VERCEL_VALUE_OPTIONS.__contains__)
     command = args[index] if index < len(args) else None
     if command is not None and command != 'deploy' and command in VERCEL_SUBCOMMANDS:
-        return None  # Other subcommands belong to native permissions.
+        return  # Other subcommands belong to native permissions.
     targets = [arg.split('=', 1)[1] if arg.startswith('--target=') else (args[position + 1] if position + 1 < len(args) else None)
                for position, arg in enumerate(args) if arg == '--target' or arg.startswith('--target=')]
     if not ('--prod' in args or targets) or any(target != 'production' for target in targets):
         fail('Vercel Preview deployments (including the bare default deploy) are disabled for this project.',
              'Build locally with vercel build, or deploy production explicitly with vercel deploy --prod.', 'preview')
-    root = repository(cwd)
-    return require_receipt(root, project_policy(root), None) if root else None
 
 
 def github(args, cwd):
@@ -406,16 +287,6 @@ def github(args, cwd):
              'The owner runs the exact gh repo delete command after confirming the target.', 'destructive-remote')
     if args[:1] == ['api']:
         api_delete(args[1:], cwd)
-    if args[:2] == ['release', 'create']:
-        root = repository(cwd)
-        if root is None:
-            return None
-        policy = project_policy(root)
-        index = 2 + skip_options(args[2:], lambda option: option not in RELEASE_FLAGS)
-        commit = tag_commit(root, args[index]) if index < len(args) and policy.get('require_verification_receipt') else None
-        if commit is not None:
-            return require_receipt(root, policy, commit)
-    return None
 
 
 def shell_script(args):
@@ -618,14 +489,13 @@ def inspect_command(command, cwd, depth=0):
     # Substitution bodies are part of the raw text, so no policy word anywhere
     # means nothing below can match.
     if depth > 5 or not POLICY_WORD.search(command):
-        return []
+        return
     try:
         tokens, embedded = tokenize(command)
     except Unclassifiable:
-        return []
-    decisions = []
+        return
     for inner in embedded:
-        decisions.extend(inspect_command(inner, cwd, depth + 1))
+        inspect_command(inner, cwd, depth + 1)
     segments, current = [], []
     for kind, token in tokens:
         if kind == 'operator':
@@ -646,10 +516,10 @@ def inspect_command(command, cwd, depth=0):
         if name in SHELLS:
             script = shell_script(args)
             if script is not None:
-                decisions.extend(inspect_command(script, cwd, depth + 1))
+                inspect_command(script, cwd, depth + 1)
             continue
         if name == 'eval':
-            decisions.extend(inspect_command(' '.join(args), cwd, depth + 1))
+            inspect_command(' '.join(args), cwd, depth + 1)
             continue
         if name in ('npx', 'pnpm', 'npm', 'yarn', 'bunx'):
             args = args[skip_options(args, NPX_VALUE_OPTIONS.__contains__):]
@@ -665,37 +535,31 @@ def inspect_command(command, cwd, depth=0):
             continue
         try:
             if name == 'git':
-                decision = git_command(args, cwd)
+                git_command(args, cwd)
             elif name in ('vercel', 'vc'):
-                decision = deployment(args, cwd)
+                deployment(args)
             elif name == 'gh':
-                decision = github(args, cwd)
-            else:
-                decision = None
+                github(args, cwd)
         except Blocked:
             raise
         except Exception as error:  # One unreadable segment must not hide a later destructive one.
             print('POLICY UNAVAILABLE: a ' + name + ' segment could not be evaluated (' + type(error).__name__ +
                   '); later segments are still checked.', file=sys.stderr)
-            continue
-        if decision:
-            decisions.append(decision)
-    return decisions
 
 
 def evaluate(event):
     if not isinstance(event, dict) or not isinstance(event.get('tool_name'), str) or not event['tool_name']:
         fail('The native event does not identify its tool.', 'Reinstall the matching native PreToolUse adapter.', 'malformed-event')
     if event['tool_name'] != 'Bash':
-        return []
+        return
     if event.get('hook_event_name') != 'PreToolUse' or not isinstance(event.get('tool_input'), dict):
         fail('Malformed guarded PreToolUse event.', 'Reinstall the matching native adapter and verify its stdin schema.', 'malformed-event')
     command, cwd = event['tool_input'].get('command'), event.get('cwd')
     if not isinstance(command, str) or not isinstance(cwd, str):
         fail('Guarded shell event requires command text and a cwd.', 'Verify the native adapter tool_input.command and cwd fields.', 'malformed-event')
     if not command.strip() or not Path(cwd).is_dir():
-        return []  # A removed working directory must not block every shell command.
-    return inspect_command(command, Path(cwd).resolve())
+        return  # A removed working directory must not block every shell command.
+    inspect_command(command, Path(cwd).resolve())
 
 
 def telemetry(event, harness, decision, rule):
@@ -729,8 +593,7 @@ def main(argv):
             event = read_json(sys.stdin.read())
         except ValueError:
             fail('Native hook input must be one JSON object.', 'Reinstall the matching native PreToolUse adapter.', 'malformed-event')
-        for rule in evaluate(event):
-            telemetry(event, harness, 'allow', rule)
+        evaluate(event)
         return 0
     except Blocked as error:
         print('BLOCKED / WHY: ' + str(error) + ' / FIX: ' + error.fix, file=sys.stderr)
