@@ -12,9 +12,10 @@ and explicit skill invocation never prove consent, and the hook never grants it.
 | Operation | Rule |
 | --- | --- |
 | Force-push (`--force`, `-f`, `--force-with-lease`, `+ref`) or deletion (`--delete`, `-d`, `:ref`) of a protected branch | `protected-branch` |
-| The same with a target the parser cannot resolve (for example `"$BRANCH"` or a substitution) | `protected-branch` |
+| The same with a target the parser cannot resolve (for example `"$BRANCH"`, a substitution or a glob such as `refs/heads/*`) | `protected-branch` |
+| `gh api` with method DELETE on a repository or on a protected branch ref (`repos/O/R/git/refs/heads/main`) | `destructive-remote`, `protected-branch` |
 | `git push --mirror`, `--prune`, or `--all`/`--branches` combined with force or deletion | `destructive-push` |
-| Vercel Preview creation: bare `vercel`/`vc`, `vercel deploy` or a path deploy without `--prod`/`--target production`, including npx/pnpm/yarn wrappers | `preview` |
+| Vercel Preview creation: bare `vercel`/`vc`, `vercel deploy`, or a path deploy (any first word that is not a Vercel subcommand) without `--prod`/`--target production`, including npx/pnpm/yarn wrappers and pinned `vercel@version` packages | `preview` |
 | `gh repo delete` | `destructive-remote` |
 
 Protected branches are `main`, `master` and `develop`, plus the project's
@@ -22,7 +23,7 @@ Protected branches are `main`, `master` and `develop`, plus the project's
 are declared. Force-pushing or deleting a working branch is allowed.
 
 Everything else passes through: ordinary `git push` of any branch or tag,
-`gh pr create/merge/update-branch`, `gh workflow run`, `gh run rerun`, `gh api`,
+`gh pr create/merge/update-branch`, `gh workflow run`, `gh run rerun`, other `gh api` calls,
 releases, issues, Vercel production deploys and other Vercel subcommands. Those
 are outward-facing actions, so the project's native permission rules and the
 user govern them. `git pull` is never blocked.
@@ -30,16 +31,19 @@ user govern them. `git pull` is never blocked.
 ## Pass-through by design
 
 Shell text is parsed and never executed. Chains, pipes, subshells, command and
-process substitutions, `bash -c`, `eval`, `env`/`command`/`sudo` wrappers,
-`timeout`/`nice`/`nohup` wrappers, redirections such as `2>&1`, `git -C`,
+process substitutions, `bash`/`sh`/`zsh -c` (including forms such as `-ec`,
+`-e -c` and `-o pipefail -c`), `eval`, `env`/`command`/`sudo`/`timeout`/`nice`/
+`nohup`/`stdbuf`/`caffeinate`/`xargs` wrappers, redirections such as `2>&1`, `git -C`,
 `git -c` and loop bodies are inspected for the blocked forms above.
 Literal `echo`, `printf`, `cat`, `grep` and `rg` arguments and quoted `cat`/`tee`
 here-document bodies are text.
 
 Anything the parser cannot read, including unterminated quotes, unknown wrappers,
 package scripts, Git aliases and deeply nested shells, passes to native
-permissions. A missing working directory or missing Git passes silently. A
-missing Python runtime or policy script prints `RPI POLICY SKIPPED`, and an
+permissions. A missing working directory or missing Git passes silently. The
+wrapper prefers `python3.14` through `python3.11` over an older default `python3`
+(macOS ships 3.9). With no supported runtime, or a missing policy script, it
+prints `RPI POLICY SKIPPED`; that also skips an opted-in receipt gate. An
 unexpected evaluation error prints `POLICY UNAVAILABLE`; both exit 0. This hook
 is not a complete shell security boundary. A defect in it must not block ordinary
 work. Only a malformed native event or an unknown adapter argument, which
@@ -104,7 +108,8 @@ locale, timezone and Python execution settings.
 ## Evidence
 
 Blocks and gated publications are appended to `.rpi/local/contract-events.jsonl`
-as `{ts, session_id, hook, decision, rule, file}`. Pass-through commands are not
+at the repository root as `{ts, session_id, hook, decision, rule, file}`; outside
+a repository nothing is written. Pass-through commands are not
 recorded. Optional telemetry failure does not change the decision. Direct native
 event fixtures establish the adapter contract; they do not establish actual
 client trust or invocation. See [compatibility evidence](compatibility.md).

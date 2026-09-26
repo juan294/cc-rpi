@@ -569,7 +569,8 @@ def main():
     parser.add_argument("command", choices=("validate", "render", "check-generated", "check-native", "check-local-skills", "check-self", "self-paths", "counts", "plan", "apply", "check", "rollback", "detach", "diagnose"))
     parser.add_argument("--source", type=Path, default=Path(__file__).resolve().parents[2])
     parser.add_argument("--output", type=Path)
-    parser.add_argument("--harness", choices=("both", *HARNESSES), default="both")
+    # Default: both for install/render; an update keeps the recorded harnesses.
+    parser.add_argument("--harness", choices=("both", *HARNESSES), default=None)
     parser.add_argument("--domain", action="append", default=None)
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--skill-dir", type=Path, action="append")
@@ -590,6 +591,8 @@ def main():
     diagnostics = load_sibling("rpi-diagnostics")
     diagnostics.add_arguments(parser)
     args = parser.parse_args()
+    if args.harness is None and args.command not in ("plan", "check", "detach"):
+        args.harness = "both"
     try:
         if args.command == "diagnose":
             if args.target is None:

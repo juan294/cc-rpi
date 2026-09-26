@@ -652,8 +652,8 @@ def make_plan(engine, request):
                 raise Conflict('native configuration must be a regular file')
             local = file_changes.get((root_id, destination), node_bytes(current))
             result = configuration.reconcile(local, previous_records, group['desired'], cid in authorized, allow_removal=request['action'] == 'detach')
-            conflicts.extend({'destination': destination, 'reason': item['reason'], 'component_id': cid}
-                             for item in result['conflicts'])
+            conflicts.extend({'destination': destination, 'reason': entry_conflict_reason(item, cid),
+                              'component_id': cid, 'record_id': item['id']} for item in result['conflicts'])
             retained.extend({'destination': destination, 'reason': item['reason'], 'component_id': cid}
                             for item in result['retained'])
             if result['content'] != local:
@@ -932,6 +932,33 @@ def rollback(journal_path):
         os.close(lock)
 
 
+def entry_conflict_reason(item, component_id):
+    """Name the native entry and the exact repair for a configuration conflict."""
+    reason = item['reason'] + ' (entry ' + item['id'] + ')'
+    if 'setup or detach scope' in item['reason'] or 'explicit setup scope' in item['reason']:
+        return reason + '; review the native diff, then re-plan with --allow-capabilities ' + component_id
+    if 'both changed' in item['reason']:
+        return (reason + '; restore the template value of this entry or delete the local entry, then re-plan '
+                'with --allow-capabilities ' + component_id)
+    return reason
+
+
+def recorded_harness(args):
+    """An update or detach keeps the installation's recorded harnesses unless one is named."""
+    if args.harness is not None:
+        return args.harness
+    if args.command == 'check' or args.action in ('update', 'detach'):
+        try:
+            base = Path(args.state_root) if args.scope == 'user' and args.state_root else Path(args.target)
+            state = base.absolute().resolve() / ('' if args.scope == 'user' and args.state_root else '.rpi')
+            recorded = (load_state(state) or {}).get('harnesses') or []
+        except (Conflict, OSError, TypeError, ValueError):
+            recorded = []
+        if len(recorded) == 1:
+            return recorded[0]
+    return 'both'
+
+
 def blocked_hint(args, reason):
     command = [sys.executable, str(Path(__file__).with_name('rpi-distribution.py'))]
     if getattr(args, 'target', None):
@@ -965,6 +992,7 @@ def cli(engine, args):
                 args.target = args.state_root
             else:
                 raise ValueError('project lifecycle operations require an explicit --target')
+        args.harness = recorded_harness(args)
         request = {'source': str(args.source.absolute()), 'target': str(args.target.absolute()),
                    'harnesses': list(engine.HARNESSES) if args.harness == 'both' else [args.harness],
                    'domains': args.domain, 'scope': args.scope, 'route': args.route,

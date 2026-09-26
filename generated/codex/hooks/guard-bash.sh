@@ -17,7 +17,15 @@ case "$rpi_harness" in
   claude|codex) ;;
   *) printf '%s\n' 'BLOCKED / WHY: unsupported hook adapter. / FIX: invoke guard-bash.sh with claude or codex.' >&2; exit 2 ;;
 esac
-if ! command -v python3 >/dev/null 2>&1; then
+# Prefer a supported interpreter over an older default python3 (macOS ships 3.9).
+rpi_python=
+for rpi_candidate in python3.14 python3.13 python3.12 python3.11 python3; do
+  if command -v "$rpi_candidate" >/dev/null 2>&1; then
+    rpi_python=$rpi_candidate
+    break
+  fi
+done
+if [[ -z $rpi_python ]]; then
   if [[ ${OSTYPE:-} == darwin* ]]; then
     rpi_skip 'Python 3 is required by the policy adapter. FIX: brew install python'
   fi
@@ -31,4 +39,4 @@ fi
 if [[ ! -f "$rpi_engine" ]]; then
   rpi_skip 'the declared rpi-policy.py dependency is missing. FIX: run python3 .rpi/scripts/rpi-distribution.py check --target . and apply a reviewed update.'
 fi
-exec python3 "$rpi_engine" --harness "$rpi_harness"
+exec "$rpi_python" "$rpi_engine" --harness "$rpi_harness"

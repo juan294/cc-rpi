@@ -70,6 +70,27 @@ class PolicyReceiptTests(test_policy.PolicyFixture):
         self.evidence()
         self.assert_allowed('git push origin --tags')
 
+    def test_opted_in_glob_refspecs_need_evidence(self):
+        self.opt_in()
+        for command in ("git push origin 'refs/heads/*'", "git push origin 'refs/tags/*'",
+                        "git push origin 'refs/tags/*:refs/tags/*'"):
+            with self.subTest(command=command):
+                self.assert_blocked(command, 'verification evidence is missing')
+
+    def test_unreadable_policy_file_blocks_policy_dependent_commands(self):
+        path = self.project / '.rpi/policy.json'
+        path.unlink()
+        path.mkdir()
+        self.assert_blocked('git push origin develop', '.rpi/policy.json')
+        self.assert_allowed('git status')
+
+    def test_stale_receipt_repair_names_environment_changes(self):
+        self.opt_in()
+        self.evidence()
+        result = self.invoke('git push origin develop', environment={**self.environment, 'LC_ALL': 'C.UTF-8', 'TZ': 'Etc/GMT+3'})
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn('locale, timezone or Python', result.stderr)
+
     def test_opted_in_release_tag_is_found_after_option_values(self):
         self.opt_in()
         self.tag()

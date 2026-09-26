@@ -262,6 +262,71 @@ class TransactionTests(unittest.TestCase):
         self.assertEqual(settings['env']['KEY'], 'SYNTHETIC_PRIVATE')
         self.assertEqual(settings['permissions']['deny'], ['Read(private/**)'])
 
+    def add_policy_component(self, entries):
+        manifest_path = self.source / 'templates/distribution.json'
+        manifest = json.loads(manifest_path.read_text())
+        self.write(self.source, 'templates/adapters/policy.json', json.dumps({'schema_version': 1, 'entries': entries}))
+        if not any(component['id'] == 'config:policy' for component in manifest['components']):
+            manifest['components'].append({'id': 'config:policy', 'kind': 'config', 'scope': 'project',
+                'selection': 'default', 'harnesses': ['claude'], 'dependencies': [],
+                'source': 'templates/adapters/policy.json', 'outputs': {'claude': 'configuration/policy.json'},
+                'destinations': {'claude': '.claude/settings.json'},
+                'ownership': {'direct': 'cc-rpi', 'plugin': 'cc-rpi'}})
+            manifest_path.write_text(json.dumps(manifest))
+
+    def test_retired_entry_conflict_names_the_entry_and_capability_flag(self):
+        ask = {'id': 'ask-push', 'pointer': ['permissions', 'ask'], 'mode': 'entry', 'value': 'Bash(git push:*)'}
+        self.add_policy_component([ask])
+        self.apply_ready('install', '--allow-capabilities', 'config:policy')
+        self.add_policy_component([])
+        plan, _ = self.plan('update')
+        self.assertEqual(plan['status'], 'conflict')
+        reasons = [item['reason'] for item in plan['conflicts'] if item.get('record_id') == 'ask-push']
+        self.assertEqual(len(reasons), 1, plan['conflicts'])
+        self.assertIn('entry ask-push', reasons[0])
+        self.assertIn('--allow-capabilities config:policy', reasons[0])
+        self.apply_ready('update', '--allow-capabilities', 'config:policy')
+        settings = json.loads((self.project / '.claude/settings.json').read_text())
+        self.assertNotIn('Bash(git push:*)', settings['permissions']['ask'])
+
+    def test_locally_edited_owned_entry_conflict_names_its_repair(self):
+        ask = {'id': 'ask-push', 'pointer': ['permissions', 'ask'], 'mode': 'entry', 'value': 'Bash(git push:*)'}
+        self.add_policy_component([ask])
+        self.apply_ready('install', '--allow-capabilities', 'config:policy')
+        settings_path = self.project / '.claude/settings.json'
+        settings_path.write_text(settings_path.read_text().replace('Bash(git push:*)', 'Bash(git push origin:*)'))
+        self.add_policy_component([dict(ask, value='Bash(git push --dry-run:*)')])
+        plan, _ = self.plan('update', '--allow-capabilities', 'config:policy')
+        reason = next(item['reason'] for item in plan['conflicts'] if item.get('record_id') == 'ask-push')
+        self.assertIn('restore the template value', reason)
+
+    def test_owner_json_indentation_is_preserved(self):
+        self.add_policy_component([{'id': 'deny-env', 'pointer': ['permissions', 'deny'], 'mode': 'entry', 'value': 'Read(.env)'}])
+        self.write(self.project, '.claude/settings.json', '{\n    "model": "owner-choice"\n}\n')
+        self.apply_ready('install', '--allow-capabilities', 'config:policy')
+        text = (self.project / '.claude/settings.json').read_text()
+        self.assertIn('\n    "model": "owner-choice"', text)
+        self.assertIn('Read(.env)', text)
+
+    def test_update_without_harness_keeps_recorded_harnesses(self):
+        output = self.plans / 'claude-install.json'
+        result = self.invoke('plan', '--source', self.source, '--target', self.project, '--harness', 'claude',
+                             '--route', 'direct', '--action', 'install', '--output', output)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.invoke('apply', '--plan', output).returncode, 0)
+        update = self.plans / 'default-update.json'
+        result = self.invoke('plan', '--source', self.source, '--target', self.project,
+                             '--route', 'direct', '--action', 'update', '--output', update)
+        self.assertIn(result.returncode, (0, 2), result.stdout + result.stderr)
+        self.assertEqual(json.loads(update.read_text())['request']['harnesses'], ['claude'])
+        self.assertFalse((self.project / '.codex').exists())
+        install = self.plans / 'default-install.json'
+        fresh = self.workspace / 'fresh-project'
+        fresh.mkdir()
+        self.invoke('plan', '--source', self.source, '--target', fresh, '--route', 'direct',
+                    '--action', 'install', '--output', install)
+        self.assertEqual(json.loads(install.read_text())['request']['harnesses'], ['claude', 'codex'])
+
     def test_explicit_user_roots_do_not_install_project_workflows(self):
         user_source = self.source / 'templates/distribution.json'
         manifest = json.loads(user_source.read_text())

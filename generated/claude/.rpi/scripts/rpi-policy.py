@@ -33,7 +33,18 @@ HEREDOC = re.compile(r"(?m)^[ \t]*(?:cat|tee)\b[^\n]*?<<-?(['\"])([A-Za-z_][A-Za
 # Wrapper -> its options that take a separate value.
 WRAPPERS = {'env': {'-u', '--unset', '-C', '--chdir', '-S'}, 'command': set(), 'exec': {'-a'},
             'sudo': {'-u', '-g', '-C', '-h', '-p', '-U', '-r', '-t'}, 'time': set(), 'nohup': set(),
-            'nice': {'-n'}, 'timeout': {'-k', '--kill-after', '-s', '--signal'}}
+            'nice': {'-n'}, 'timeout': {'-k', '--kill-after', '-s', '--signal'},
+            'stdbuf': {'-i', '-o', '-e'}, 'caffeinate': {'-t', '-w'},
+            'xargs': {'-n', '-I', '-L', '-P', '-d', '-E', '-s', '-a', '--max-args', '--max-procs', '--delimiter'}}
+SHELLS = ('bash', 'sh', 'zsh', 'dash', 'ksh')
+NPX_VALUE_OPTIONS = {'-p', '--package', '-c', '--call', '--filter', '-C', '--dir'}
+# Vercel CLI subcommands; any other first word is a path to deploy.
+VERCEL_SUBCOMMANDS = {'alias', 'aliases', 'api', 'bisect', 'blob', 'build', 'buy', 'cache', 'certs', 'cert', 'deploy',
+                      'dev', 'dns', 'domains', 'domain', 'env', 'flags', 'git', 'guidance', 'help', 'httpstat', 'init',
+                      'inspect', 'install', 'i', 'integration', 'integration-resource', 'link', 'list', 'ls', 'login',
+                      'logout', 'logs', 'mcp', 'microfrontends', 'open', 'project', 'projects', 'promote', 'pull',
+                      'redeploy', 'remove', 'rm', 'rollback', 'rolling-release', 'switch', 'target', 'targets',
+                      'teams', 'team', 'telemetry', 'upgrade', 'whoami'}
 VERCEL_VALUE_OPTIONS = {'--token', '-t', '--scope', '-S', '--team', '-T', '--cwd', '-A', '--local-config',
                         '-Q', '--global-config', '--target', '-e', '--env', '-b', '--build-env', '-m', '--meta',
                         '--regions', '--archive'}
@@ -123,7 +134,7 @@ def project_policy(root):
         return {}
     try:
         value = read_json(path.read_text())
-    except ValueError:
+    except (ValueError, OSError):
         value = None
     if not isinstance(value, dict) or value.get('schema_version') != 1 or set(value) - POLICY_KEYS:
         fail('Invalid project policy in .rpi/policy.json.',
@@ -194,7 +205,8 @@ def verified_candidate(root, policy):
             any(not isinstance(item, dict) or type(item.get('exit_code')) is not int or item['exit_code'] != 0 for item in checks) or
             [{key: item.get(key) for key in ('name', 'argv')} for item in checks] != expected):
         fail('Local verification does not attest this exact complete candidate.',
-             'Run ' + runner + '; custom, stale, partial or failed reports do not attest the candidate.', 'stale-evidence')
+             'Run ' + runner + '; custom, stale, partial or failed reports do not attest the candidate, and changed '
+             'locale, timezone or Python settings require a fresh run.', 'stale-evidence')
     return actual
 
 
@@ -217,8 +229,8 @@ def require_receipt(root, policy, commit):
 
 def resolved_branch(ref, current):
     """Branch a push destination names, or None when it cannot be resolved."""
-    if not ref or DYNAMIC in ref:
-        return None
+    if not ref or DYNAMIC in ref or '*' in ref:
+        return None  # Unresolved or a glob that can match any branch.
     if ref in ('HEAD', '@'):
         return current
     return ref.removeprefix('refs/heads/')
@@ -283,7 +295,9 @@ def push(args, cwd):
         return None
     decision = None
     for source, destination, _, _ in targets:
-        if resolved_branch(destination, current) == integration:
+        if destination and '*' in destination:
+            decision = require_receipt(root, policy, None)  # A glob can publish the integration branch or tags.
+        elif resolved_branch(destination, current) == integration:
             commit = git(root, 'rev-parse', '--verify', '--quiet', (source or 'HEAD') + '^{commit}')
             if commit is None:
                 fail('The pushed integration ref cannot be resolved for receipt verification.',
@@ -318,7 +332,7 @@ def deployment(args, cwd):
         return None
     index = skip_options(args, VERCEL_VALUE_OPTIONS.__contains__)
     command = args[index] if index < len(args) else None
-    if command is not None and command != 'deploy' and '/' not in command and command not in ('.', '..'):
+    if command is not None and command != 'deploy' and command in VERCEL_SUBCOMMANDS:
         return None  # Other subcommands belong to native permissions.
     targets = [arg.split('=', 1)[1] if arg.startswith('--target=') else (args[position + 1] if position + 1 < len(args) else None)
                for position, arg in enumerate(args) if arg == '--target' or arg.startswith('--target=')]
@@ -333,6 +347,8 @@ def github(args, cwd):
     if args[:2] == ['repo', 'delete']:
         fail('Deleting a repository is irreversible.',
              'The owner runs the exact gh repo delete command after confirming the target.', 'destructive-remote')
+    if args[:1] == ['api']:
+        api_delete(args[1:], cwd)
     if args[:2] == ['release', 'create']:
         root = repository(cwd)
         if root is None:
@@ -343,6 +359,36 @@ def github(args, cwd):
         if commit is not None:
             return require_receipt(root, policy, commit)
     return None
+
+
+def shell_script(args):
+    """The -c script of a shell invocation such as bash -ec 'CMD' or sh -e -c 'CMD'."""
+    index = 0
+    while index < len(args) and args[index][:1] in ('-', '+'):
+        if re.fullmatch(r'-[A-Za-z]*c[A-Za-z]*', args[index]):
+            return args[index + 1] if index + 1 < len(args) else None
+        index += 2 if args[index] in ('-o', '+o', '-O', '+O') else 1  # -o takes an option name.
+    return None
+
+
+def api_delete(args, cwd):
+    """Block API deletion of a repository or a protected branch ref."""
+    methods = [args[index + 1] for index, arg in enumerate(args[:-1]) if arg in ('-X', '--method')]
+    methods += [arg.split('=', 1)[1] for arg in args if arg.startswith(('--method=', '-X='))]
+    if not any(method.upper() == 'DELETE' for method in methods):
+        return
+    for arg in args:
+        if re.fullmatch(r'/?repos/[^/]+/[^/]+/?', arg):
+            fail('Deleting a repository is irreversible.',
+                 'The owner runs the exact deletion after confirming the target.', 'destructive-remote')
+        match = re.fullmatch(r'/?repos/[^/]+/[^/]+/git/refs/heads/(.+)', arg)
+        if match:
+            root = repository(cwd)
+            policy = project_policy(root) if root else {}
+            integration = integration_branch(root, policy) if root else None
+            if match[1] in set(PROTECTED) | set(policy.get('production_branches', [])) | {integration}:
+                fail('Deleting a protected branch (' + match[1] + ') through the API rewrites shared history.',
+                     'Delete only working branches; if it is truly intended, the owner runs the exact command.', 'protected-branch')
 
 
 def strip_quoted_heredocs(command):
@@ -526,15 +572,19 @@ def inspect_command(command, cwd, depth=0):
         name, args = Path(words[0]).name, words[1:]
         if name in LITERAL_TEXT:
             continue
-        if name in ('bash', 'sh', 'zsh') and len(args) >= 2 and args[0] in ('-c', '-lc'):
-            decisions.extend(inspect_command(args[1], cwd, depth + 1))
+        if name in SHELLS:
+            script = shell_script(args)
+            if script is not None:
+                decisions.extend(inspect_command(script, cwd, depth + 1))
             continue
         if name == 'eval':
             decisions.extend(inspect_command(' '.join(args), cwd, depth + 1))
             continue
         if name in ('npx', 'pnpm', 'npm', 'yarn', 'bunx'):
-            while args and (args[0] in ('exec', 'dlx', '--') or args[0].startswith('-')):
+            args = args[skip_options(args, NPX_VALUE_OPTIONS.__contains__):]
+            if args[:1] in (['exec'], ['dlx']):
                 args = args[1:]
+                args = args[skip_options(args, NPX_VALUE_OPTIONS.__contains__):]
             package = Path(args[0]).name.split('@', 1)[0] if args else ''
             if package not in ('vercel', 'vc'):
                 continue
@@ -574,9 +624,12 @@ def evaluate(event):
 def telemetry(event, harness, decision, rule):
     from datetime import datetime, timezone
     try:
-        root = Path(event.get('cwd', ''))
+        cwd = event.get('cwd', '')
+        root = repository(cwd) if Path(cwd).is_dir() else None
+        if root is None:
+            return  # Outside a repository there is no ignored evidence directory to write.
         directory = root / '.rpi/local'
-        if not root.is_dir() or any(path.is_symlink() for path in (root, root / '.rpi', directory, directory / 'contract-events.jsonl')):
+        if any(path.is_symlink() for path in (root, root / '.rpi', directory, directory / 'contract-events.jsonl')):
             return
         directory.mkdir(parents=True, exist_ok=True)
         value = {'ts': datetime.now(timezone.utc).isoformat(), 'session_id': event.get('session_id', ''),
@@ -607,7 +660,7 @@ def main(argv):
         return 2
     except Exception as error:  # A denylist defect must not block ordinary work.
         print('POLICY UNAVAILABLE: evaluation failed (' + type(error).__name__ + '); the command passes to native permissions. '
-              'Run python3 -m unittest discover -s tests -p "test_policy*.py" in cc-rpi to reproduce.', file=sys.stderr)
+              'FIX: run python3 .rpi/scripts/rpi-distribution.py check --target . and report the command shape to cc-rpi.', file=sys.stderr)
         return 0
 
 

@@ -8,6 +8,7 @@ Removing a boundary likewise needs setup scope, or an explicitly selected detach
 """
 import copy
 import json
+import re
 
 MISSING = object()
 
@@ -83,6 +84,15 @@ def read(document, record):
     return value
 
 
+def local_indent(local):
+    """Keep the owner's JSON indentation (spaces or a tab); default to two spaces."""
+    match = re.search(rb'\n([ \t]+)\S', local or b'')
+    if not match:
+        return 2
+    unit = match[1]
+    return '\t' if unit.startswith(b'\t') else len(unit)
+
+
 def reconcile(local, previous_records, desired_records, allow_capabilities=False, allow_removal=False):
     if not isinstance(allow_capabilities, bool) or not isinstance(allow_removal, bool):
         raise ValueError('capability setup scope must be an explicit boolean')
@@ -154,5 +164,5 @@ def reconcile(local, previous_records, desired_records, allow_capabilities=False
         entries.append(copy.deepcopy(new))
     if conflicts:
         return {'content': local, 'entries': copy.deepcopy(previous_records), 'conflicts': conflicts, 'retained': retained}
-    content = local if same(document, original) else (json.dumps(document, indent=2, ensure_ascii=False, allow_nan=False) + '\n').encode()
+    content = local if same(document, original) else (json.dumps(document, indent=local_indent(local), ensure_ascii=False, allow_nan=False) + '\n').encode()
     return {'content': content, 'entries': entries, 'conflicts': [], 'retained': retained}

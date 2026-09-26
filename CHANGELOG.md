@@ -44,9 +44,13 @@ their guidance is unchanged, and the hook no longer enforces #33 or #48.
   branches), `git push --mirror`/`--prune`, forced or deleting `--all`, Vercel
   Preview creation and `gh repo delete`. Everything else, including shell text
   the parser cannot read, passes to Claude Code's or Codex's native permissions.
-  Runtime failures (missing Python, Git, policy script or cwd, or an unexpected
+  Glob refspecs, `bash -ec`-style shell spellings, common wrappers and
+  `gh api` DELETE of a repository or protected branch are covered. Runtime
+  failures (missing Python, Git, policy script or cwd, or an unexpected
   evaluation error) pass through instead of blocking every command; a missing
-  runtime, missing script or evaluation error also prints a warning.
+  runtime, missing script or evaluation error also prints a warning. The wrapper
+  prefers a supported `python3.1x` over an older default `python3`, and
+  telemetry is written at the repository root.
 - **The verification-receipt push gate is opt-in.** Set
   `"require_verification_receipt": true` in `.rpi/policy.json` to require a
   clean tree and an exact-candidate `verification.json` for integration-branch,
@@ -61,6 +65,11 @@ their guidance is unchanged, and the hook no longer enforces #33 or #48.
 
 ### Fixed
 
+- **Installation updates are easier to recover.** An update without
+  `--harness` keeps the installation's recorded harnesses instead of adding
+  Codex files to a Claude-only project. A native settings conflict names the
+  entry and the exact `--allow-capabilities` flag, and a locally edited owned
+  entry says how to restore it. The owner's JSON indentation is preserved.
 - **Stale "hook enforced" claims.** Index rules #33 and #48 now point to the
   `git-workflow` skill that holds their bodies, since the hook no longer blocks
   dirty pulls or `--tags`. Rule #44 now points to `python-rules`; no hook ever

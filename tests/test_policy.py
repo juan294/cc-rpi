@@ -250,6 +250,69 @@ class PolicyTests(PolicyFixture):
             with self.subTest(command=command):
                 self.assert_allowed(command)
 
+    def test_forced_or_deleting_glob_refspecs_cover_protected_branches(self):
+        for command in ("git push -f origin 'refs/heads/*:refs/heads/*'", "git push --force origin 'refs/heads/*'",
+                        "git push origin '+refs/heads/*:refs/heads/*'", "git push origin ':refs/heads/*'"):
+            with self.subTest(command=command):
+                self.assert_blocked(command, 'protected branch')
+        self.assert_allowed("git push origin 'refs/heads/*:refs/heads/*'")
+
+    def test_shell_option_spellings_before_c_are_inspected(self):
+        for command in ("bash -ec 'git push -f origin develop'", "bash -xc 'git push -f origin develop'",
+                        "sh -e -c 'git push -f origin develop'", "zsh -o pipefail -c 'git push -f origin develop'",
+                        'stdbuf -oL git push -f origin develop', 'caffeinate -i git push -f origin develop',
+                        'xargs -n1 git push -f origin develop'):
+            with self.subTest(command=command):
+                self.assert_blocked(command, 'protected branch')
+
+    def test_protected_ref_deletion_through_the_api_is_blocked(self):
+        for command in ('gh api -X DELETE repos/fixture/project/git/refs/heads/main',
+                        'gh api --method=DELETE repos/fixture/project/git/refs/heads/develop',
+                        'gh api --method DELETE repos/fixture/project'):
+            with self.subTest(command=command):
+                self.assert_blocked(command)
+        self.assert_allowed('gh api -X DELETE repos/fixture/project/git/refs/heads/feature/old')
+        self.assert_allowed('gh api repos/fixture/project/git/refs/heads/main')
+
+    def test_bare_vercel_path_words_and_package_options_are_deploys(self):
+        for command in ('vercel dist', 'vc apps/web', 'npx -p vercel vercel deploy', 'npx --package=vercel vercel'):
+            with self.subTest(command=command):
+                self.assert_blocked(command, 'Vercel Preview')
+        for command in ('vercel domains ls', 'vercel certs ls', 'vercel project ls', 'vercel redeploy dpl_1',
+                        'vercel remove dpl_1', 'vercel git connect'):
+            with self.subTest(command=command):
+                self.assert_allowed(command)
+
+    def test_telemetry_is_written_at_the_repository_root(self):
+        nested = self.project / 'src'
+        nested.mkdir()
+        event = dict(self.event('git push -f origin develop'), cwd=str(nested))
+        self.assertEqual(self.invoke(event=event).returncode, 2)
+        self.assertFalse((nested / '.rpi').exists())
+        self.assertTrue((self.project / '.rpi/local/contract-events.jsonl').is_file())
+        outside = self.workspace / 'not-a-repo'
+        outside.mkdir()
+        self.assertEqual(self.invoke(event=dict(self.event('vercel'), cwd=str(outside))).returncode, 2)
+        self.assertFalse((outside / '.rpi').exists())
+
+    def test_wrapper_prefers_a_supported_python_over_an_old_default(self):
+        runtimes = self.workspace / 'runtimes'
+        runtimes.mkdir()
+        (runtimes / 'python3').write_text('#!/bin/sh\necho old-python >&2\nexit 0\n')
+        (runtimes / 'python3').chmod(0o755)
+        (runtimes / 'python3.13').symlink_to(sys.executable)
+        wrapper = self.project / '.claude/hooks/guard-bash.sh'
+        wrapper.parent.mkdir(parents=True)
+        shutil.copyfile(ROOT / 'templates/hooks/guard-bash.sh', wrapper)
+        runtime = self.project / '.rpi/scripts'
+        runtime.mkdir(parents=True)
+        shutil.copyfile(POLICY, runtime / POLICY.name)
+        environment = {**self.environment, 'PATH': str(runtimes) + os.pathsep + '/usr/bin:/bin'}
+        result = subprocess.run(['/bin/bash', str(wrapper)], input=json.dumps(self.event('git push -f origin develop')),
+                                text=True, capture_output=True, env=environment)
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertNotIn('old-python', result.stderr)
+
     def test_literal_text_never_triggers_a_block(self):
         for command in ('printf "%s" "git push -f origin develop"', "echo 'git push --mirror'",
                         "echo '$(git push -f origin develop)'", 'echo gh repo delete x',
