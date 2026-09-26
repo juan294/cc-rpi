@@ -106,7 +106,9 @@ class PrePushTests(PrePushFixture):
         result = self.assert_refused(feature, self.line('refs/heads/develop'), reason='does not attest')
         self.assertIn('bash scripts/verify-local.sh', result.stderr)
         self.git('reset', '-q', '--hard', verified)
-        other = self.git('commit-tree', '-m', 'Unverified', self.git('rev-parse', 'HEAD^{tree}'))
+        # CI runners have no ambient Git identity, so the fixture names its own.
+        other = self.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+                         'commit-tree', '-m', 'Unverified', self.git('rev-parse', 'HEAD^{tree}'))
         result = self.assert_refused(feature, self.line('refs/heads/develop', other), reason='differs from the verified candidate')
         fix = result.stderr.split('/ FIX:')[1]
         self.assertIn('git push origin HEAD:refs/heads/develop', fix)
