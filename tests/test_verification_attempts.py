@@ -1,6 +1,11 @@
 """Latest verification attempts supersede old success, including process death."""
+import contextlib
+import importlib.util
+import io
 import json
 import os
+import shlex
+from unittest import mock
 from pathlib import Path
 import selectors
 import signal
@@ -219,6 +224,47 @@ class VerificationAttemptTests(unittest.TestCase):
                     self.assertTrue(path.is_symlink())
                 finally:
                     path.unlink()
+
+
+class OldInterpreterFixTests(unittest.TestCase):
+    """An old python3 must print a runnable fix that names a supported interpreter, never itself."""
+
+    def setUp(self):
+        self.fixture = test_policy.PolicyTests()
+        self.fixture.setUp()
+        self.addCleanup(self.fixture.doCleanups)
+        spec = importlib.util.spec_from_file_location('old_interpreter_verifier', VERIFY)
+        self.verifier = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.verifier)
+        self.bin = self.fixture.workspace / 'interpreters'
+        self.bin.mkdir()
+
+    def script(self, name, body):
+        path = self.bin / name
+        path.write_text('#!/bin/sh\n' + body + '\n')
+        path.chmod(0o755)
+        return path
+
+    def fix(self):
+        stderr = io.StringIO()
+        argv = ['rpi-verify.py', '--root', str(self.fixture.project)]
+        with mock.patch.object(sys, 'version_info', (3, 9, 6, 'final', 0)), mock.patch.object(sys, 'argv', argv), \
+                mock.patch.dict(os.environ, {'PATH': str(self.bin)}), contextlib.redirect_stderr(stderr):
+            self.assertEqual(self.verifier.main(), 1)
+        self.assertIn('requires Python 3.11', stderr.getvalue())
+        return stderr.getvalue().split('/ FIX:')[1]
+
+    def test_fix_names_an_available_supported_interpreter(self):
+        self.script('python3', 'exit 1')  # The old default fails the version probe.
+        supported = self.script('python3.12', 'exec ' + shlex.quote(sys.executable) + ' "$@"')
+        fix = self.fix()
+        self.assertIn(shlex.join([str(supported), str(VERIFY.resolve()), '--root', str(self.fixture.project)]), fix)
+        self.assertNotIn(shlex.quote(sys.executable) + ' ', fix)
+
+    def test_fix_falls_back_to_uv_when_no_supported_interpreter_exists(self):
+        self.script('python3', 'exit 1')
+        fix = self.fix()
+        self.assertIn('uv run --no-project --python 3.13 python ' + shlex.quote(str(VERIFY.resolve())), fix)
 
 
 if __name__ == '__main__':

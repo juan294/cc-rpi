@@ -6,10 +6,14 @@ ref it is about to update: "<local ref> <local sha> <remote ref> <remote sha>".
 Git has already expanded --all, --tags, globs, remote.<name>.push, push.default
 and aliases, so the gate sees the exact refs and commits being published.
 
-A push is gated when the pushing checkout's .rpi/policy.json, or the one
-committed in the pushed commit, sets "require_verification_receipt": true; the
-stricter wins, so a worktree on a pre-opt-in branch cannot publish an opted-in
-integration branch. Otherwise the hook exits 0. A gated update of
+A branch update is gated when the pushing checkout's .rpi/policy.json, the one
+committed in the pushed commit, or the one committed in the remote commit it
+replaces (when that object is local) sets "require_verification_receipt": true;
+the stricter wins, so a worktree on a pre-opt-in branch cannot publish an
+opted-in integration branch and a commit cannot opt itself out unverified. A
+version tag follows only the policy committed in the tagged commit and in the
+tag's replaced remote target, so tags from before opt-in stay publishable.
+Otherwise the hook exits 0. A gated update of
 refs/heads/<integration_branch> or of a version tag requires a clean tree
 (ignoring .rpi/local/) and a passing .rpi/local/verification.json for the pushed
 commit; deleting the integration branch is refused. Any unexpected error in an
@@ -29,6 +33,7 @@ sys.dont_write_bytecode = True
 
 ZERO = re.compile(r'0+')
 VERSION_TAG = re.compile(r'v?\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?')
+PYTHON = re.compile(r'python(?:3(?:\.\d+)?)?')
 POLICY_KEYS = {'schema_version', 'integration_branch', 'production_branches', 'remote',
                'require_verification_receipt', 'verification_checks', 'verification_command'}
 INTERPRETER = ('python', 'implementation', 'executable', 'packages')  # Packages belong to the interpreter.
@@ -145,7 +150,14 @@ def verification_contract(policy):
             fail('The project verification inventory must contain unique names and literal argv arrays.',
                  'Review .rpi/policy.json verification_checks against the complete local CI selection.')
         names.add(check['name'])
+    if PYTHON.fullmatch(os.path.basename(command[0])):  # The receipt binds the verifying interpreter: print this hook's.
+        command = [sys.executable, *command[1:]]
     return checks, shlex.join(command)
+
+
+def exact_verifier():
+    """The verifier run by this hook's own interpreter, the only one whose receipt this gate accepts."""
+    return shlex.join([sys.executable, '.rpi/scripts/rpi-verify.py'])
 
 
 def hook_environment():
@@ -188,13 +200,20 @@ def stale(report, environment, runner):
             scope = 'differs only in its Python interpreter' if changed <= set(INTERPRETER) else 'differs, including its Python interpreter'
             fail('The verification receipt runtime ' + scope + ': verified with ' + interpreter(recorded) +
                  ', this gate runs ' + interpreter(environment) + '.',
-                 'Run ' + runner + ' with the interpreter the hook uses (' + environment['executable'] +
-                 ' first on PATH), or put the verified interpreter first on PATH for git push.')
+                 'Run exactly ' + exact_verifier() + ' from the repository root in the shell that runs git push, then push again.')
+        keys = changed_keys(recorded, environment)
+        if keys == ['executables.python3']:
+            def found(runtime):
+                entry = (runtime.get('executables') or {}).get('python3')
+                return str(entry.get('path')) if isinstance(entry, dict) else 'none'
+            fail('The verification receipt runtime differs only in the python3 first on PATH: verified with ' +
+                 found(recorded) + ', this gate sees ' + found(environment) + '.',
+                 'Run exactly ' + exact_verifier() + ' in the shell that runs git push (the same PATH), then push again.')
         if changed == {'execution_settings_sha256'}:
             fail('The verification receipt runtime differs only in its locale, timezone or Python settings; '
                  'this gate runs with ' + settings(hook_environment()) + '.',
                  'Run ' + runner + ' with the same LANG, LC_*, TZ and PYTHON* settings as git push, or push with the settings verification used.')
-        fail('The verification receipt runtime differs in: ' + ', '.join(changed_keys(recorded, environment)) + '.',
+        fail('The verification receipt runtime differs in: ' + ', '.join(keys) + '.',
              'Run ' + runner + ' in the environment that runs git push; changed tools, packages, platform, '
              'locale, timezone or Python settings require a fresh run.')
     fail('Local verification does not attest this exact complete candidate.',
@@ -241,8 +260,9 @@ def verified_candidate(root, policy):
 def gated_updates(root, checkout, lines):
     """(remote ref, pushed commit, policy) triples that need the receipt; deleting an integration branch is refused.
 
-    Each update is gated by the checkout's policy or by the policy committed in
-    the pushed (or, for a deletion, the replaced) commit, whichever opts in.
+    A branch update is gated by the checkout's policy or the policy committed in
+    the pushed or the replaced remote commit, whichever opts in; a version tag
+    only by the policies committed in its tagged and replaced commits.
     """
     updates = []
     for line in lines:
@@ -256,8 +276,11 @@ def gated_updates(root, checkout, lines):
         tag = remote_ref.startswith('refs/tags/') and VERSION_TAG.fullmatch(remote_ref[len('refs/tags/'):])
         if not (remote_ref.startswith('refs/heads/') or tag) or (deleted and tag):
             continue
-        commit = git(root, 'rev-parse', '--verify', '--quiet', (remote_sha if deleted else local_sha) + '^{commit}')
-        policies = [policy for policy in (checkout, committed_policy(root, commit) if commit else None) if policy]
+        commit = None if deleted else git(root, 'rev-parse', '--verify', '--quiet', local_sha + '^{commit}')
+        # The replaced remote commit counts only when its objects are local (fetched).
+        replaced = None if ZERO.fullmatch(remote_sha) else git(root, 'rev-parse', '--verify', '--quiet', remote_sha + '^{commit}')
+        policies = [policy for policy in ([] if tag else [checkout]) +
+                    [committed_policy(root, sha) for sha in (commit, replaced) if sha] if policy]
         for policy in policies:
             if remote_ref == 'refs/heads/' + policy['integration_branch'] and deleted:
                 fail('Deleting the integration branch (' + policy['integration_branch'] + ') removes the published history.',
@@ -300,10 +323,19 @@ def evaluate(argv, lines, cwd):
         if remote_ref.startswith('refs/tags/'):
             name = remote_ref[len('refs/tags/'):]
             fix = ('Verify the tagged commit: git switch --detach ' + name + ', run ' + runner +
-                   ', then push the tag: git push ' + argv[0] + ' ' + remote_ref + '.')
-        else:
-            fix = ('Push the verified commit: git push ' + argv[0] + ' ' + gate['integration_branch'] + ', or run ' +
-                   runner + ' on the commit you are publishing.')
+                   ', then push the tag: git push ' + shlex.quote(argv[0]) + ' ' + remote_ref + '.')
+        else:  # Never repeat the refused push: publish the verified HEAD, or verify the pushed commit first.
+            branch, remote = gate['integration_branch'], shlex.quote(argv[0])
+            if git(root, 'rev-parse', '--verify', '--quiet', 'refs/heads/' + branch + '^{commit}') == commit:
+                other = 'git switch ' + branch + ', run ' + runner + ', then git push ' + remote + ' ' + branch
+            else:
+                other = ('git switch --detach ' + commit + ', run ' + runner + ', then git push ' + remote + ' ' +
+                         commit + ':refs/heads/' + branch)
+            if verified == git(root, 'rev-parse', 'HEAD'):
+                fix = ('Publish the verified HEAD: git push ' + remote + ' HEAD:refs/heads/' + branch +
+                       '; or, to publish ' + commit[:12] + ': ' + other + '.')
+            else:
+                fix = 'To publish ' + commit[:12] + ': ' + other + '.'
         fail('The pushed ' + remote_ref + ' (' + commit[:12] + ') differs from the verified candidate commit (' + str(verified)[:12] + ').', fix)
 
 

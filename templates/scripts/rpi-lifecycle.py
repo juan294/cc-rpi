@@ -32,11 +32,14 @@ class MergeConflict(Conflict):
 
 
 class UsageError(ValueError):
-    """An invalid request whose exact repair is known at the failure site."""
+    """An invalid request whose exact repair is known at the failure site.
 
-    def __init__(self, reason, fix):
+    `drop` = (option, values) the operator passed in error; the CLI turns it into
+    the same command without them."""
+
+    def __init__(self, reason, fix, drop=None):
         super().__init__(reason)
-        self.fix = fix
+        self.fix, self.drop = fix, drop
 
 
 class TargetSettingsError(ValueError):
@@ -372,11 +375,15 @@ def make_plan(engine, request):
     revision = request.get('legacy_base')
     if revision:
         if not re.fullmatch('[0-9a-f]{40}|[0-9a-f]{64}', revision):
-            raise ValueError('--legacy-base must be a full immutable commit ID')
+            raise UsageError('--legacy-base must be a full immutable commit ID, not ' + repr(revision),
+                             'pass the full ID that ' + shlex.join(['git', '-C', str(source), 'rev-parse', '--verify', revision + '^{commit}']) +
+                             ' prints')
         top = subprocess.run(['git', '-C', str(source), 'rev-parse', '--show-toplevel'], capture_output=True, text=True)
         kind = subprocess.run(['git', '-C', str(source), 'cat-file', '-t', revision], capture_output=True, text=True)
         if top.returncode != 0 or Path(top.stdout.strip()).resolve() != source or kind.returncode != 0 or kind.stdout.strip() != 'commit':
-            raise ValueError('--legacy-base must identify a locally available commit in the explicitly bound source checkout')
+            raise UsageError('--legacy-base ' + revision + ' is not a commit available in the --source checkout ' + str(source),
+                             'pass --source the cc-rpi Git checkout root that contains that commit (fetch it there first), '
+                             'or choose a commit that ' + shlex.join(['git', '-C', str(source), 'log', '--format=%H']) + ' lists')
     configuration = engine.load_sibling('rpi-config')
     if request['scope'] == 'project':
         settings = bound_path(roots['project'], '.claude/settings.json')
@@ -391,7 +398,11 @@ def make_plan(engine, request):
             raise Conflict('settings must be a regular JSON file')
     previous = load_state(state)
     if previous and (previous.get('scope') != request['scope'] or previous.get('root_ids') != sorted(roots)):
-        raise ValueError('installation root IDs or scope changed')
+        raise UsageError('this request uses scope ' + request['scope'] + ' with roots ' + ', '.join(sorted(roots)) +
+                         '; the installation at ' + str(state) + ' records scope ' + str(previous.get('scope')) +
+                         ' with roots ' + ', '.join(map(str, previous.get('root_ids') or [])),
+                         'rerun with --scope ' + str(previous.get('scope')) + ' and that installation\'s roots, '
+                         'or inspect ' + str(Path(state) / 'manifest.json') + ' if it was edited by hand')
     # Local root binding is separate from the portable ownership manifest.
     binding_path = bound_path(state, 'local/root-binding.json')
     binding = snapshot(binding_path)
@@ -418,6 +429,11 @@ def make_plan(engine, request):
                          for h in previous['harnesses']}
     routes, domains_by_harness = {}, {}
     available = {c['name'] for c in manifest['components'] if c.get('category') == 'domain'}
+    unknown = sorted(set(request.get('domains') or []) - available)
+    if unknown:
+        raise UsageError('--domain names no domain in this source: ' + ', '.join(unknown) +
+                         ' (available: ' + (', '.join(sorted(available)) or 'none') + ')',
+                         'drop ' + ' '.join('--domain ' + name for name in unknown), drop=('--domain', unknown))
     for harness in request['harnesses']:
         installed = installations.get(harness, {})
         routes[harness] = request.get('route') or installed.get('route', 'direct')
@@ -651,8 +667,14 @@ def make_plan(engine, request):
                         if c['kind'] == 'config' and not c.get('distribution_only') and c['scope'] == request['scope']]
     selected_capabilities = {c['id'] for c in engine.selected_components(manifest, domains)
                              if c.get('capability') and c['scope'] == request['scope'] and set(c['harnesses']) & set(request['harnesses'])}
-    if authorized - ({c['id'] for c in selected_configs if set(c['harnesses']) & set(request['harnesses'])} | selected_capabilities | {e['component_id'] for e in (previous or {}).get('entries', []) if 'config_record' in e or e.get('capability')}):
-        raise ValueError('capability authorization names an unselected configuration component')
+    selectable = ({c['id'] for c in selected_configs if set(c['harnesses']) & set(request['harnesses'])} | selected_capabilities |
+                  {e['component_id'] for e in (previous or {}).get('entries', []) if 'config_record' in e or e.get('capability')})
+    if authorized - selectable:
+        unselected = sorted(authorized - selectable)
+        raise UsageError('--allow-capabilities names a component this request does not install: ' + ', '.join(unselected) +
+                         ' (selectable for ' + '/'.join(request['harnesses']) + ': ' + (', '.join(sorted(selectable)) or 'none') + ')',
+                         'drop ' + ' '.join('--allow-capabilities ' + cid for cid in unselected),
+                         drop=('--allow-capabilities', unselected))
     for entry in (previous or {}).get('entries', []):
         if 'config_record' not in entry:
             continue
@@ -745,14 +767,46 @@ def make_plan(engine, request):
     after = file_node(serialized(next_manifest)) if next_manifest else {'kind': 'missing'}
     if node_bytes(before) != node_bytes(after):
         operations.append({'root_id': 'state', 'destination': 'manifest.json', 'before': before, 'after': after})
-    notices = receipt_gate_notices(request, roots, operations)
+    notices = receipt_gate_notices(request, roots, operations, previous, manifest['version'])
     return {'schema_version': 1, 'request': request, 'roots': roots, 'state_root': state,
             'source': identity, 'status': 'conflict' if conflicts else 'ready' if operations else 'noop',
             'operations': operations, 'conflicts': conflicts, 'retained': retained, **({'notices': notices} if notices else {}),
             'observations': [{'root_id': root, 'destination': name, 'node': node} for (root, name), node in sorted(observations.items())]}
 
 
-GATE_DOC = 'docs/native-policy.md ("Optional verification receipt gate")'
+GATE_DOC = 'https://github.com/juan294/cc-rpi/blob/main/docs/native-policy.md#optional-verification-receipt-gate'
+# Verbatim from docs/native-policy.md (a test keeps them identical); adopters do not have that file.
+PRE_PUSH_ENABLE = r'''hooks=$(git config --type=path --get core.hooksPath || echo "$(git rev-parse --path-format=absolute --git-common-dir)/hooks")
+mkdir -p "$hooks" && cat > "$hooks/pre-push" <<'EOF'
+#!/bin/sh
+top=$(git rev-parse --show-toplevel 2>/dev/null)
+gate="$top/.rpi/scripts/rpi-prepush.py"
+case $0 in /*) hook=$0 ;; *) hook=$PWD/$0 ;; esac
+if [ ! -f "$gate" ]; then
+  echo "BLOCKED / WHY: this checkout has no .rpi/scripts/rpi-prepush.py receipt gate. / FIX: push from a checkout that contains it, such as the integration worktree; or restore it with a reviewed update (RPI_SOURCE is your cc-rpi checkout): bash \"\$RPI_SOURCE/scripts/install.sh\" --target \"$top\" --action update --output \"$top/.rpi/local/plans/restore.json\"; review it, then bash \"\$RPI_SOURCE/scripts/install.sh\" --apply \"$top/.rpi/local/plans/restore.json\"; or, if this project no longer opts in, remove this hook: rm \"$hook\"" >&2
+  exit 1
+fi
+for python in python3.14 python3.13 python3.12 python3.11 python3; do
+  command -v "$python" >/dev/null 2>&1 && break
+  python=
+done
+if [ -z "$python" ] || ! "$python" -c 'import sys; sys.exit(sys.version_info < (3, 11))' 2>/dev/null; then
+  echo "BLOCKED / WHY: the receipt gate needs Python 3.11 or newer; the first of python3.14, python3.13, python3.12, python3.11 and python3 on PATH is ${python:-missing}. / FIX: install Python 3.11 or newer so python3.11 (or newer) is on PATH (brew install python@3.13, or sudo apt-get install python3.11), then push again." >&2
+  exit 1
+fi
+exec "$python" "$gate" "$@"
+EOF
+chmod +x "$hooks/pre-push"'''
+ENABLE_HINT = ('run the one-time command in enable_command from the integration checkout\'s repository root '
+               '(documented at ' + GATE_DOC + ')')
+
+
+def release(version):
+    """(major, minor) of a recorded version; None when absent or unreadable."""
+    try:
+        return tuple(int(part) for part in str(version).split('.')[:2])
+    except ValueError:
+        return None
 
 
 def pre_push_hook(root):
@@ -769,10 +823,12 @@ def pre_push_hook(root):
         invokes = path.is_file() and b'rpi-prepush.py' in path.read_bytes()
     except OSError:
         invokes = False
+    if invokes and not os.access(path, os.X_OK):
+        return str(path), 'not executable'  # Git skips it without running the gate.
     return str(path), 'present' if invokes else 'does not invoke rpi-prepush.py' if path.exists() else 'missing'
 
 
-def receipt_gate_notices(request, roots, operations):
+def receipt_gate_notices(request, roots, operations, previous=None, version=None):
     """Informational receipt-gate notices; they never change a plan's status."""
     if request['scope'] != 'project':
         return []
@@ -781,10 +837,11 @@ def receipt_gate_notices(request, roots, operations):
         removes = any(op['root_id'] == 'project' and op['destination'] == '.rpi/scripts/rpi-prepush.py'
                       and op['after']['kind'] == 'missing' for op in operations)
         hook = pre_push_hook(root) if removes else None
-        if not hook or hook[1] != 'present':
+        if not hook or hook[1] not in ('present', 'not executable'):
             return []
-        return [{'pre_push_hook': 'present', 'hook_path': hook[0],
-                 'reason': 'this detach removes .rpi/scripts/rpi-prepush.py, which the pre-push hook invokes; later pushes would fail',
+        return [{'pre_push_hook': hook[1], 'hook_path': hook[0],
+                 'reason': 'this detach removes .rpi/scripts/rpi-prepush.py, which the pre-push hook invokes; later pushes would fail' +
+                           (' once the hook is made executable' if hook[1] == 'not executable' else ''),
                  'fix': 'after applying, remove ' + hook[0] + ' (or its rpi-prepush.py line); the engine never modifies .git'}]
     if request['action'] != 'update':
         return []
@@ -793,25 +850,37 @@ def receipt_gate_notices(request, roots, operations):
         policy = json.loads(node_bytes(node)) if node['kind'] == 'file' else None
     except (Conflict, OSError, ValueError):
         policy = None
-    if not isinstance(policy, dict):
-        return []
-    if policy.get('require_verification_receipt') is True:
+    if isinstance(policy, dict) and policy.get('require_verification_receipt') is True:
         hook = pre_push_hook(root)
         notice = {'receipt_gate': 'on', 'pre_push_hook': hook[1] if hook else 'unavailable; not a Git work tree'}
         if hook:
             notice['hook_path'] = hook[0]
-        if notice['pre_push_hook'] != 'present':
-            notice['fix'] = ('.rpi/policy.json requires a verification receipt, but no pre-push hook runs '
-                             '.rpi/scripts/rpi-prepush.py; install it with the one-time command in ' + GATE_DOC)
+        if notice['pre_push_hook'] == 'not executable':
+            notice['fix'] = ('Git ignores a pre-push hook without the execute bit, so pushes are not gated; run ' +
+                             shlex.join(['chmod', '+x', hook[0]]))
+        elif notice['pre_push_hook'] != 'present':
+            notice.update(fix='.rpi/policy.json requires a verification receipt, but no pre-push hook runs '
+                              '.rpi/scripts/rpi-prepush.py; ' + ENABLE_HINT, enable_command=PRE_PUSH_ENABLE)
         return [notice]
-    if 'verification_checks' in policy or 'verification_command' in policy:
-        return [{'receipt_gate': 'off',
+    opt_in = ('add "require_verification_receipt": true to .rpi/policy.json and enable the Git pre-push hook that runs '
+              '.rpi/scripts/rpi-prepush.py: ' + ENABLE_HINT)
+    if isinstance(policy, dict) and ('verification_checks' in policy or 'verification_command' in policy):
+        return [{'receipt_gate': 'off', 'enable_command': PRE_PUSH_ENABLE,
                  'reason': '.rpi/policy.json declares verification evidence but not require_verification_receipt; '
                            'the v2.0 pre-action hook blocked integration pushes without a passing receipt, and '
                            'from v2.1 that push gate is opt-in, so pushes are no longer gated',
-                 'fix': 'to keep the push gate, add "require_verification_receipt": true to .rpi/policy.json and '
-                        'enable the Git pre-push hook that runs .rpi/scripts/rpi-prepush.py with the one-time '
-                        'command in ' + GATE_DOC + '; to accept an ungated push, no action is needed'}]
+                 'fix': 'to keep the push gate, ' + opt_in + '; to accept an ungated push, no action is needed'}]
+    recorded = sorted({str(selection.get('source', {}).get('version') or 'unrecorded') for selection in
+                       (previous or {}).get('installations', {}).values() if isinstance(selection, dict)}) or ['unrecorded']
+    older = [value for value in recorded if (release(value) or (0, 0)) < (2, 1)]
+    if previous and older and (release(version) or (0, 0)) >= (2, 1):
+        return [{'receipt_gate': 'off', 'recorded_version': ', '.join(older), 'enable_command': PRE_PUSH_ENABLE,
+                 'reason': 'this installation was recorded at cc-rpi ' + ', '.join(older) + '; from v2.1 the pre-action '
+                           'hook no longer asks for or blocks ordinary git push, gh pr or gh workflow run commands, '
+                           'so after this update pushes are not gated unless the project opts in',
+                 'fix': 'no action is needed to accept ungated pushes; to require a passing verification receipt before '
+                        'integration-branch and version-tag pushes, declare verification_checks and verification_command, ' +
+                        opt_in}]
     return []
 
 
@@ -1260,14 +1329,53 @@ def blocked_hint(args, reason, fix=None):
     return fix
 
 
+def rerun(drop=(), add=()):
+    """This invocation without the named (option, values) and with extra arguments."""
+    option, values = drop or (None, ())
+    arguments, kept = sys.argv[1:], []
+    index = 0
+    while index < len(arguments):
+        name, _, inline = arguments[index].partition('=')
+        if option and name.startswith('--') and len(name) > 2 and option.startswith(name):
+            value = inline if inline else arguments[index + 1] if index + 1 < len(arguments) else None
+            if value in values:
+                index += 1 if inline else 2
+                continue
+        kept.append(arguments[index])
+        index += 1
+    return engine_command(*kept, *add)
+
+
+def plan_first(args, reason):
+    """Apply without a usable plan: the newest saved plan nearby, or how to create one."""
+    target = Path(getattr(args, 'target', None) or Path.cwd()).absolute()
+    saved = sorted((path for path in (target / '.rpi/local/plans').glob('*.json') if path.is_file() and path != args.plan),
+                   key=lambda path: path.stat().st_mtime_ns) if (target / '.rpi/local/plans').is_dir() else []
+    output = target / '.rpi/local/plans' / ('update-' + time.strftime('%Y%m%d-%H%M%S') + '.json')
+    create = ('create a new plan with ' + engine_command('plan', '--source', args.source.absolute(), '--target', target,
+                                                         '--output', output) +
+              ' (from the project root it installs into), review it, then run ' + engine_command('apply', '--plan', output))
+    if saved:
+        create = 'apply the newest saved plan with ' + engine_command('apply', '--plan', saved[-1].resolve()) + '; or ' + create
+    return UsageError(reason, create)
+
+
 def cli(engine, args):
     pending_fix = None
     if args.command == 'detach':
         args.command, args.action = 'plan', 'detach'
     if args.command == 'apply':
         if not args.plan:
-            raise ValueError('apply requires --plan')
-        result = apply_plan(engine, json.loads(args.plan.read_text()), args.fail_after, args.fail_after_rename)
+            raise plan_first(args, 'apply requires --plan with the path a plan --output saved')
+        try:
+            plan = json.loads(args.plan.read_text())
+        except OSError as error:
+            raise plan_first(args, 'cannot read plan ' + str(args.plan) + ': ' + (error.strerror or str(error))) from error
+        except ValueError as error:
+            raise plan_first(args, 'plan ' + str(args.plan) + ' is not plan JSON: ' + str(error)) from error
+        if not isinstance(plan, dict) or plan.get('schema_version') != 1 or not isinstance(plan.get('request'), dict):
+            raise plan_first(args, 'plan ' + str(args.plan) + ' is not a schema_version 1 plan with a request')
+        result = apply_plan(engine, plan, args.fail_after, args.fail_after_rename)
     elif args.command == 'rollback':
         if not args.journal:
             raise UsageError('rollback requires --journal', journal_fix(args))
@@ -1286,7 +1394,9 @@ def cli(engine, args):
             if args.scope == 'user' and args.state_root:
                 args.target = args.state_root
             else:
-                raise ValueError('project lifecycle operations require an explicit --target')
+                raise UsageError('project lifecycle operations require an explicit --target',
+                                 'name the project root; to use the current directory, rerun ' +
+                                 rerun(add=('--target', Path.cwd().absolute())))
         args.harness = recorded_harness(args)
         request = {'source': str(args.source.absolute()), 'target': str(args.target.absolute()),
                    'harnesses': list(engine.HARNESSES) if args.harness == 'both' else [args.harness],
@@ -1298,6 +1408,10 @@ def cli(engine, args):
                    'codex_skill_root': str(args.codex_skill_root.absolute()) if args.codex_skill_root else None}
         try:
             result = make_plan(engine, request)
+        except UsageError as error:
+            if error.drop:
+                error.fix += '; rerun ' + rerun(drop=error.drop)
+            raise
         except Conflict as error:
             pending_fix = error.fix
             result = {'schema_version': 1, 'request': request, 'status': 'conflict', 'operations': [],
@@ -1306,7 +1420,10 @@ def cli(engine, args):
         saved = None
         if args.command == 'plan':
             if not args.output:
-                raise ValueError('plan requires an explicit --output')
+                stamp = time.strftime('%Y%m%d-%H%M%S')
+                raise UsageError('plan requires an explicit --output for the reviewable plan',
+                                 'save it under the ignored local plans directory; rerun ' + rerun(add=(
+                                     '--output', Path(request_roots(request)[1]) / 'local/plans' / (request['action'] + '-' + stamp + '.json'))))
             output = args.output.parent.resolve() / args.output.name
             bound_path(output.parent, output.name)
             if output.exists() or output.is_symlink():

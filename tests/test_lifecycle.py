@@ -8,6 +8,13 @@ import unittest
 import test_lifecycle_adopters as adopters
 
 
+def lifecycle():
+    spec = importlib.util.spec_from_file_location('fixture_lifecycle', adopters.ROOT / 'templates/scripts/rpi-lifecycle.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 class TransactionTests(unittest.TestCase):
     setUp = adopters.LifecycleAdopterTests.setUp
     write = adopters.LifecycleAdopterTests.write
@@ -618,8 +625,9 @@ class TransactionTests(unittest.TestCase):
         self.assertEqual((result.returncode, summary['status']), (0, 'healthy'), result.stdout)
         notice = self.receipt_gate(summary)
         self.assertEqual(notice['receipt_gate'], 'off')
-        for fragment in ('"require_verification_receipt": true', 'pre-push', 'docs/native-policy.md'):
+        for fragment in ('"require_verification_receipt": true', 'pre-push', lifecycle().GATE_DOC):
             self.assertIn(fragment, notice['fix'])
+        self.assertEqual(notice['enable_command'], lifecycle().PRE_PUSH_ENABLE)
         plan, _ = self.plan('update')
         self.assertEqual(plan['status'], 'noop')
         self.assertEqual(self.receipt_gate(plan)['receipt_gate'], 'off')
@@ -631,9 +639,16 @@ class TransactionTests(unittest.TestCase):
         notice = self.receipt_gate(self.check()[1])
         self.assertEqual((notice['receipt_gate'], notice['pre_push_hook']), ('on', 'missing'))
         self.assertEqual(notice['hook_path'], str((hooks / 'pre-push').resolve()))
-        self.assertIn('docs/native-policy.md', notice['fix'])
+        self.assertIn(lifecycle().GATE_DOC, notice['fix'])
+        self.assertEqual(notice['enable_command'], lifecycle().PRE_PUSH_ENABLE)
         self.assertEqual(sorted(p.name for p in hooks.iterdir()), before)
-        self.write(hooks, 'pre-push', '#!/bin/sh\nexec python3 "$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py" "$@"\n')
+        hook = self.write(hooks, 'pre-push', '#!/bin/sh\nexec python3 "$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py" "$@"\n')
+        hook.chmod(0o644)  # Git silently skips a hook without the execute bit.
+        notice = self.receipt_gate(self.check()[1])
+        self.assertEqual((notice['receipt_gate'], notice['pre_push_hook']), ('on', 'not executable'))
+        chmod = shlex.split(notice['fix'].split(' run ', 1)[1])
+        self.assertEqual(chmod, ['chmod', '+x', str(hook.resolve())])
+        self.assertEqual(adopters.subprocess.run(chmod).returncode, 0)
         notice = self.receipt_gate(self.check()[1])
         self.assertEqual((notice['receipt_gate'], notice['pre_push_hook']), ('on', 'present'))
         self.assertNotIn('fix', notice)
@@ -641,6 +656,105 @@ class TransactionTests(unittest.TestCase):
         self.assertEqual(self.receipt_gate(self.check()[1])['pre_push_hook'], 'does not invoke rpi-prepush.py')
         (self.project / '.rpi/policy.json').unlink()
         self.assertIsNone(self.receipt_gate(self.check()[1]))
+
+    def test_notice_enable_command_matches_the_documented_command(self):
+        text = (adopters.ROOT / 'docs/native-policy.md').read_text()
+        block = text.split('Enable it once per clone', 1)[1].split('```bash\n', 1)[1].split('```', 1)[0]
+        self.assertEqual(lifecycle().PRE_PUSH_ENABLE, block.rstrip('\n'))
+        self.assertTrue(lifecycle().GATE_DOC.startswith('https://github.com/juan294/cc-rpi/blob/main/docs/native-policy.md'))
+
+    def test_update_from_an_older_release_names_the_removed_push_block_without_a_policy(self):
+        self.apply_ready()
+        self.assertIsNone(self.receipt_gate(self.check()[1]))  # Same release: nothing changed.
+        manifest_path = self.source / 'templates/distribution.json'
+        manifest = json.loads(manifest_path.read_text())
+        recorded, manifest['version'] = manifest['version'], '2.1.0'
+        manifest_path.write_text(json.dumps(manifest))
+        self.assertFalse((self.project / '.rpi/policy.json').exists())
+        result, summary = self.check()
+        notice = self.receipt_gate(summary)
+        self.assertEqual((notice['receipt_gate'], notice['recorded_version']), ('off', recorded), summary)
+        for fragment in ('git push', 'gh pr', 'gh workflow run', 'no longer'):
+            self.assertIn(fragment, notice['reason'])
+        for fragment in ('"require_verification_receipt": true', 'enable_command', lifecycle().GATE_DOC):
+            self.assertIn(fragment, notice['fix'])
+        self.assertEqual(notice['enable_command'], lifecycle().PRE_PUSH_ENABLE)
+        plan, _ = self.plan('update')
+        self.assertEqual(self.receipt_gate(plan)['recorded_version'], recorded)
+        self.apply_ready('update')
+        self.assertIsNone(self.receipt_gate(self.check()[1]))  # Recorded once the update applies.
+
+    def blocked(self, result):
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        why, fix = result.stderr.strip().split(' / FIX: ', 1)
+        self.assertNotIn('distribution.json', fix)
+        return why, fix
+
+    def test_unselected_capability_flag_names_the_value_and_prints_the_corrected_command(self):
+        self.apply_ready()
+        path = self.plans / 'unselected.json'
+        why, fix = self.blocked(self.invoke('plan', '--source', self.source, '--target', self.project,
+                                            '--action', 'update', '--allow-capabilities', 'config:codex-hooks',
+                                            '--output', path))
+        self.assertIn('config:codex-hooks', why)
+        self.assertIn('--allow-capabilities config:codex-hooks', fix)
+        rerun = shlex.split(fix.split('rerun ', 1)[1])
+        self.assertNotIn('--allow-capabilities', rerun)
+        self.assertEqual(rerun[rerun.index('--output') + 1], str(path))
+        self.assertFalse(path.exists())
+        self.assertEqual(adopters.subprocess.run(rerun, capture_output=True).returncode, 0)
+        self.assertEqual(json.loads(path.read_text())['status'], 'noop')
+
+    def test_unknown_domain_names_the_value_and_prints_the_corrected_command(self):
+        path = self.plans / 'domain.json'
+        why, fix = self.blocked(self.invoke('plan', '--source', self.source, '--target', self.project,
+                                            '--domain', 'no-such-domain', '--output', path))
+        self.assertIn('no-such-domain', why)
+        rerun = shlex.split(fix.split('rerun ', 1)[1])
+        self.assertNotIn('--domain', rerun)
+        self.assertEqual(adopters.subprocess.run(rerun, capture_output=True).returncode, 0)
+        self.assertTrue(path.is_file())
+
+    def test_missing_plan_output_and_target_print_runnable_commands(self):
+        why, fix = self.blocked(self.invoke('plan', '--source', self.source, '--target', self.project))
+        self.assertIn('--output', why)
+        rerun = shlex.split(fix.split('rerun ', 1)[1])
+        output = Path(rerun[rerun.index('--output') + 1])
+        self.assertTrue(output.is_relative_to(self.project.resolve() / '.rpi/local/plans'), output)
+        self.assertEqual(adopters.subprocess.run(rerun, capture_output=True).returncode, 0)
+        self.assertTrue(output.is_file())
+        why, fix = self.blocked(adopters.subprocess.run(
+            [adopters.sys.executable, str(adopters.ENGINE), 'check', '--source', str(self.source)],
+            capture_output=True, text=True, cwd=self.project))
+        self.assertIn('--target', why)
+        rerun = shlex.split(fix.split('rerun ', 1)[1])
+        self.assertEqual(Path(rerun[rerun.index('--target') + 1]).resolve(), self.project.resolve())
+
+    def test_abbreviated_legacy_base_prints_the_command_that_resolves_it(self):
+        short = self.base_revision[:8]
+        why, fix = self.blocked(self.invoke('plan', '--source', self.source, '--target', self.project,
+                                            '--legacy-base', short, '--output', self.plans / 'legacy.json'))
+        self.assertIn(short, why)
+        resolve = shlex.split(fix.split('pass the full ID that ', 1)[1].rsplit(' prints', 1)[0])
+        resolved = adopters.subprocess.run(resolve, capture_output=True, text=True)
+        self.assertEqual(resolved.stdout.strip(), self.base_revision)
+
+    def test_apply_without_a_usable_plan_names_the_path_and_a_runnable_repair(self):
+        why, fix = self.blocked(self.invoke('apply'))
+        self.assertIn('--plan', why)
+        self.assertIn('--output', fix)
+        missing = self.plans / 'never-created.json'
+        why, fix = self.blocked(self.invoke('apply', '--plan', missing))
+        self.assertIn(str(missing), why)
+        self.assertIn('--output', fix)
+        self.apply_ready()
+        saved = self.write(self.project, '.rpi/local/plans/update-saved.json', '{}')
+        why, fix = self.blocked(self.invoke('apply', '--plan', missing, '--target', self.project))
+        self.assertIn(shlex.join(['--plan', str(saved.resolve())]), fix)  # The newest saved plan nearby.
+        broken = self.write(self.plans, 'broken.json', '{"not": "a plan"')
+        why, fix = self.blocked(self.invoke('apply', '--plan', broken))
+        self.assertIn(str(broken), why)
+        self.assertIn('create a new plan', fix)
 
     def test_detach_names_a_pre_push_hook_that_invokes_the_removed_gate(self):
         manifest_path = self.source / 'templates/distribution.json'
