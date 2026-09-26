@@ -62,7 +62,7 @@ Before pushing, inspect GitHub workflows/webhooks and connected deployment
 projects read-only. A discovered Vercel Preview trigger blocks publication.
 Record the exact integrated SHA and accepted local/native/charter evidence, push
 completed `main` once, and require both expected push workflows to succeed for
-that SHA. Then create and push only annotated `v2.0.0` at that commit and publish
+that SHA. Then create and push only the requested annotated version tag at that commit and publish
 the reviewed notes with `gh release create --verify-tag --notes-file`.
 
 Read back the tag target and release identity before calling the version released.

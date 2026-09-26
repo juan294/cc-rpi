@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-09-26
+
+Nothing retired this cycle: no rule or error ID is retired. Index rules #33,
+#44 and #48 moved from a hook pointer to the skills that hold their bodies;
+their guidance is unchanged, and the hook no longer enforces #33 or #48.
+
 ### Added
 
 - **`rpi-plan` requires a Stuck states and recovery section and a Consumer

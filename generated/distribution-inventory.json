@@ -13,7 +13,7 @@
   },
   "claude/.rpi/distribution.json": {
     "bytes": 39513,
-    "sha256": "258e038b793588a8aa4c6293c8ae24c7d63fec3a4786b7bc1d2f3557bc77db64"
+    "sha256": "13fd58b9976632553a624e45e362b784e2541d2417d6a64d0ca1b869dbc4e750"
   },
   "claude/.rpi/scripts/rpi-candidate.py": {
     "bytes": 3913,
@@ -381,11 +381,11 @@
   },
   "codex/.claude-plugin/marketplace.json": {
     "bytes": 236,
-    "sha256": "6ad44f16d47a0691c9f9d2b33a0aca513e38c7a98b4b2a447f7c1367fb43b3fe"
+    "sha256": "0bec6c044f1239a9d1adbd848db360ffa2a49265a65da50e2ef3f8d00d941a09"
   },
   "codex/.codex-plugin/plugin.json": {
     "bytes": 202,
-    "sha256": "6a1db204bf272e4b2813e2af43625bfb42cfb10fa49bf5e122a119ffa581943f"
+    "sha256": "a2ae514538d04be3d1ad804e415d1f13bfc344e312ecc0aa965e8bb2b81da682"
   },
   "codex/.codex/rules/rpi.rules": {
     "bytes": 470,
@@ -405,7 +405,7 @@
   },
   "codex/.rpi/distribution.json": {
     "bytes": 39513,
-    "sha256": "258e038b793588a8aa4c6293c8ae24c7d63fec3a4786b7bc1d2f3557bc77db64"
+    "sha256": "13fd58b9976632553a624e45e362b784e2541d2417d6a64d0ca1b869dbc4e750"
   },
   "codex/.rpi/scripts/rpi-candidate.py": {
     "bytes": 3913,
@@ -509,7 +509,7 @@
   },
   "codex/runtime/templates/adapters/codex-marketplace.json": {
     "bytes": 236,
-    "sha256": "6ad44f16d47a0691c9f9d2b33a0aca513e38c7a98b4b2a447f7c1367fb43b3fe"
+    "sha256": "0bec6c044f1239a9d1adbd848db360ffa2a49265a65da50e2ef3f8d00d941a09"
   },
   "codex/runtime/templates/adapters/codex-permissions.rules": {
     "bytes": 470,
@@ -517,7 +517,7 @@
   },
   "codex/runtime/templates/adapters/codex-plugin.json": {
     "bytes": 202,
-    "sha256": "6a1db204bf272e4b2813e2af43625bfb42cfb10fa49bf5e122a119ffa581943f"
+    "sha256": "a2ae514538d04be3d1ad804e415d1f13bfc344e312ecc0aa965e8bb2b81da682"
   },
   "codex/runtime/templates/adapters/codex.json": {
     "bytes": 178,
@@ -529,7 +529,7 @@
   },
   "codex/runtime/templates/distribution.json": {
     "bytes": 39513,
-    "sha256": "258e038b793588a8aa4c6293c8ae24c7d63fec3a4786b7bc1d2f3557bc77db64"
+    "sha256": "13fd58b9976632553a624e45e362b784e2541d2417d6a64d0ca1b869dbc4e750"
   },
   "codex/runtime/templates/e2e-pro-playbook-template.md": {
     "bytes": 52054,
