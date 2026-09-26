@@ -44,8 +44,8 @@ ledger in `.claude/rules/contributing.md`.
 18. Handle empty repos gracefully -> skills/git-workflow
 25. Missing upstream does not authorize working-branch publication -> skills/git-workflow
 30. Keep working branches local; release PRs require authorization -> skills/git-workflow
-33. Commit before `git pull --rebase` -> hook: guard-bash.sh
-48. Push specific tags, not `--tags` -> hook: guard-bash.sh
+33. Commit before `git pull --rebase` -> skills/git-workflow
+48. Push specific tags, not `--tags` -> skills/git-workflow
 52. Verify current branch before committing -> skills/git-workflow
 60. Use `--ours`/`--theirs` for unmerged files -> skills/git-workflow
 61. Preserve conflicting untracked files before merge -> skills/git-workflow
@@ -76,7 +76,7 @@ ledger in `.claude/rules/contributing.md`.
 ## Python [skill:python-rules]
 
 29. Honor project Python pins and supported interpreter constraints -> skills/python-rules
-44. Use `uv run python`, not bare `python3` -> hook: guard-bash.sh
+44. Use `uv run python`, not bare `python3` -> skills/python-rules
 46. Use `python -m` for scripts with relative imports -> skills/python-rules
 
 ## macOS [skill:macos-rules]

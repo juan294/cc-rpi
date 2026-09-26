@@ -189,10 +189,12 @@ skips block acceptance; changed inputs cannot reuse an old passing receipt.
 
 Read-only engine `diagnose` and `rpi-status` distinguish configured, discovered,
 trusted and observed states. Missing native observations stay unavailable. A hook
-can exist yet be skipped or untrusted. Supported native permissions retain
-approval authority; guarded remote automation stays blocked when the necessary
-boundary is unavailable. See [compatibility](docs/compatibility.md) and
-[migration](docs/migrations/v2.md), including the deliberate fail-closed change.
+can exist yet be skipped or untrusted. Native permissions retain approval
+authority for pushes, pull requests and workflow dispatch; the pre-action hook
+only blocks clearly destructive operations and passes everything else through.
+Opt in to the exact-candidate push gate with `require_verification_receipt`. See
+[native policy](docs/native-policy.md), [compatibility](docs/compatibility.md) and
+[migration](docs/migrations/v2.md).
 
 The pre-release sequence is `rpi-pre-launch`, `rpi-remediate`, `rpi-update-docs`,
 then `rpi-release`. Adapt the [E2E Pro playbook](templates/e2e-pro-playbook-template.md)

@@ -25,6 +25,50 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
   documented failure mode's current recovery and visibility when it finds
   one, as an observed fact, not a proposal.
 
+### Changed
+
+- **The pre-action policy hook is now a destructive-operation denylist instead
+  of a fail-closed allowlist.** Adopter telemetry recorded about 580 blocks
+  across eight projects since v2.0.0. Most were parser false positives on
+  read-only commands, such as loops, `$(git log ...)` and `cd ~/...`, or
+  unconditional bans on `gh pr create/merge/update-branch`, `gh workflow run`
+  and non-alert `gh api` calls in projects that ship through pull requests.
+  The hook now blocks only force-pushing or deleting a protected branch
+  (`main`, `master`, `develop`, plus the declared integration and production
+  branches), `git push --mirror`/`--prune`, forced or deleting `--all`, Vercel
+  Preview creation and `gh repo delete`. Everything else, including shell text
+  the parser cannot read, passes to Claude Code's or Codex's native permissions.
+  Runtime failures (missing Python, Git, policy script or cwd, or an unexpected
+  evaluation error) pass through instead of blocking every command; a missing
+  runtime, missing script or evaluation error also prints a warning.
+- **The verification-receipt push gate is opt-in.** Set
+  `"require_verification_receipt": true` in `.rpi/policy.json` to require a
+  clean tree and an exact-candidate `verification.json` for integration-branch,
+  version-tag and production publication. Projects without the key, or without
+  `.rpi/policy.json`, are not gated. cc-rpi opts itself in.
+- **Native rules no longer ask for `git push`, `gh pr create` or
+  `gh workflow run`, and no longer deny `git push --tags`**, in both the Claude
+  settings entries and the Codex execpolicy. Release and Vercel ask rules and
+  the `--mirror` deny remain. Adopters pick up the removal with an update that
+  passes `--allow-capabilities config:claude-policy` (and
+  `config:codex-hooks`/`resource:codex-permissions` for Codex).
+
+### Fixed
+
+- **Stale "hook enforced" claims.** Index rules #33 and #48 now point to the
+  `git-workflow` skill that holds their bodies, since the hook no longer blocks
+  dirty pulls or `--tags`. Rule #44 now points to `python-rules`; no hook ever
+  enforced `uv run python`. `rules/testing.md` no longer claims hook enforcement
+  of sequential verification. The methodology, divergence and migration notes
+  describe the denylist.
+
+### Removed
+
+- The Claude permission-mode gate and `.rpi/local/publication-trust.json`
+  standing consent. The hook no longer inspects permission modes, so auto,
+  bypass and dontAsk sessions behave exactly as the native client decides. An
+  existing trust file is now ignored and can be deleted.
+
 ## [2.0.2] - 2026-09-06
 
 ### Added

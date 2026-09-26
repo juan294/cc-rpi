@@ -2,6 +2,7 @@
   "schema_version": 1,
   "integration_branch": "main",
   "remote": "origin",
+  "require_verification_receipt": true,
   "verification_command": ["bash", "scripts/verify-local.sh"],
   "verification_checks": [
     {"name": "prerequisites", "argv": ["python3", "scripts/verification-checks.py", "prerequisites"]},

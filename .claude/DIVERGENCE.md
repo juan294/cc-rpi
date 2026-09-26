@@ -52,9 +52,10 @@ manifest, avoiding a second hand-maintained inventory here.
 | `scripts/verify-version.sh` |
 
 ## Policy behavior change
-There are no divergent policy wrappers. The canonical `guard-bash.sh` now fails
-closed on malformed guarded events and missing policy prerequisites, replacing
-v1's fail-open behavior. Structural passage emits no native allow decision;
+There are no divergent policy wrappers. The canonical `guard-bash.sh` is a
+destructive-operation denylist: it blocks only the forms listed in
+`docs/native-policy.md` and passes everything else, including its own missing
+prerequisites, to native permissions. Passage emits no native allow decision;
 trusted native permissions retain approval authority. Registration is not proof
 of trust or observed enforcement; actual client acceptance is tracked separately.
 

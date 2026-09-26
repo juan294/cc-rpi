@@ -275,9 +275,10 @@ Beyond CLAUDE.md content, the agent's operating environment is configured throug
 ### Native Permission Boundaries
 
 Use the harness-specific adapter for native permissions. Claude's deny rules
-cover unconditionally forbidden forms; ask rules cover publication and deployment
-entry points. The stateful policy hook supplements these rules with branch,
-Preview and local-evidence checks. Do not add blanket `Bash(git *)` or
+cover unconditionally forbidden forms; ask rules cover release and deployment
+entry points. Pushes, pull requests and workflow dispatch follow the project's
+own permission rules. The policy hook supplements these rules by denying
+destructive operations such as force-pushing a protected branch. Do not add blanket `Bash(git *)` or
 `Bash(gh *)` allows. Preserve unrelated owner permissions and ordering during
 setup; permission changes are a separate reviewable diff.
 

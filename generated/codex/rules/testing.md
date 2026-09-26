@@ -33,8 +33,8 @@ a revert costs more than the probe would have.
 
 ## Verification Sequencing
 
-Run checks sequentially, never as parallel Bash calls
-(hook enforced). Fail fast with `typecheck && lint && test`, or collect every command status
+Run checks sequentially, never as parallel Bash calls.
+Fail fast with `typecheck && lint && test`, or collect every command status
 and return failure if any check failed. A bare semicolon chain hides earlier
 failures behind the last exit status.
 

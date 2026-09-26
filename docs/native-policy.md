@@ -1,94 +1,112 @@
 # Native policy boundary
 
-The shared pre-action parser is supplemental. It returns exit 2 with nonempty
-`BLOCKED / WHY / FIX` stderr on a forbidden or unsupported guarded event. A
-structural pass returns exit 0 without a native allow decision. Repository
-settings, verification reports and explicit skill invocation never prove consent.
+The shared pre-action hook is a small supplemental denylist, not an approval
+system. Exit 2 with nonempty `BLOCKED / WHY / FIX` stderr blocks one of the few
+positively identified destructive operations listed below. Every other command
+exits 0 without a native allow decision, so the client's own permission rules,
+permission mode and user decide it. Repository settings, verification reports
+and explicit skill invocation never prove consent, and the hook never grants it.
 
-Claude registers `PreToolUse` for `Bash`, and uses native `permissions.ask` and
-`permissions.deny` entries. Remote structural passage accepts the known `default`,
-`acceptEdits` and `plan` modes; missing, unknown, `dontAsk` and bypass modes remain
-blocked. Native deny precedence and the user's approval remain authoritative.
-Codex uses its own `hooks.json` and execpolicy rules. The pinned 0.153.4 contract
-maps several native policies to `permission_mode: default`; an explicit prompt
-rule becomes a native approval request or a denial when prompting is disabled.
-It never becomes consent. Codex's hook `ask` response is unsupported and must not
-be used as an approval mechanism. Other Codex versions remain unsupported for
-remote automation until their native contract is verified.
+## What is blocked
 
-Both adapters consume `hook_event_name`, `tool_name`, `tool_input.command`, and
-an existing `cwd`. Native hook execution must start within the trusted installed
-project; the registration finds the installed wrapper in the working directory
-or its ancestors without requiring Git first. The wrapper requires Python, and
-Git is required only when the policy evaluates repository state. Unrelated tools
-and ordinary local shell commands do not require a verification report.
+| Operation | Rule |
+| --- | --- |
+| Force-push (`--force`, `-f`, `--force-with-lease`, `+ref`) or deletion (`--delete`, `-d`, `:ref`) of a protected branch | `protected-branch` |
+| The same with a target the parser cannot resolve (for example `"$BRANCH"` or a substitution) | `protected-branch` |
+| `git push --mirror`, `--prune`, or `--all`/`--branches` combined with force or deletion | `destructive-push` |
+| Vercel Preview creation: bare `vercel`/`vc`, `vercel deploy` or a path deploy without `--prod`/`--target production`, including npx/pnpm/yarn wrappers | `preview` |
+| `gh repo delete` | `destructive-remote` |
 
-## Supported shell and publication forms
+Protected branches are `main`, `master` and `develop`, plus the project's
+`integration_branch` and `production_branches` from `.rpi/policy.json` when they
+are declared. Force-pushing or deleting a working branch is allowed.
 
-Literal shell argv, command chains and substitutions are inspected without
-executing them. Literal `echo`, `printf`, search arguments and quoted cat/tee
-here-document bodies are text. Recognized local Git commands, `git -C PATH`,
-ordinary environment wrappers and local package commands remain available.
-Shell `command -v` / `command -V` lookup inspects names without executing them;
-substitutions and subsequent chained commands still receive their own checks.
-Policy-sensitive `eval`, dynamic target expansion, unknown executable wrappers,
-Git configuration injection and Git environment overrides are rejected. This
-parser is not a complete shell security boundary.
-Configured Git aliases are also rejected: inspect the alias and issue its expanded
-literal command separately, so both the supplemental guard and native permissions
-can review the operation actually requested.
+Everything else passes through: ordinary `git push` of any branch or tag,
+`gh pr create/merge/update-branch`, `gh workflow run`, `gh run rerun`, `gh api`,
+releases, issues, Vercel production deploys and other Vercel subcommands. Those
+are outward-facing actions, so the project's native permission rules and the
+user govern them. `git pull` is never blocked.
 
-A push requires one explicit configured remote and one literal integration ref
-or annotated version tag. Implicit upstream/refspec configuration, working
-branches, force, deletion, mirrors, bulk/follow-tags publication and configuration
-that expands publication are blocked. A named tag must point at the exact verified
-candidate. Vercel's bare/default deployment and non-production targets are denied.
-Explicit production commands need exact local evidence and a native approval
-boundary. Claude supports the declared `vercel`/`vc` and npx/pnpm Vercel forms;
-Codex remote passage requires separately issued canonical commands covered by its
-project prompt rules. Unsupported remote wrappers remain blocked.
+## Pass-through by design
 
-GitHub run viewing/listing/watching and PR/release/workflow inspection are local
-policy read paths. PR creation/merging, workflow dispatches and run reruns are
-blocked. Canonical `gh release create TAG --verify-tag --title TITLE --notes-file FILE`
-accepts an annotated version tag at the verified integration HEAD and an existing
-notes file inside that repository, subject to the same native approval boundary.
-The release checkout must have one documented remote with identical single
-fetch/push URLs and no divergent GitHub default repository. Repository/target
-overrides and additional options remain unsupported. This conservative local
-binding follows the [GitHub CLI 2.100.0 remote selection contract](https://github.com/cli/cli/blob/v2.100.0/pkg/cmd/factory/default.go). Arbitrary
-API, release editing and asset mutations require an exact owner-reviewed command
-outside agent automation. The release review supplies those commands without forging a
-receipt or disabling the guard.
+Shell text is parsed and never executed. Chains, pipes, subshells, command and
+process substitutions, `bash -c`, `eval`, `env`/`command`/`sudo` wrappers,
+`timeout`/`nice`/`nohup` wrappers, redirections such as `2>&1`, `git -C`,
+`git -c` and loop bodies are inspected for the blocked forms above.
+Literal `echo`, `printf`, `cat`, `grep` and `rg` arguments and quoted `cat`/`tee`
+here-document bodies are text.
 
-## Project setup and evidence
+Anything the parser cannot read, including unterminated quotes, unknown wrappers,
+package scripts, Git aliases and deeply nested shells, passes to native
+permissions. A missing working directory or missing Git passes silently. A
+missing Python runtime or policy script prints `RPI POLICY SKIPPED`, and an
+unexpected evaluation error prints `POLICY UNAVAILABLE`; both exit 0. This hook
+is not a complete shell security boundary. A defect in it must not block ordinary
+work. Only a malformed native event or an unknown adapter argument, which
+indicate a broken installation, fail closed for every command. An invalid
+`.rpi/policy.json` blocks the commands that read it (see below).
+
+## Native permissions
+
+Claude registers `PreToolUse` for `Bash` and ships a short native rule set:
+`permissions.ask` for `gh release create/edit/upload` and the Vercel forms, and
+`permissions.deny` for bare `vercel`/`vc` and `git push --mirror`. It ships no
+ask rule for `git push`, `gh pr create` or `gh workflow run`, so a project's own
+allow rules and the active permission mode apply unchanged. Codex uses its own
+`hooks.json` and execpolicy rules: prompts for `gh release`, `vercel` and `vc`,
+and a forbidden `git push --mirror` prefix. Codex relies on the hook for bare
+Vercel Preview forms. Codex's hook `ask` response is unsupported and is never used as an
+approval mechanism.
 
 Review native changes separately with `--allow-capabilities config:claude-policy`,
 `--allow-capabilities config:codex-hooks` and, for Codex permission files,
 `--allow-capabilities resource:codex-permissions`. The installation engine keeps
-unknown hooks, settings and explicit Agent Teams opt-ins. New installs do not
-activate Agent Teams. A capability file change or retirement also needs setup
+unknown hooks, settings and explicit Agent Teams opt-ins. A capability change or
+retirement, such as removing the former `git push` ask rule, needs that setup
 scope; explicitly selected detach may remove unchanged owned content.
 
-Declare the project's full local gate selection in `.rpi/policy.json` using
-`verification_checks` (unique `name` and literal `argv` pairs) and
-`verification_command` (the runnable local runner argv). An adopter can use
-`["python3", ".rpi/scripts/rpi-verify.py"]`. The runner executes that complete
-inventory sequentially; custom fixture selections cannot attest the full suite.
-Publication compares every expected name/argv and successful exit, candidate
-identity and runtime identity before and after verification. This validates
-local evidence, not user authorization. See [migration setup](migrations/v2.md).
-Starting a new verification attempt supersedes the prior success before checks
-execute. Interrupted attempts remain unusable, and overlapping attempts cannot
-overwrite each other's result. Runtime identity includes a digest of locale,
-timezone and Python execution settings; changing them requires fresh verification.
-Project-specific external inputs still belong in the declared checks, since a
-receipt cannot attest every machine setting or mutable external service.
+Both adapters consume `hook_event_name`, `tool_name`, `tool_input.command` and
+`cwd`. The registration finds the installed wrapper in the working directory or
+its ancestors. When no wrapper is found, it passes through with a warning.
 
-Direct native event fixtures and pinned source inspection establish the adapter
-contract. They do not establish actual client trust, invocation or approval.
-The v2 acceptance record separately observes trusted allowed and denied native
-invocations and actual accepted/declined approvals for both evaluated adapters;
-see [compatibility evidence](compatibility.md). Registration, trust and observed
-enforcement remain separate states for every adopter. Absent telemetry is
-unobserved. Optional telemetry failure does not change the policy decision.
+## Optional verification receipt gate
+
+A project can opt in to exact-candidate publication evidence:
+
+```json
+{
+  "schema_version": 1,
+  "integration_branch": "main",
+  "require_verification_receipt": true,
+  "verification_command": ["python3", ".rpi/scripts/rpi-verify.py"],
+  "verification_checks": [{"name": "tests", "argv": ["npm", "test"]}]
+}
+```
+
+With the gate on, a push of the integration branch, of an existing version tag or
+of tags in bulk (`--tags`, `--follow-tags`),
+`gh release create` for an existing version tag, and a Vercel production deploy
+each require a clean tree and a passing `.rpi/local/verification.json` receipt.
+That receipt must cover every declared `verification_checks` name/argv pair, the
+exact candidate identity and the runtime identity. The pushed ref or tag must
+also point at the verified commit. Working-branch pushes are never gated. The
+gate validates local evidence, not user authorization. Without the key, or
+without `.rpi/policy.json` at all, there is no receipt gate. A present but
+invalid `.rpi/policy.json` blocks only `git push`, Vercel production and
+`gh release create`, and the repair names the file. See
+[migration setup](migrations/v2.md).
+
+The runner executes the declared inventory sequentially. Starting a new
+verification attempt supersedes the prior success before checks execute.
+Interrupted attempts remain unusable. Runtime identity includes a digest of
+locale, timezone and Python execution settings.
+
+## Evidence
+
+Blocks and gated publications are appended to `.rpi/local/contract-events.jsonl`
+as `{ts, session_id, hook, decision, rule, file}`. Pass-through commands are not
+recorded. Optional telemetry failure does not change the decision. Direct native
+event fixtures establish the adapter contract; they do not establish actual
+client trust or invocation. See [compatibility evidence](compatibility.md).
+Registration, trust and observed enforcement remain separate states for every
+adopter.

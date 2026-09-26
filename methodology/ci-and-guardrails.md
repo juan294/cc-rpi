@@ -7,7 +7,7 @@ Guardrails are automated enforcement layers that catch mistakes before they reac
 ```
 Level 0: Agent-time (PreToolUse hooks)
 ├── Intercepts commands BEFORE they execute
-├── Blocks known-bad patterns (dirty pull, --tags)
+├── Blocks destructive patterns (force-push/delete of protected branches)
 ├── Agent sees the block reason and self-corrects
 └── Prevention depends on matched events and native registration/trust
 
@@ -47,26 +47,23 @@ Hooks fix this by moving enforcement from "remember the rule" to "the command is
 
 Use the ownership-aware lifecycle engine to plan the native settings diff and
 apply it within existing setup authorization. Preserve project/user hooks, deny
-rules and ordering. Claude native `permissions.deny` and `permissions.ask` form
-the structural boundary; the stateful hook checks the documented branch,
-Preview, tag and local-verification conditions. Broad git/gh allows are not a
-substitute. Codex gets its own native schema and trust process.
+rules and ordering. Claude native `permissions.deny` and `permissions.ask` rules,
+the active permission mode and the user decide publication; the hook only denies
+a short list of destructive operations. Codex gets its own native schema and
+trust process.
 
 The shared policy implementation is
 [`templates/scripts/rpi-policy.py`](../templates/scripts/rpi-policy.py), with
 [`guard-bash.sh`](../templates/hooks/guard-bash.sh) as the compatible Claude
-wrapper. Supported command shapes are explicit in the implementation and its
-fixtures. A shell substring match cannot establish arbitrary command safety.
-Malformed guarded shell events, missing policy prerequisites and ambiguous
-policy-sensitive forms block with `BLOCKED / WHY / FIX`; ordinary unrelated
-tools remain unaffected. See the [migration note](../docs/migrations/v2.md).
+wrapper. It is a denylist: force-pushing or deleting a protected branch,
+`git push --mirror`/`--prune`, Vercel Preview creation and `gh repo delete` block
+with `BLOCKED / WHY / FIX`. Everything else, including shell text the parser
+cannot read and every runtime failure of the hook itself, passes through to
+native permissions. See the [native policy](../docs/native-policy.md).
 
-A structural pass does not authorize publication. The active owner instruction
-and native trusted permission boundary carry authorization. Never use a
-model-written receipt, release skill invocation or `--follow-tags` as proof of
-consent. When the client cannot provide the required native approval boundary,
-keep remote automation blocked and provide the exact owner-executed commands at
-release review.
+A pass does not authorize publication. The active owner instruction and the
+native permission boundary carry authorization. Never use a model-written
+receipt or release skill invocation as proof of consent.
 
 ### What to Enforce via Hooks
 
@@ -75,10 +72,11 @@ Only promote a rule to hook enforcement when:
 2. **Mechanically detectable** — a shell script can identify the bad pattern
 3. **Has a clear fix** — the block message tells the agent exactly what to do instead
 
-The stateful policy preserves dirty-pull, named-tag and protected-branch
-checks, and adds the owner's working-branch and Preview restrictions. Completed
-integration and named-tag publication must satisfy the documented local evidence
-and target checks before reaching the separate native approval boundary.
+A block must also be worth its false positives. A guard that blocks read-only
+commands it cannot parse trains agents to route around it and costs the owner
+more than the errors it prevents, so ambiguous input passes through. A project
+that wants integration and release publication bound to exact local evidence
+opts in with `require_verification_receipt` in `.rpi/policy.json`.
 
 ### Block messages are corrective hints
 
@@ -132,8 +130,8 @@ properties matter:
   pre-commit — this layer closes the feedback loop fast.
 - **It is supplemental feedback.** Missing optional post-edit tooling can leave
   a check unobserved; report that limitation. The pre-action policy guard has a
-  separate fail-closed contract, so post-edit behavior cannot authorize a shell
-  action.
+  separate destructive-operation denylist contract, so post-edit behavior cannot
+  authorize a shell action.
 
 The shipped checks on edited `.md` files:
 
@@ -168,9 +166,10 @@ the emoji check's structure.
 ### Measuring whether enforcement works
 
 Enforcement you can't measure is enforcement you trust blindly. Available hook adapters append
-one best-effort JSONL row per evaluated command/edit to
-`.claude/metrics/contract-events.jsonl` — `{ts, session_id, hook, decision, rule,
-file}`. They never log command text or file contents (guard-bash sees commands
+best-effort JSONL rows `{ts, session_id, hook, decision, rule, file}`: the edit
+hook writes one per evaluated edit to `.claude/metrics/contract-events.jsonl`,
+and the policy hook writes one per block or gated publication to
+`.rpi/local/contract-events.jsonl`. They never log command text or file contents (guard-bash sees commands
 that may carry tokens), and any logging error is swallowed so telemetry can never
 break policy evaluation. A missing telemetry stream means unobserved coverage,
 not zero violations; logs alone do not prove every native tool path is guarded.

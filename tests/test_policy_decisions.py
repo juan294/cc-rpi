@@ -1,7 +1,5 @@
-"""Decision-path acceptance for policy; all remote executables are local sentinels."""
+"""Opt-in verification receipt gate; all remote executables are local sentinels."""
 import json
-import os
-import shlex
 import subprocess
 import sys
 import unittest
@@ -9,303 +7,155 @@ import unittest
 import test_policy
 
 
-class PolicyDecisionTests(unittest.TestCase):
-    # Reuse fixture operations without inheriting and rediscovering its tests.
-    setUp = test_policy.PolicyTests.setUp
-    git = test_policy.PolicyTests.git
-    event = test_policy.PolicyTests.event
-    invoke = test_policy.PolicyTests.invoke
-    execute = test_policy.PolicyTests.execute
-    expected_checks = test_policy.PolicyTests.expected_checks
-    evidence = test_policy.PolicyTests.evidence
+class PolicyReceiptTests(test_policy.PolicyFixture):
+    def test_receipt_gate_is_off_by_default(self):
+        (self.project / 'README.md').write_text('Dirty, unverified.\n')
+        for command in ('git push origin develop', 'git push', 'vercel --prod',
+                        'gh release create v9.9.9 --generate-notes'):
+            with self.subTest(command=command):
+                self.assert_allowed(command)
 
-    def deny(self, command, reason, **kwargs):
-        result = self.invoke(command, **kwargs)
-        self.assertEqual(result.returncode, 2, command + '\n' + result.stderr)
-        self.assertIn(reason, result.stderr)
-        self.assertIn('/ FIX:', result.stderr)
-        self.assertFalse(self.sentinel.exists(), command)
-        return result
-
-    def allow(self, command, **kwargs):
-        result = self.invoke(command, **kwargs)
-        self.assertEqual(result.returncode, 0, command + '\n' + result.stderr)
-        self.assertEqual(result.stdout, '')
-        self.assertFalse(self.sentinel.exists(), 'a hook structural pass cannot execute or approve')
-        return result
-
-    def commit(self):
-        self.git('add', '.')
-        self.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
-                 'commit', '--allow-empty', '-qm', 'Decision fixture')
-
-    def policy(self, **changes):
-        path = self.project / '.rpi/policy.json'
-        value = json.loads(path.read_text())
-        value.update(changes)
-        path.write_text(json.dumps(value))
-        return path
-
-    def tag(self, name='v9.9.9'):
-        self.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
-                 'tag', '-a', name, '-m', 'Decision fixture')
-
-    def release(self):
-        self.tag()
-        notes = self.project / '.rpi/local/notes.md'
-        notes.parent.mkdir(parents=True, exist_ok=True)
-        notes.write_text('Reviewed local notes.\n')
-        return 'gh release create v9.9.9 --verify-tag --title v9.9.9 --notes-file .rpi/local/notes.md'
-
-    def codex(self, version='codex-cli 0.153.4', decision='prompt', exit_code=0):
-        path = self.fakebin / 'codex'
-        path.write_text('#!/usr/bin/env python3\nimport json,sys\n'
-                        f'print({version!r} if "--version" in sys.argv else json.dumps({{"decision": {decision!r}}}))\n'
-                        f'sys.exit(0 if "--version" in sys.argv else {exit_code})\n')
-        path.chmod(0o755)
-
-    def native_rules(self):
-        path = self.project / '.codex/rules/rpi.rules'
-        path.parent.mkdir(parents=True)
-        path.write_bytes((test_policy.ROOT / 'templates/adapters/codex-permissions.rules').read_bytes())
-        self.commit()
-        return path
-
-    def test_topology_rejects_redirected_invalid_or_working_targets(self):
-        path = self.project / '.rpi/policy.json'
-        original = path.read_bytes()
-        for update, reason in (({'schema_version': 2}, 'Invalid project topology schema'),
-                               ({'unreviewed': True}, 'Invalid project topology schema'),
-                               ({'integration_branch': 'feature/pretend'}, 'documented integration branch'),
-                               ({'integration_branch': None}, 'documented integration branch'),
-                               ({'remote': '../origin'}, 'publication remote must be one')):
-            with self.subTest(update=update):
-                path.write_bytes(original)
-                self.policy(**update)
-                self.deny('git push origin develop', reason)
-        path.write_bytes(original)
-        copied = self.workspace / 'policy.json'
-        copied.write_bytes(original)
-        path.unlink()
-        path.symlink_to(copied)
-        self.deny('git push origin develop', 'Project policy must be a regular file')
-        self.assertEqual(copied.read_bytes(), original)
-
-    def test_inferred_topology_never_substitutes_for_verification_declaration(self):
+    def test_project_without_policy_file_is_never_gated(self):
         (self.project / '.rpi/policy.json').unlink()
-        self.deny('git push origin develop', 'must declare its complete local verification inventory')
-        self.git('branch', '-m', 'other')
-        self.deny('git push origin other', 'documented integration branch is required')
+        self.assert_allowed('git push origin develop')
+        self.assert_blocked('git push -f origin develop', 'protected branch')
+        self.assert_blocked('git push -f origin main', 'protected branch')
 
-    def test_verification_declaration_rejects_malformed_command_and_checks(self):
-        path = self.project / '.rpi/policy.json'
-        original = path.read_bytes()
-        updates = [({'verification_command': []}, 'verification command is missing or malformed'),
-                   ({'verification_checks': []}, 'complete project verification inventory is missing'),
-                   ({'verification_checks': [*self.expected_checks(), self.expected_checks()[0]]}, 'unique names and literal argv'),
-                   ({'verification_checks': [{'name': 'test', 'argv': [None]}]}, 'unique names and literal argv'),
-                   ({'verification_checks': [{'name': 'test', 'argv': ['true'], 'extra': True}]}, 'unique names and literal argv')]
-        for update, reason in updates:
-            with self.subTest(update=update):
-                path.write_bytes(original)
-                self.policy(**update)
-                self.deny('git push origin develop', reason)
-
-    def test_malformed_and_nonfinite_json_fail_closed(self):
-        for data in ('{"tool_name":"Bash","tool_name":"Read"}', '{"tool_name": NaN}', '[]', '{}'):
-            with self.subTest(data=data):
-                result = subprocess.run([sys.executable, str(test_policy.POLICY), '--harness', 'claude'],
-                                        input=data, text=True, capture_output=True,
-                                        cwd=self.project, env=self.environment)
-                self.assertEqual(result.returncode, 2, result.stderr)
-                self.assertIn('BLOCKED / WHY:', result.stderr)
-                self.assertFalse(self.sentinel.exists())
-
-    def test_failed_git_state_and_unconfigured_remote_cannot_reach_transport(self):
-        outside = self.workspace / 'outside'
-        outside.mkdir()
-        self.deny('git push origin develop', 'Git could not resolve',
-                  event={**self.event('git push origin develop'), 'cwd': str(outside)})
-        self.deny('git push other develop', 'not the documented configured publication remote')
-        self.git('remote', 'remove', 'origin')
-        self.deny('git push origin develop', 'not the documented configured publication remote')
-
-    def test_push_option_source_and_commit_decisions(self):
-        self.evidence()
-        self.allow('git push --porcelain --dry-run -u origin develop')
-        self.deny('git push --receive-pack=other origin develop', 'unsupported push option')
-        self.deny('git push origin other:develop', 'push source differs')
-        self.tag()
-        self.commit()
-        self.evidence()
-        self.deny('git push origin v9.9.9', 'ref being published differs')
-        self.git('checkout', '-qb', 'other')
-        self.evidence()
-        self.deny('git push origin develop', 'completed documented integration branch')
-
-    def test_report_claims_cannot_replace_complete_exact_success(self):
+    def test_opted_in_integration_push_needs_current_complete_evidence(self):
+        self.opt_in()
+        for command in ('git push origin develop', 'git push', 'git push origin HEAD'):
+            with self.subTest(command=command):
+                self.assert_blocked(command, 'verification evidence is missing')
         path = self.evidence()
-        valid = json.loads(path.read_text())
-        mutations = [dict(valid, passed=False), dict(valid, identity_after={}),
-                     dict(valid, environment_unchanged=False), dict(valid, environment_after={}),
-                     dict(valid, checks=[dict(item, exit_code=True) for item in valid['checks']]),
-                     dict(valid, checks=[dict(item, exit_code=1) for item in valid['checks']]),
-                     dict(valid, checks=[None, None])]
-        for report in mutations:
-            with self.subTest(report=report):
-                path.write_text(json.dumps(report))
-                self.deny('git push origin develop', 'does not attest this exact complete candidate')
-        external = self.workspace / 'external-report.json'
-        external.write_text(json.dumps(valid))
-        path.unlink()
-        path.symlink_to(external)
-        self.deny('git push origin develop', 'verification evidence is missing')
-        self.assertEqual(json.loads(external.read_text()), valid)
-
-    def test_canonical_native_boundary_rejects_chains_wrappers_and_quoted_executable(self):
+        self.assert_allowed('git push origin develop')
+        self.assert_allowed('git push')
+        report = json.loads(path.read_text())
+        for mutation in (dict(report, suite='custom'), dict(report, passed=False),
+                         dict(report, checks=report['checks'][:1]),
+                         dict(report, checks=list(reversed(report['checks']))),
+                         dict(report, checks=[dict(item, exit_code=1) for item in report['checks']])):
+            with self.subTest(mutation=mutation):
+                path.write_text(json.dumps(mutation))
+                self.assert_blocked('git push origin develop', 'does not attest')
         self.evidence()
-        for command in ('git status && git push origin develop', "'git' push origin develop",
-                        'command git push origin develop'):
-            with self.subTest(command=command):
-                reason = 'canonical executable command' if command.startswith(('git status', "'git'")) else 'native permission shapes'
-                self.deny(command, reason)
+        (self.project / 'README.md').write_text('Changed after verification.\n')
+        self.assert_blocked('git push origin develop', 'clean')
 
-    def test_codex_missing_wrong_version_and_nonprompt_rules_are_distinct_denials(self):
-        self.native_rules()
-        # Restrict PATH so an actual installed Codex cannot satisfy the fixture.
-        isolated = self.workspace / 'isolated'
-        isolated.mkdir()
-        for name, executable in (('git', self.fakebin / 'git'), ('python3', sys.executable)):
-            (isolated / name).symlink_to(executable)
-        environment = {**self.environment, 'PATH': str(isolated)}
-        self.environment = environment
-        self.evidence()
-        self.deny('git push origin develop', 'native Codex rule evaluator is unavailable', harness='codex')
-        self.environment = {**environment, 'PATH': str(self.fakebin) + os.pathsep + str(isolated)}
-        for version, decision, code, reason in (
-                ('codex-cli 0.0.0', 'prompt', 0, 'outside the verified'),
-                ('codex-cli 0.153.4', 'allow', 0, 'Native rules do not require approval'),
-                ('codex-cli 0.153.4', 'prompt', 1, 'Native rules do not require approval')):
-            with self.subTest(version=version, decision=decision, code=code):
-                self.codex(version, decision, code)
-                self.evidence()  # Bind the receipt to each actual changed fake client.
-                self.deny('git push origin develop', reason, harness='codex')
-        self.codex()
-        self.evidence()
-        self.allow('git push origin develop', harness='codex')
-        # A non-prompting Codex mode is denied on its own reason, and standing
-        # consent is the only alternative to a native approval mode.
-        self.deny('git push origin develop', 'Codex execution mode lacks', harness='codex',
-                  event={**self.event('git push origin develop'), 'permission_mode': 'bypassPermissions'})
+    def test_opted_in_gate_ignores_working_branches(self):
+        self.opt_in()
+        self.git('checkout', '-qb', 'feature/work')
+        (self.project / 'scratch.txt').write_text('in progress\n')
+        self.assert_allowed('git push -u origin feature/work')
+        self.assert_allowed('git push')
 
-    def test_native_permission_file_symlink_never_claims_trust(self):
-        rules = self.native_rules()
-        outside = self.workspace / 'rules'
-        outside.write_bytes(rules.read_bytes())
-        rules.unlink()
-        rules.symlink_to(outside)
+    def test_opted_in_tag_and_release_must_match_verified_commit(self):
+        self.opt_in()
+        self.tag()
+        self.evidence()
+        self.assert_allowed('git push origin v9.9.9')
+        self.assert_allowed('gh release create v9.9.9 --verify-tag --title v9.9.9 --notes-file notes.md')
         self.commit()
         self.evidence()
-        self.deny('git push origin develop', 'permission rules are missing or redirected', harness='codex')
+        self.assert_blocked('git push origin v9.9.9', 'differs from the verified candidate')
+        self.assert_blocked('gh release create v9.9.9 --notes x', 'differs from the verified candidate')
+        self.assert_allowed('gh release create v0.0.1-unknown --notes x')
 
-    def test_deployment_readonly_target_mutation_and_valid_production_paths(self):
-        for command in ('vercel inspect fixture', 'vercel env ls', 'vc --version'):
-            self.allow(command)
-        for command, reason in (('vercel deploy --target', 'Missing Vercel target value'),
-                                ('vercel promote deployment', 'promotion/rollback'),
-                                ('vercel rollback deployment', 'promotion/rollback'),
-                                ('vercel remove fixture --prod', 'Unsupported Vercel mutation shape')):
-            self.deny(command, reason)
+    def test_opted_in_bulk_tag_push_needs_evidence(self):
+        self.opt_in()
+        self.tag('v1.2.3')
+        self.git('checkout', '-qb', 'feature/work')
+        for command in ('git push origin --tags', 'git push --follow-tags origin feature/work'):
+            with self.subTest(command=command):
+                self.assert_blocked(command, 'verification evidence is missing')
         self.evidence()
-        for command in ('vercel deploy --target production', 'vercel --prod', 'vc deploy --prod'):
-            self.allow(command)
-        result = self.execute('vercel deploy --prod')
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.sentinel.read_text(), 'vercel executed')
+        self.assert_allowed('git push origin --tags')
 
-    def test_release_shapes_refuse_unbound_or_missing_option_values(self):
-        for command, reason in (('gh release create', 'one literal named version tag'),
-                                ('gh release create random', 'one literal named version tag'),
-                                ('gh release create v9.9.9 --title', 'requires a literal value'),
-                                ('gh release create v9.9.9 --title --verify-tag', 'requires a literal value'),
-                                ('gh release upload v9.9.9 asset', 'release mutations require'),
-                                ('gh release edit v9.9.9 --draft=false', 'release mutations require')):
-            self.deny(command, reason)
-
-    def test_release_requires_integration_annotated_tag_and_matching_commit(self):
-        command = self.release()
-        self.evidence()
-        self.git('checkout', '-qb', 'other')
-        self.deny(command, 'completed integration checkout')
-        self.git('checkout', 'develop')
-        self.git('tag', '-d', 'v9.9.9')
-        self.deny(command, 'existing annotated version tag')
+    def test_opted_in_release_tag_is_found_after_option_values(self):
+        self.opt_in()
         self.tag()
         self.commit()
         self.evidence()
-        self.deny(command, 'release tag differs from the verified candidate')
-
-    def test_git_global_directory_and_pager_options_resolve_local_pull(self):
-        self.allow('git')
-        self.allow('git --no-pager status')
-        self.allow('git --paginate status')
-        self.allow('git -C. pull --rebase')
-        self.assertEqual(self.execute('git -C. pull --rebase').returncode, 0)
-        self.assertEqual(self.sentinel.read_text(), 'git executed')
-
-    def test_wrappers_chained_cwd_and_literal_only_segments(self):
-        nested = self.project / 'nested'
-        nested.mkdir()
-        for command in ('command -- git status', 'exec -- git status', 'TEST=git',
-                        'true && git status', 'git status;\n', 'cd nested && git status',
-                        "bash -lc 'git status'", 'env -i -- git status'):
-            self.allow(command)
-        for command, reason in (('cd missing && git push origin develop', 'working directory does not exist'),
-                                ('wrapper git push origin develop', 'Unsupported executable wrapper'),
-                                ('npm run vercel', 'Package scripts hide'),
-                                ('npx git push origin develop', 'Unsupported package wrapper'),
-                                ('(git push origin develop)', 'Unsupported compound shell grouping')):
-            self.deny(command, reason)
-
-    def test_shell_parse_failures_block_before_any_transport(self):
-        for command in ('git push origin develop\\', 'git push "develop',
-                        'echo `git push origin develop', 'echo $(git push origin develop',
-                        "cat <<'EOF'\ngit push origin develop\n"):
+        for command in ('gh release create --title "Release" v9.9.9', 'gh release create -t Rel v9.9.9',
+                        'gh release create --repo owner/x v9.9.9', 'gh release create --draft v9.9.9 --notes x'):
             with self.subTest(command=command):
-                self.deny(command, 'Malformed policy-sensitive shell syntax')
-        self.evidence()
-        self.allow('git \\\nstatus # git push origin feature/comment\n')
-        for inner in ('echo "text \'nested\'"; git push origin feature/work',
-                      'echo $(printf nested); git push origin feature/work',
-                      r'echo escaped\); git push origin feature/work',
-                      '(git push origin feature/work)'):
-            self.deny('echo $(' + inner + ')', 'BLOCKED / WHY:')
-        command = 'git status'
-        for _ in range(7):
-            command = 'bash -c ' + shlex.quote(command)
-        self.deny(command, 'exceed the supported parser depth')
+                self.assert_blocked(command, 'differs from the verified candidate')
 
-    def test_telemetry_symlink_is_skipped_without_changing_the_policy_result(self):
-        directory = self.project / '.rpi/local'
-        directory.mkdir()
-        outside = self.workspace / 'telemetry.txt'
-        outside.write_text('owner sentinel\n')
-        (directory / 'contract-events.jsonl').symlink_to(outside)
-        self.allow('git pull --rebase')
-        self.assertEqual(outside.read_text(), 'owner sentinel\n')
-
-    def test_missing_candidate_runtime_dependency_uses_native_block_exit(self):
+    def test_opted_in_gate_errors_block_instead_of_failing_open(self):
         runtime = self.workspace / 'runtime'
         runtime.mkdir()
         policy = runtime / 'rpi-policy.py'
         policy.write_bytes(test_policy.POLICY.read_bytes())
+        (runtime / 'rpi-candidate.py').write_text('def identity(root):\n    raise RuntimeError\n\ndef environment(*_):\n    return {}\n')
+        self.opt_in()
         self.evidence()
         result = subprocess.run([sys.executable, str(policy), '--harness', 'claude'],
                                 input=json.dumps(self.event('git push origin develop')),
                                 text=True, capture_output=True, env=self.environment, cwd=self.project)
         self.assertEqual(result.returncode, 2, result.stderr)
-        self.assertIn('policy dependency is missing', result.stderr)
-        self.assertFalse(self.sentinel.exists())
+        self.assertIn('Receipt verification failed', result.stderr)
+
+    def test_invalid_policy_file_blocks_release_creation(self):
+        (self.project / '.rpi/policy.json').write_text('not json')
+        self.assert_blocked('gh release create v7.7.7 --notes x', '.rpi/policy.json')
+
+    def test_opted_in_production_deploy_needs_evidence(self):
+        self.opt_in()
+        self.assert_blocked('vercel --prod', 'verification evidence is missing')
+        self.evidence()
+        self.assert_allowed('vercel deploy --prod')
+        self.assert_allowed('vercel env ls')
+
+    def test_opted_in_malformed_declaration_is_reported(self):
+        path = self.project / '.rpi/policy.json'
+        original = path.read_bytes()
+        for update, reason in (({'verification_command': []}, 'verification command is missing or malformed'),
+                               ({'verification_checks': []}, 'verification inventory is missing'),
+                               ({'verification_checks': [{'name': 't', 'argv': [None]}]}, 'unique names and literal argv')):
+            with self.subTest(update=update):
+                path.write_bytes(original)
+                self.policy(require_verification_receipt=True, **update)
+                self.assert_blocked('git push origin develop', reason)
+        path.write_text('{"schema_version": 1, "require_verification_receipt": "yes"}')
+        self.assert_blocked('git push origin develop', 'require_verification_receipt must be true or false')
+
+    def test_invalid_policy_file_blocks_only_policy_dependent_commands(self):
+        path = self.project / '.rpi/policy.json'
+        for data in ('not json', '[]', '{"schema_version": 2}', '{"schema_version": 1, "unknown": 1}'):
+            with self.subTest(data=data):
+                path.write_text(data)
+                self.assert_blocked('git push origin develop', '.rpi/policy.json')
+                self.assert_allowed('git status')
+                self.assert_allowed('gh pr create --fill')
+        copied = self.workspace / 'policy.json'
+        copied.write_text('{"schema_version": 1}')
+        path.unlink()
+        path.symlink_to(copied)
+        self.assert_blocked('git push origin develop', 'regular file')
+
+    def test_changed_locale_cannot_reuse_passing_receipt(self):
+        self.opt_in()
+        self.environment['LC_ALL'] = 'C'
+        self.evidence()
+        self.assertEqual(self.invoke('git push origin develop').returncode, 0)
+        changed = {**self.environment, 'LC_ALL': 'C.UTF-8'}
+        result = self.invoke('git push origin develop', environment=changed)
+        self.assertEqual(result.returncode, 2, result.stderr)
+
+    def test_missing_candidate_helper_blocks_only_when_opted_in(self):
+        runtime = self.workspace / 'runtime'
+        runtime.mkdir()
+        policy = runtime / 'rpi-policy.py'
+        policy.write_bytes(test_policy.POLICY.read_bytes())
+        def run():
+            return subprocess.run([sys.executable, str(policy), '--harness', 'claude'],
+                                  input=json.dumps(self.event('git push origin develop')),
+                                  text=True, capture_output=True, env=self.environment, cwd=self.project)
+        self.assertEqual(run().returncode, 0)
+        self.opt_in()
+        self.evidence()
+        result = run()
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn('candidate identity helper is missing', result.stderr)
 
 
 if __name__ == '__main__':

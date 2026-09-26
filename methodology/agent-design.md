@@ -259,9 +259,9 @@ when the user said "push to the integration branch" earlier in the
 conversation — git state is the source of truth, not conversation
 memory.
 
-The `guard-bash.sh` hook should block direct pushes to protected
-production branches as a last line of defense, but verification should
-happen before the commit, not after.
+The `guard-bash.sh` hook blocks force-pushes and deletion of protected
+branches as a last line of defense, but verification should happen
+before the commit, not after.
 
 ### File Ownership for Parallel Agents
 

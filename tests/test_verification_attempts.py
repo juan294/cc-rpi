@@ -48,6 +48,7 @@ class VerificationAttemptTests(unittest.TestCase):
         declaration = self.project / '.rpi/policy.json'
         value = json.loads(declaration.read_text())
         value['verification_checks'] = self.checks
+        value['require_verification_receipt'] = True  # These attempts exercise the opt-in gate.
         declaration.write_text(json.dumps(value))
         self.fixture.git('add', '.')
         self.fixture.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',

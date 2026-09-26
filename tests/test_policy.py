@@ -13,7 +13,9 @@ ROOT = Path(__file__).resolve().parents[1]
 POLICY = ROOT / 'templates/scripts/rpi-policy.py'
 
 
-class PolicyTests(unittest.TestCase):
+class PolicyFixture(unittest.TestCase):
+    """Shared fixture; test classes derive from it and add only tests."""
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="rpi policy é ' & ")
         self.addCleanup(self.temporary.cleanup)
@@ -43,14 +45,22 @@ Path(os.environ['RPI_SENTINEL']).write_text(name+' executed')
         (self.project / '.rpi').mkdir()
         (self.project / '.rpi/policy.json').write_text(json.dumps({'schema_version': 1, 'integration_branch': 'develop',
             'remote': 'origin', 'verification_checks': self.expected_checks(), 'verification_command': ['bash', 'scripts/verify-local.sh']}))
-        self.git('add', '.')
-        self.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'Fixture')
+        self.commit('Fixture')
         self.git('remote', 'add', 'origin', 'https://github.com/fixture/project.git')
 
     def git(self, *arguments):
         result = subprocess.run([self.environment['RPI_REAL_GIT'], '-C', str(self.project), *arguments], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         return result.stdout.strip()
+
+    def commit(self, message='Fixture change'):
+        self.git('add', '.')
+        self.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+                 'commit', '--allow-empty', '-qm', message)
+
+    def tag(self, name='v9.9.9'):
+        self.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+                 'tag', '-a', name, '-m', 'Fixture tag')
 
     def event(self, command):
         return {'hook_event_name': 'PreToolUse', 'tool_name': 'Bash', 'session_id': 'fixture-session',
@@ -62,15 +72,27 @@ Path(os.environ['RPI_SENTINEL']).write_text(name+' executed')
                               capture_output=True, text=True, cwd=self.project,
                               env=environment or self.environment)
 
-    def execute(self, command, harness='claude', native_authorized=True):
+    def execute(self, command, harness='claude'):
         result = self.invoke(command, harness)
-        if result.returncode == 0 and native_authorized:
+        if result.returncode == 0:
             subprocess.run(['bash', '-c', command], cwd=self.project, env=self.environment, check=True)
         return result
 
     def expected_checks(self):
         return [{'name': 'fixture-tests', 'argv': ['python3', '-m', 'unittest']},
                 {'name': 'fixture-build', 'argv': ['bash', 'build.sh']}]
+
+    def policy(self, **changes):
+        path = self.project / '.rpi/policy.json'
+        value = json.loads(path.read_text())
+        value.update(changes)
+        path.write_text(json.dumps(value))
+        return path
+
+    def opt_in(self):
+        """Opt into the receipt gate and commit, so the candidate is clean."""
+        self.policy(require_verification_receipt=True)
+        self.commit('Opt in')
 
     def evidence(self):
         spec = importlib.util.spec_from_file_location('policy_candidate_fixture', ROOT / 'templates/scripts/rpi-candidate.py')
@@ -86,141 +108,242 @@ Path(os.environ['RPI_SENTINEL']).write_text(name+' executed')
         path.write_text(json.dumps(report))
         return path
 
-    def assert_blocked(self, command, harness='claude'):
-        result = self.execute(command, harness)
-        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+    def assert_allowed(self, command, harness='claude', **kwargs):
+        result = self.invoke(command, harness, **kwargs)
+        self.assertEqual(result.returncode, 0, command + '\n' + result.stderr)
+        self.assertNotIn('"allow"', result.stdout, 'a pass never manufactures native approval')
+        self.assertFalse(self.sentinel.exists(), 'the policy never executes the command')
+        return result
+
+    def assert_blocked(self, command, reason=''):
+        result = self.execute(command)
+        self.assertEqual(result.returncode, 2, command + '\n' + result.stdout + result.stderr)
         self.assertIn('BLOCKED / WHY:', result.stderr)
         self.assertIn('/ FIX:', result.stderr)
+        self.assertIn(reason, result.stderr)
         self.assertFalse(self.sentinel.exists(), command)
+        return result
 
-    def test_local_work_and_literal_command_text_remain_allowed(self):
-        for command in ('git status --short', 'printf "%s" "git push origin feature/test"',
-                        "printf '%s' 'vercel deploy --target preview'", 'echo git push --tags'):
-            self.assertEqual(self.invoke(command).returncode, 0, command)
+
+class PolicyTests(PolicyFixture):
+    def test_ordinary_publication_passes_to_native_permissions(self):
+        # Pushes, PRs and workflow dispatch belong to the client's own permission
+        # rules and the user; the policy neither blocks nor approves them.
+        for command in ('git push', 'git push origin develop', 'git push -u origin feature/work',
+                        'git push origin HEAD', 'git push --tags', 'git push origin --follow-tags',
+                        'git push origin feature/work --force', 'git push -f origin feature/work',
+                        'git push --force-with-lease origin HEAD:refs/heads/fix/thing',
+                        'git push origin --delete feature/old', 'git push origin :feature/old',
+                        'gh pr create --fill', 'gh pr merge 12 --squash --delete-branch',
+                        'gh pr update-branch 12', 'gh workflow run ci.yml', 'gh run rerun 123',
+                        'gh api -X POST repos/fixture/project/issues/1/comments -f body=hi',
+                        'gh release create v1.0.0 --generate-notes', 'gh release edit v1.0.0 --draft=false',
+                        'gh issue create --title T', 'gh repo view', 'gh label create bug'):
+            with self.subTest(command=command):
+                self.assert_allowed(command)
+
+    def test_every_permission_mode_passes_to_native_permissions(self):
+        for mode in (None, 'default', 'acceptEdits', 'plan', 'auto', 'dontAsk', 'bypassPermissions'):
+            with self.subTest(mode=mode):
+                event = dict(self.event('git push origin develop'), permission_mode=mode)
+                self.assertEqual(self.invoke(event=event).returncode, 0)
+                self.assertEqual(self.invoke(event=event, harness='codex').returncode, 0)
+
+    def test_force_or_deletion_of_a_protected_branch_is_blocked(self):
+        for command in ('git push --force origin develop', 'git push -f origin develop',
+                        'git push origin develop --force-with-lease', 'git push origin +develop',
+                        'git push origin +HEAD:develop', 'git push origin HEAD:refs/heads/main --force',
+                        'git push -fu origin master', 'git push origin --delete main',
+                        'git push origin -d develop', 'git push origin :main',
+                        'git push origin :refs/heads/develop', 'git push --force'):
+            with self.subTest(command=command):
+                self.assert_blocked(command, 'protected branch')
+
+    def test_declared_production_branches_are_protected(self):
+        self.policy(production_branches=['release'])
+        self.assert_blocked('git push --force origin release', 'protected branch')
+        self.assert_allowed('git push --force origin feature/release')
+
+    def test_force_on_a_working_branch_uses_its_current_branch(self):
+        self.git('checkout', '-qb', 'feature/work')
+        self.assert_allowed('git push --force')
+        self.assert_allowed('git push --force-with-lease origin HEAD')
+        self.git('checkout', '-q', 'develop')
+        self.assert_blocked('git push --force origin HEAD', 'protected branch')
+
+    def test_force_with_an_unresolvable_target_is_blocked(self):
+        self.assert_blocked('git push --force origin "$BRANCH"', 'protected branch')
+        self.assert_blocked('git push -f origin $(git branch --show-current)', 'protected branch')
+        self.assert_allowed('git push origin "$BRANCH"')
+
+    def test_mirror_prune_and_forced_all_rewrite_the_remote(self):
+        for command in ('git push --mirror', 'git push origin --mirror', 'git push --prune origin',
+                        'git push --all --force origin', 'git push origin --all -f'):
+            with self.subTest(command=command):
+                self.assert_blocked(command, 'rewrites or deletes remote refs')
+        self.assert_allowed('git push --all origin')
+
+    def test_repository_deletion_is_blocked(self):
+        self.assert_blocked('gh repo delete fixture/project --yes', 'Deleting a repository')
+        self.assert_allowed('gh repo view fixture/project')
+
+    def test_preview_default_bare_alias_and_wrapped_forms_never_execute(self):
+        for command in ('vercel', 'vc', 'vercel deploy', 'vercel deploy --target preview',
+                        'vercel deploy --target=preview --prod', 'vercel deploy --target',
+                        'npx --no-install vercel deploy', 'pnpm exec vercel', 'pnpm dlx vercel .',
+                        'env MODE=x vercel .', 'vercel ./app', 'vercel --yes'):
+            with self.subTest(command=command):
+                self.assert_blocked(command, 'Vercel Preview')
+
+    def test_vercel_production_and_other_subcommands_pass_to_native_permissions(self):
+        for command in ('vercel --prod', 'vercel deploy --prod', 'vc deploy --target production',
+                        'npx --yes vercel deploy --prod', 'vercel inspect fixture', 'vercel env ls',
+                        'vercel env add NAME production', 'vercel promote dpl_1', 'vercel logs x', 'vc --version'):
+            with self.subTest(command=command):
+                self.assert_allowed(command)
+
+    def test_destructive_forms_are_found_in_chains_substitutions_and_wrappers(self):
+        for command in ('git status && git push -f origin develop', 'git status; git push -f origin develop',
+                        'git status\ngit push -f origin develop', 'echo "$(git push -f origin develop)"',
+                        'echo `git push -f origin develop`', "bash -lc 'git push -f origin develop'",
+                        'env TEST=1 command git push -f origin develop', 'git -C . push -f origin develop',
+                        'git --no-pager -c color.ui=never push -f origin develop', 'cd . && git push -f origin develop',
+                        '(git push -f origin develop)', 'git push -o ci.skip -f origin develop',
+                        'GIT_TRACE=1 git push -f origin develop', 'git status | git push -f origin develop'):
+            with self.subTest(command=command):
+                self.assert_blocked(command, 'protected branch')
+
+    def test_redirections_are_not_refspecs(self):
+        for command in ('git push --force origin 2>&1 | tail -20', 'git push --force origin >/dev/null',
+                        'git push --force origin 2>/dev/null', 'git push --force-with-lease origin > /tmp/out.log',
+                        'git push -f &>/dev/null', 'git push -f origin main 2>&1'):
+            with self.subTest(command=command):
+                self.assert_blocked(command, 'protected branch')
+        self.git('checkout', '-qb', 'feature/work')
+        self.assert_allowed('git push --force origin 2>&1 | tail -20')
+
+    def test_repo_option_names_the_remote(self):
+        self.git('checkout', '-qb', 'feature/work')
+        for command in ('git push --repo=origin main -f', 'git push --repo origin main -f'):
+            with self.subTest(command=command):
+                self.assert_blocked(command, 'protected branch')
+
+    def test_attached_push_option_values_are_not_flags(self):
+        self.assert_allowed('git push -oskipdeploy origin develop')
+        self.assert_blocked('git push -fo ci.skip origin develop', 'protected branch')
+        self.assert_allowed('git push --force-if-includes origin develop')
+
+    def test_common_wrappers_are_unwrapped(self):
+        for command in ('timeout 120 git push -f origin develop', 'timeout -k 5 60s git push -f origin develop',
+                        'nice -n 10 git push -f origin develop', 'sudo -u me git push -f origin develop'):
+            with self.subTest(command=command):
+                self.assert_blocked(command, 'protected branch')
+
+    def test_pinned_vercel_packages_and_global_options(self):
+        for command in ('npx vercel@latest', 'npx vercel@latest deploy', 'pnpm dlx vercel@latest deploy',
+                        'vercel --token=abc', 'vercel --scope myteam --yes'):
+            with self.subTest(command=command):
+                self.assert_blocked(command, 'Vercel Preview')
+        for command in ('vercel --token=abc pull --yes --environment=preview', 'vercel --scope myteam link',
+                        'vercel --cwd apps/web build', 'vercel -t abc env pull', 'vercel --scope myteam env ls',
+                        'vercel link', 'vercel pull', 'vc dev', 'vercel build', 'npx vercel@latest --prod'):
+            with self.subTest(command=command):
+                self.assert_allowed(command)
+
+    def test_literal_text_never_triggers_a_block(self):
+        for command in ('printf "%s" "git push -f origin develop"', "echo 'git push --mirror'",
+                        "echo '$(git push -f origin develop)'", 'echo gh repo delete x',
+                        "cat <<'TEXT'\ngit push -f origin develop\nTEXT\n",
+                        'git commit -m "$(cat <<\'EOF\'\nfix: stop git push -f origin develop\nEOF\n)"',
+                        "grep -rn 'git push --force origin main' docs", 'rg "vercel deploy"',
+                        'git log --grep="push -f"'):
+            with self.subTest(command=command):
+                self.assert_allowed(command)
+
+    def test_local_work_executes_normally(self):
         command = 'printf local > ' + subprocess.list2cmdline([str(self.sentinel)])
         self.assertEqual(self.execute(command).returncode, 0)
         self.assertEqual(self.sentinel.read_text(), 'local')
 
-    def test_executed_substitution_and_newline_are_distinct_from_literal_text(self):
-        for command in ('echo "$(git push origin feature/substitution)"',
-                        'echo `git push origin feature/backtick`',
-                        'git status\ngit push origin feature/newline'):
-            self.assert_blocked(command)
-        for command in ("echo '$(git push origin feature/literal)'",
-                        "printf '%s;%s' ';' 'git push origin feature/literal'",
-                        "cat <<'TEXT'\ngit push origin feature/literal\nTEXT\n"):
-            self.assertEqual(self.invoke(command).returncode, 0, command)
-
-    def test_feature_publication_is_denied_in_refspecs_chains_and_wrappers(self):
-        for command in ('git push origin feature/work', 'git push origin HEAD:refs/heads/feature/work',
-                        'git status && git push origin feature/work', 'env TEST=1 command git push origin feature/work',
-                        "bash -lc 'git push origin feature/work'", 'git -C . push origin feature/work'):
-            with self.subTest(command=command):
-                self.assert_blocked(command)
-
-    def test_preview_default_bare_alias_and_wrapped_forms_never_execute(self):
-        for command in ('vercel', 'vc', 'vercel deploy', 'vercel deploy --target preview',
-                        'vercel deploy --target=preview --prod', 'npx --no-install vercel deploy',
-                        'pnpm exec vercel', 'env MODE=x vercel .'):
-            with self.subTest(command=command):
-                self.assert_blocked(command)
-
-    def test_all_tags_follow_tags_and_destructive_publication_are_denied(self):
-        self.evidence()
-        for command in ('git push --tags --follow-tags', 'git push origin --follow-tags',
-                        'git push origin --all', 'git push --mirror', 'git push origin +HEAD:develop',
-                        'git push --force origin develop', 'git push origin :old-branch'):
-            with self.subTest(command=command):
-                self.assert_blocked(command)
-
-    def test_dirty_pull_is_checked_in_git_c_directory(self):
+    def test_pull_is_never_blocked(self):
         (self.project / 'README.md').write_text('Uncommitted work.\n')
-        self.assert_blocked('git -C . pull --rebase')
-        self.assert_blocked('git pull')
+        (self.project / 'untracked.txt').write_text('scratch\n')
+        self.assert_allowed('git pull --rebase')
+        self.assert_allowed('git -C . pull')
 
-    def test_clean_pull_can_execute_fake_transport(self):
-        self.assertEqual(self.execute('git pull --rebase').returncode, 0)
-        self.assertEqual(self.sentinel.read_text(), 'git executed')
+    def test_unsupported_adapter_arguments_fail_closed(self):
+        for arguments in ([], ['--harness'], ['--harness', 'other'], ['--other', 'claude']):
+            with self.subTest(arguments=arguments):
+                result = subprocess.run([sys.executable, str(POLICY), *arguments], input='{}',
+                                        text=True, capture_output=True, env=self.environment)
+                self.assertEqual(result.returncode, 2)
+                self.assertIn('/ FIX:', result.stderr)
 
-    def test_integration_needs_current_complete_gate_evidence(self):
-        self.assert_blocked('git push origin develop')
-        path = self.evidence()
-        report = json.loads(path.read_text())
-        report['suite'] = 'custom'
-        path.write_text(json.dumps(report))
-        self.assert_blocked('git push origin develop')
-        self.evidence()
-        (self.project / 'README.md').write_text('Changed after verification.\n')
-        self.assert_blocked('git push origin develop')
+    def test_malformed_events_fail_closed_with_repair_text(self):
+        for data in ('{"tool_name":"Bash","tool_name":"Read"}', '{"tool_name": NaN}', '[]', '{}',
+                     json.dumps({'tool_name': 'Bash'}),
+                     json.dumps({'tool_name': 'Bash', 'hook_event_name': 'PreToolUse', 'tool_input': {'command': ['git']}})):
+            with self.subTest(data=data):
+                result = subprocess.run([sys.executable, str(POLICY), '--harness', 'claude'], input=data,
+                                        text=True, capture_output=True, cwd=self.project, env=self.environment)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn('BLOCKED / WHY:', result.stderr)
+                self.assertIn('/ FIX:', result.stderr)
+        self.assertEqual(self.invoke(event={'tool_name': 'Read', 'tool_input': {'file_path': 'README.md'}}).returncode, 0)
 
-    def test_structural_pass_never_manufactures_native_authorization(self):
-        self.evidence()
-        result = self.execute('git push origin develop', native_authorized=False)
+    def test_missing_cwd_and_missing_git_pass_through(self):
+        # A removed worktree or absent Git must not block every shell command.
+        event = dict(self.event('git push -f origin develop'), cwd='/nonexistent-policy-fixture')
+        self.assertEqual(self.invoke(event=event).returncode, 0)
+        environment = {**self.environment, 'PATH': str(self.workspace / 'empty-path')}
+        self.assertEqual(self.invoke('git push origin develop', environment=environment).returncode, 0)
+        self.assertEqual(self.invoke('printf local', environment=environment).returncode, 0)
+
+    def test_unexpected_evaluation_errors_fail_open_with_a_warning(self):
+        runtime = self.workspace / 'runtime'
+        runtime.mkdir()
+        broken = runtime / 'rpi-policy.py'
+        broken.write_text(POLICY.read_text().replace('def push(', 'def push(*_):\n    raise RuntimeError\n\n\ndef _unused(', 1))
+        result = subprocess.run([sys.executable, str(broken), '--harness', 'claude'],
+                                input=json.dumps(self.event('git push origin develop')),
+                                text=True, capture_output=True, env=self.environment, cwd=self.project)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertNotIn('"allow"', result.stdout)
-        self.assertFalse(self.sentinel.exists(), 'fake trusted boundary withheld approval')
-        self.assertEqual(self.execute('git push origin develop', native_authorized=True).returncode, 0)
-        self.assertTrue(self.sentinel.exists())
+        self.assertIn('POLICY UNAVAILABLE', result.stderr)
 
-    def test_named_tag_at_verified_head_can_reach_claude_native_permission(self):
-        self.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'tag', '-a', 'v9.9.9', '-m', 'Release fixture')
-        self.evidence()
-        self.assertEqual(self.execute('git push origin v9.9.9').returncode, 0)
-        self.assertTrue(self.sentinel.exists())
-
-    def test_codex_remote_automation_stays_blocked_without_trusted_ask(self):
-        self.evidence()
-        self.assert_blocked('git push origin develop', 'codex')
-        self.assert_blocked('vercel deploy --prod', 'codex')
-        self.assertEqual(self.invoke('git status', 'codex').returncode, 0)
-
-    def test_codex_loaded_prompt_contract_preserves_actual_native_decision(self):
-        rules = self.project / '.codex/rules/rpi.rules'
-        rules.parent.mkdir(parents=True)
-        rules.write_bytes((ROOT / 'templates/adapters/codex-permissions.rules').read_bytes())
-        self.git('add', '.codex')
-        self.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'Explicit native setup')
-        client = self.fakebin / 'codex'
-        client.write_text("#!/usr/bin/env python3\nimport json,sys\nprint('codex-cli 0.153.4' if '--version' in sys.argv else json.dumps({'decision': 'prompt'}))\n")
-        client.chmod(0o755)
-        self.evidence()
-        event = {**self.event('git push origin develop'), 'permission_mode': 'default'}
-        result = self.invoke(harness='codex', event=event)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertNotIn('"allow"', result.stdout)
-        self.assertFalse(self.sentinel.exists(), 'the hook never executes or approves the publication')
-        client.write_text("#!/usr/bin/env python3\nimport json,sys\nprint('codex-cli 0.153.4' if '--version' in sys.argv else json.dumps({'decision': 'allow'}))\n")
-        rejected = self.invoke(harness='codex', event=event)
-        self.assertEqual(rejected.returncode, 2)
-        self.assertIn('Native rules do not require approval', rejected.stderr)
-        event['permission_mode'] = 'bypassPermissions'
-        self.assertEqual(self.invoke(harness='codex', event=event).returncode, 2)
-
-    def test_wrapper_runtime_failures_emit_native_blocking_stderr(self):
+    def test_wrapper_runtime_failures_warn_without_blocking(self):
         wrapper = ROOT / 'templates/hooks/guard-bash.sh'
         result = subprocess.run(['/bin/bash', str(wrapper)], input=json.dumps(self.event('git push')),
                                 text=True, capture_output=True, env={**self.environment, 'PATH': '/nonexistent-fixture-path'})
-        self.assertEqual(result.returncode, 2)
+        self.assertEqual(result.returncode, 0)
         self.assertIn('Python 3', result.stderr)
-        self.assertIn('/ FIX:', result.stderr)
-        old_runtime = self.workspace / 'old-runtime'
-        old_runtime.mkdir()
-        executable = old_runtime / 'python3'
-        executable.write_text('#!/bin/sh\nexit 1\n')
-        executable.chmod(0o755)
-        result = subprocess.run(['/bin/bash', str(wrapper)], input=json.dumps(self.event('git push')),
-                                text=True, capture_output=True, env={**self.environment, 'PATH': str(old_runtime)})
-        self.assertEqual(result.returncode, 2)
+        # The engine checks its own runtime; an old interpreter passes through.
+        old_runtime = ('import runpy, sys; sys.version_info = (3, 10, 0); '
+                       'sys.argv = [sys.argv[1], "--harness", "claude"]; runpy.run_path(sys.argv[0], run_name="__main__")')
+        result = subprocess.run([sys.executable, '-c', old_runtime, str(POLICY)], input=json.dumps(self.event('git push -f origin develop')),
+                                text=True, capture_output=True, env=self.environment, cwd=self.project)
+        self.assertEqual(result.returncode, 0)
         self.assertIn('Python 3.11 or newer', result.stderr)
         broken = self.workspace / 'hooks/guard-bash.sh'
         broken.parent.mkdir()
         shutil.copyfile(wrapper, broken)
         result = subprocess.run(['/bin/bash', str(broken)], input=json.dumps(self.event('git push')),
                                 text=True, capture_output=True, env=self.environment)
-        self.assertEqual(result.returncode, 2)
-        self.assertIn('rpi-policy.py dependency is missing', result.stderr)
+        self.assertEqual(result.returncode, 0)
+        self.assertIn('rpi-policy.py', result.stderr)
 
-    def test_registered_wrapper_resolves_nested_cwd_without_git_for_local_text(self):
+    def test_wrapper_passes_through_policy_blocks(self):
+        wrapper = self.project / '.claude/hooks/guard-bash.sh'
+        wrapper.parent.mkdir(parents=True)
+        shutil.copyfile(ROOT / 'templates/hooks/guard-bash.sh', wrapper)
+        runtime = self.project / '.rpi/scripts'
+        runtime.mkdir(parents=True)
+        shutil.copyfile(POLICY, runtime / POLICY.name)
+        result = subprocess.run(['/bin/bash', str(wrapper)], input=json.dumps(self.event('git push -f origin develop')),
+                                text=True, capture_output=True, env=self.environment)
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn('protected branch', result.stderr)
+
+    def test_registered_wrapper_resolves_nested_cwd_and_missing_install_passes(self):
         for name, executable in (('python3', sys.executable), ('bash', shutil.which('bash'))):
             (self.fakebin / name).symlink_to(executable)
         (self.fakebin / 'git').unlink()
@@ -229,6 +352,8 @@ Path(os.environ['RPI_SENTINEL']).write_text(name+' executed')
         shutil.copyfile(POLICY, runtime / POLICY.name)
         nested = self.project / 'nested'
         nested.mkdir()
+        outside = self.workspace / 'outside'
+        outside.mkdir()
         for harness, adapter in (('claude', 'claude-policy.json'), ('codex', 'codex-hooks.json')):
             hooks = self.project / ('.' + harness) / 'hooks'
             hooks.mkdir(parents=True)
@@ -236,213 +361,28 @@ Path(os.environ['RPI_SENTINEL']).write_text(name+' executed')
             records = json.loads((ROOT / 'templates/adapters' / adapter).read_text())['entries']
             registration = next(record['value']['hooks'][0]['command'] for record in records if record['id'] == 'pre-tool-policy')
             environment = {**self.environment, 'PATH': str(self.fakebin)}
-            result = subprocess.run(['/bin/bash', '-c', registration], input=json.dumps(self.event('printf local')),
-                                    capture_output=True, text=True, cwd=nested, env=environment)
-            self.assertEqual(result.returncode, 0, result.stderr)
+            for cwd in (nested, outside):
+                with self.subTest(harness=harness, cwd=cwd.name):
+                    result = subprocess.run(['/bin/bash', '-c', registration], input=json.dumps(self.event('printf local')),
+                                            capture_output=True, text=True, cwd=cwd, env=environment)
+                    self.assertEqual(result.returncode, 0, result.stderr)
             self.assertFalse((runtime / '__pycache__').exists())
 
     def test_optional_telemetry_failure_does_not_change_policy_result(self):
         sink = self.project / '.rpi/local/contract-events.jsonl'
         sink.mkdir(parents=True)
-        result = self.invoke('git pull --rebase')
-        self.assertEqual(result.returncode, 0, result.stderr)
+        result = self.invoke('git push -f origin develop')
+        self.assertEqual(result.returncode, 2, result.stderr)
         self.assertIn('TELEMETRY UNAVAILABLE', result.stderr)
 
-    def test_implicit_upstream_cannot_publish_working_branch(self):
-        self.git('checkout', '-qb', 'feature/implicit')
-        self.git('config', 'branch.feature/implicit.remote', 'origin')
-        self.git('config', 'branch.feature/implicit.merge', 'refs/heads/feature/implicit')
-        self.evidence()
-        self.assert_blocked('git push')
-
-    def test_policy_sensitive_ambiguity_and_malformed_events_fail_closed(self):
-        for command in ('eval "git push origin develop"', 'git push origin "$DEST"',
-                        'git push origin $(cat target.txt)', 'git -c alias.ship=push ship origin develop'):
-            with self.subTest(command=command):
-                self.assert_blocked(command)
-        for event in ({'tool_name': 'Bash'}, {'tool_name': 'Bash', 'tool_input': {'command': ['git', 'push']}},
-                      {**self.event('git push'), 'cwd': '/nonexistent-policy-fixture'}):
-            result = self.invoke(event=event)
-            self.assertEqual(result.returncode, 2, result.stderr)
-        self.assertEqual(self.invoke(event={'tool_name': 'Read', 'tool_input': {'file_path': 'README.md'}}).returncode, 0)
-
-    def test_missing_git_dependency_is_blocked_for_git_and_not_for_local_text(self):
-        environment = {**self.environment, 'PATH': str(self.workspace / 'empty-path')}
-        self.assertEqual(self.invoke('git push origin develop', environment=environment).returncode, 2)
-        self.assertEqual(self.invoke('printf local', environment=environment).returncode, 0)
-
-    def test_partial_and_reordered_project_gate_reports_are_rejected(self):
-        path = self.evidence()
-        valid = json.loads(path.read_text())
-        for checks in (valid['checks'][:1], list(reversed(valid['checks'])),
-                       [dict(item, argv=['true']) for item in valid['checks']]):
-            path.write_text(json.dumps(dict(valid, checks=checks)))
-            self.assert_blocked('git push origin develop')
-        path.write_text('[]')
-        self.assert_blocked('git push origin develop')
-
-    def test_unknown_or_missing_claude_permission_mode_cannot_publish(self):
-        self.evidence()
-        for mode in (None, 'unknown', 'bypassPermissions', 'dontAsk'):
-            event = self.event('git push origin develop')
-            event['permission_mode'] = mode
-            self.assertEqual(self.invoke(event=event).returncode, 2)
-
-    def test_lightweight_tag_is_not_a_release_candidate(self):
-        self.git('tag', 'v9.9.9')
-        self.evidence()
-        self.assert_blocked('git push origin v9.9.9')
-
-    def test_ordinary_packages_groups_and_assignment_literals_remain_local(self):
-        for command in ('npm test', 'npx eslint .', '(printf local)', 'echo GIT_DIR=x git', 'gh run watch 123 --exit-status'):
-            self.assertEqual(self.invoke(command).returncode, 0, command)
-
-    def test_readonly_github_alert_api_queries_are_allowed(self):
-        commands = (
-            "gh api --paginate 'repos/fixture/project/code-scanning/alerts?state=open' "
-            "--jq '.[] | {severity: (.rule.security_severity_level // .rule.severity)}'",
-            "gh api 'repos/fixture/project/dependabot/alerts?state=open' --paginate "
-            "--jq '.[] | {package: .dependency.package.name}'",
-            "gh api --method GET 'repos/fixture/project/secret-scanning/alerts?state=open' "
-            "--jq '.[] | {secret_type, state}'",
-            "gh api -X GET 'repos/fixture/project/code-scanning/alerts?state=open'",
-        )
-        for command in commands:
-            with self.subTest(command=command):
-                self.assertEqual(self.invoke(command).returncode, 0, command)
-
-    def test_github_alert_api_rejects_mutation_and_unbounded_shapes(self):
-        endpoint = 'repos/fixture/project/code-scanning/alerts?state=open'
-        commands = (
-            f'gh api -X POST {endpoint}',
-            f'gh api --method PATCH {endpoint}',
-            f'gh api --method GET -X GET {endpoint}',
-            f'gh api {endpoint} -f state=open',
-            f'gh api {endpoint} --input request.json',
-            f'gh api {endpoint} --hostname github.example.com',
-            'gh api repos/fixture/project/actions/workflows',
-            'gh api repos/other/project/code-scanning/alerts?state=open',
-            f"gh api {endpoint} --jq '$(git push origin develop)'",
-            'gh api "repos/fixture/project/code-scanning/alerts?state=$(printf open)"',
-        )
-        for command in commands:
-            with self.subTest(command=command):
-                self.assert_blocked(command)
-        for name in ('GH_REPO', 'GH_HOST'):
-            with self.subTest(environment=name):
-                result = self.invoke(f'gh api {endpoint}', environment={**self.environment, name: 'other/project'})
-                self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
-                self.assertFalse(self.sentinel.exists())
-                self.assert_blocked(f'{name}=other/project gh api {endpoint}')
-
-    def test_canonical_release_creation_preserves_native_approval(self):
-        self.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'tag', '-a', 'v9.9.9', '-m', 'Release fixture')
-        notes = self.project / '.rpi/local/release-notes.md'
-        notes.parent.mkdir(parents=True, exist_ok=True)
-        notes.write_text('Verified fixture release.\n')
-        self.evidence()
-        command = "gh release create v9.9.9 --verify-tag --title 'v9.9.9' --notes-file .rpi/local/release-notes.md"
-        result = self.execute(command, native_authorized=False)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertNotIn('allow', result.stdout)
-        self.assertFalse(self.sentinel.exists())
-        self.assertEqual(self.execute(command).returncode, 0)
-        self.sentinel.unlink()
-        for suffix in (' --repo other/project', ' --target other', ' --verify-tag'):
-            self.assert_blocked(command + suffix)
-        self.assert_blocked(command.replace('--verify-tag ', ''))
-        self.assert_blocked(command.replace('release-notes.md', 'missing.md'))
-        for name in ('GH_REPO', 'GH_HOST'):
-            result = self.invoke(command, environment={**self.environment, name: 'wrong-destination'})
-            self.assertEqual(result.returncode, 2, result.stderr)
-            self.assertFalse(self.sentinel.exists())
-            self.assert_blocked(name + '=wrong-destination ' + command)
-        link = notes.with_name('linked-notes.md')
-        link.symlink_to(notes)
-        self.assert_blocked(command.replace('release-notes.md', 'linked-notes.md'))
-        self.git('config', 'remote.origin.gh-resolved', 'wrong/project')
-        self.assert_blocked(command)
-        self.git('config', '--unset', 'remote.origin.gh-resolved')
-        self.git('remote', 'add', 'upstream', 'https://example.invalid/wrong/project.git')
-        self.assert_blocked(command)
-        self.git('remote', 'remove', 'upstream')
-        self.git('config', 'remote.origin.pushurl', 'https://example.invalid/wrong/push.git')
-        self.assert_blocked(command)
-
-    def test_sensitive_remote_gh_entries_are_classified(self):
-        for command in ('gh pr create', 'gh workflow run validate.yml', 'gh release create v9.9.9'):
-            self.assert_blocked(command)
-
-    def test_readonly_issue_and_label_inspection_is_allowed(self):
-        for command in ('gh issue list', 'gh issue view 12', 'gh issue status', 'gh label list'):
-            self.assertEqual(self.invoke(command).returncode, 0, command)
-
-    def test_issue_creation_needs_a_literal_title_and_local_body(self):
-        body = self.project / 'issue-body.md'
-        body.write_text('Reproduction and expected behavior.\n')
-        allowed = 'gh issue create --title "Guard rejects inert gh reads" --body-file issue-body.md'
-        self.assertEqual(self.invoke(allowed).returncode, 0, allowed)
-
-    def test_issue_creation_cannot_retarget_another_repository_or_escape_the_project(self):
-        body = self.project / 'issue-body.md'
-        body.write_text('Reproduction and expected behavior.\n')
-        for command in ('gh issue create --title T --body-file issue-body.md --repo other/repo',
-                        'gh issue create --title T --body-file ../outside.md',
-                        'gh issue create --title T',
-                        'gh issue create --body-file issue-body.md',
-                        'gh issue create --title T --body-file issue-body.md --web'):
-            self.assert_blocked(command)
-        environment = dict(self.environment, GH_REPO='other/repo')
-        result = self.invoke('gh issue create --title T --body-file issue-body.md', environment=environment)
-        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
-
-    def trust(self, payload=None):
-        path = self.project / '.rpi/local/publication-trust.json'
-        path.parent.mkdir(parents=True, exist_ok=True)
-        record = {'schema_version': 1, 'publication_without_prompt': True,
-                  'authorized_on': '2026-09-06'} if payload is None else payload
-        path.write_text(json.dumps(record) if isinstance(record, dict) else record)
-        return path
-
-    def publication_event(self, command, mode):
-        return dict(self.event(command), permission_mode=mode)
-
-    def test_non_prompting_mode_cannot_publish_without_standing_authorization(self):
-        self.evidence()
-        for mode in ('bypassPermissions', 'dontAsk', 'auto'):
-            result = self.invoke(event=self.publication_event('git push origin develop', mode))
-            self.assertEqual(result.returncode, 2, mode)
-
-    def test_standing_authorization_lets_a_non_prompting_mode_publish(self):
-        self.evidence()
-        self.trust()
-        for mode in ('bypassPermissions', 'dontAsk', 'auto'):
-            result = self.invoke(event=self.publication_event('git push origin develop', mode))
-            self.assertEqual(result.returncode, 0, mode + ': ' + result.stdout + result.stderr)
-
-    def test_malformed_or_redirected_authorization_never_grants_publication(self):
-        self.evidence()
-        path = self.trust()
-        for payload in ('not json', {'schema_version': 2, 'publication_without_prompt': True},
-                        {'schema_version': 1, 'publication_without_prompt': False},
-                        {'schema_version': 1}):
-            self.trust(payload)
-            result = self.invoke(event=self.publication_event('git push origin develop', 'bypassPermissions'))
-            self.assertEqual(result.returncode, 2, str(payload))
-        path.unlink()
-        outside = self.workspace / 'trust.json'
-        outside.write_text(json.dumps({'schema_version': 1, 'publication_without_prompt': True}))
-        path.symlink_to(outside)
-        result = self.invoke(event=self.publication_event('git push origin develop', 'bypassPermissions'))
-        self.assertEqual(result.returncode, 2, 'a redirected authorization must not grant publication')
-
-    def test_standing_authorization_does_not_bypass_candidate_verification(self):
-        self.evidence()
-        self.trust()
-        (self.project / 'uncommitted.txt').write_text('dirty candidate\n')
-        result = self.invoke(event=self.publication_event('git push origin develop', 'bypassPermissions'))
-        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
-        self.assertIn('clean completed integration candidate', result.stderr)
+    def test_blocks_are_recorded_in_the_contract_event_stream(self):
+        self.invoke('git push -f origin develop')
+        self.invoke('git status')
+        lines = (self.project / '.rpi/local/contract-events.jsonl').read_text().splitlines()
+        self.assertEqual(len(lines), 1)
+        record = json.loads(lines[0])
+        self.assertEqual(set(record), {'ts', 'session_id', 'hook', 'decision', 'rule', 'file'})
+        self.assertEqual((record['decision'], record['rule']), ('block', 'protected-branch'))
 
 
 if __name__ == '__main__':
