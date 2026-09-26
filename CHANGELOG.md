@@ -44,8 +44,11 @@ their guidance is unchanged, and the hook no longer enforces #33 or #48.
   branches), `git push --mirror`/`--prune`, forced or deleting `--all`, Vercel
   Preview creation and `gh repo delete`. Everything else, including shell text
   the parser cannot read, passes to Claude Code's or Codex's native permissions.
-  Glob refspecs, `bash -ec`-style shell spellings, common wrappers and
-  `gh api` DELETE of a repository or protected branch are covered. Runtime
+  Glob refspecs, configured push destinations, `bash -ec`-style shell
+  spellings, common wrappers and `gh api` DELETE of a repository or protected
+  branch are covered; each command segment is evaluated independently, and
+  dry-run pushes pass. Under the opt-in gate, bulk tag pushes are refused in
+  favor of named tags. Runtime
   failures (missing Python, Git, policy script or cwd, or an unexpected
   evaluation error) pass through instead of blocking every command; a missing
   runtime, missing script or evaluation error also prints a warning. The wrapper
@@ -68,8 +71,14 @@ their guidance is unchanged, and the hook no longer enforces #33 or #48.
 - **Installation updates are easier to recover.** An update without
   `--harness` keeps the installation's recorded harnesses instead of adding
   Codex files to a Claude-only project. A native settings conflict names the
-  entry and the exact `--allow-capabilities` flag, and a locally edited owned
-  entry says how to restore it. The owner's JSON indentation is preserved.
+  entry, its value and the exact `--allow-capabilities` flag. When the owner
+  edited an owned entry that the template also changed, the conflict shows the
+  previous and new values; replacing the edited entry with the new value, or
+  restoring the previous one, both lead to a clean update. `check` names an
+  owned entry that was edited away, so a missing boundary is visible. Failed or
+  interrupted applies print the exact `rollback --journal` command, `check`
+  reports an unfinished transaction, and rollback refuses an older journal once
+  a newer transaction exists. The owner's JSON indentation is preserved.
 - **Stale "hook enforced" claims.** Index rules #33 and #48 now point to the
   `git-workflow` skill that holds their bodies, since the hook no longer blocks
   dirty pulls or `--tags`. Rule #44 now points to `python-rules`; no hook ever

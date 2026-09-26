@@ -60,22 +60,76 @@ class PolicyReceiptTests(test_policy.PolicyFixture):
         self.assert_blocked('gh release create v9.9.9 --notes x', 'differs from the verified candidate')
         self.assert_allowed('gh release create v0.0.1-unknown --notes x')
 
-    def test_opted_in_bulk_tag_push_needs_evidence(self):
+    def test_opted_in_bulk_tag_push_requires_named_tags_even_with_evidence(self):
         self.opt_in()
         self.tag('v1.2.3')
         self.git('checkout', '-qb', 'feature/work')
+        self.evidence()
         for command in ('git push origin --tags', 'git push --follow-tags origin feature/work'):
             with self.subTest(command=command):
-                self.assert_blocked(command, 'verification evidence is missing')
-        self.evidence()
-        self.assert_allowed('git push origin --tags')
+                self.assert_blocked(command, 'git push origin vX.Y.Z')
 
     def test_opted_in_glob_refspecs_need_evidence(self):
         self.opt_in()
-        for command in ("git push origin 'refs/heads/*'", "git push origin 'refs/tags/*'",
-                        "git push origin 'refs/tags/*:refs/tags/*'"):
+        self.assert_blocked("git push origin 'refs/heads/*'", 'verification evidence is missing')
+        for command in ("git push origin 'refs/tags/*'", "git push origin 'refs/tags/*:refs/tags/*'"):
             with self.subTest(command=command):
-                self.assert_blocked(command, 'verification evidence is missing')
+                self.assert_blocked(command, 'git push origin vX.Y.Z')
+
+    def test_opted_in_glob_push_with_a_receipt_never_crashes_the_evaluation(self):
+        self.opt_in()
+        self.evidence()
+        self.assert_allowed("git push origin 'refs/heads/*'")
+        for command in ("git push origin 'refs/tags/*'; git push -f origin develop",
+                        "git push origin 'refs/heads/*' && gh repo delete o/r --yes"):
+            with self.subTest(command=command):
+                result = self.assert_blocked(command)
+                self.assertNotIn('POLICY UNAVAILABLE', result.stderr)
+
+    def test_opted_in_bulk_tag_publication_requires_named_tags(self):
+        self.opt_in()
+        self.tag('v1.0.0')
+        self.commit('After the old tag')
+        self.evidence()
+        for command in ('git push --tags', "git push origin 'refs/tags/*'", 'git push --follow-tags origin develop'):
+            with self.subTest(command=command):
+                self.assert_blocked(command, 'git push origin vX.Y.Z')
+
+    def test_opted_in_glob_branch_push_checks_the_integration_commit(self):
+        self.opt_in()
+        self.evidence()
+        self.commit('Unverified change')
+        self.assert_blocked("git push origin 'refs/heads/*'", 'does not attest')
+
+    def test_receipt_binds_the_resolved_interpreter(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('candidate_fixture', test_policy.ROOT / 'templates/scripts/rpi-candidate.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        alias = self.workspace / 'python-alias'
+        alias.symlink_to(sys.executable)
+        original = sys.executable
+        try:
+            sys.executable = str(alias)
+            aliased = module.environment(self.environment)['executable']
+        finally:
+            sys.executable = original
+        self.assertEqual(aliased, module.environment(self.environment)['executable'])
+
+    def test_ref_evidence_repair_is_a_runnable_command(self):
+        self.opt_in()
+        self.tag()
+        self.commit('Moves HEAD past the tag')
+        self.evidence()
+        result = self.assert_blocked('git push origin v9.9.9', 'differs from the verified candidate')
+        self.assertIn('git push origin develop', result.stderr)
+
+    def test_invalid_policy_messages_name_the_cause(self):
+        path = self.project / '.rpi/policy.json'
+        path.write_text('not json')
+        self.assert_blocked('git push origin develop', 'not valid JSON')
+        path.write_text(json.dumps({'schema_version': 1, 'integration_branch': ['release']}))
+        self.assert_blocked('git push -f origin release', 'integration_branch')
 
     def test_unreadable_policy_file_blocks_policy_dependent_commands(self):
         path = self.project / '.rpi/policy.json'

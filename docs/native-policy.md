@@ -20,7 +20,10 @@ and explicit skill invocation never prove consent, and the hook never grants it.
 
 Protected branches are `main`, `master` and `develop`, plus the project's
 `integration_branch` and `production_branches` from `.rpi/policy.json` when they
-are declared. Force-pushing or deleting a working branch is allowed.
+are declared. Force-pushing or deleting a working branch is allowed, and so is
+any `--dry-run`/`-n` push. A push that names no refspec is resolved from Git's
+configuration: `remote.<name>.push`, and `push.default` `upstream`, `matching`
+or the current branch.
 
 Everything else passes through: ordinary `git push` of any branch or tag,
 `gh pr create/merge/update-branch`, `gh workflow run`, `gh run rerun`, other `gh api` calls,
@@ -32,9 +35,13 @@ user govern them. `git pull` is never blocked.
 
 Shell text is parsed and never executed. Chains, pipes, subshells, command and
 process substitutions, `bash`/`sh`/`zsh -c` (including forms such as `-ec`,
-`-e -c` and `-o pipefail -c`), `eval`, `env`/`command`/`sudo`/`timeout`/`nice`/
-`nohup`/`stdbuf`/`caffeinate`/`xargs` wrappers, redirections such as `2>&1`, `git -C`,
-`git -c` and loop bodies are inspected for the blocked forms above.
+`-e -c` and `-o pipefail -c`), `eval`, `env` (including `-S`)/`command`/`builtin`/
+`sudo`/`doas`/`timeout`/`nice`/`nohup`/`stdbuf`/`caffeinate`/`xargs` wrappers,
+redirections such as `2>&1`, `git -C`, `git -c`, literal `cd`/`pushd` and loop
+bodies are inspected for the blocked forms above. After `cd "$DIR"` or `popd` the
+repository is unknown, so only the default protected branches apply. Each command
+segment is evaluated on its own: a segment the policy cannot evaluate prints
+`POLICY UNAVAILABLE` and never hides a later destructive segment.
 Literal `echo`, `printf`, `cat`, `grep` and `rg` arguments and quoted `cat`/`tee`
 here-document bodies are text.
 
@@ -87,13 +94,17 @@ A project can opt in to exact-candidate publication evidence:
 }
 ```
 
-With the gate on, a push of the integration branch, of an existing version tag or
-of tags in bulk (`--tags`, `--follow-tags`),
+With the gate on, a push of the integration branch (including a branch glob such
+as `refs/heads/*`) or of an existing version tag,
 `gh release create` for an existing version tag, and a Vercel production deploy
 each require a clean tree and a passing `.rpi/local/verification.json` receipt.
 That receipt must cover every declared `verification_checks` name/argv pair, the
 exact candidate identity and the runtime identity. The pushed ref or tag must
-also point at the verified commit. Working-branch pushes are never gated. The
+also point at the verified commit. Bulk tag publication (`--tags`,
+`--follow-tags`, `refs/tags/*`) is refused under the gate because it cannot be
+bound to one verified commit; push the release tag by name. The receipt binds the
+resolved interpreter, so `python3` and `python3.13` naming one binary match.
+Working-branch pushes are never gated. The
 gate validates local evidence, not user authorization. Without the key, or
 without `.rpi/policy.json` at all, there is no receipt gate. A present but
 invalid `.rpi/policy.json` blocks only `git push`, Vercel production and
@@ -108,8 +119,8 @@ locale, timezone and Python execution settings.
 ## Evidence
 
 Blocks and gated publications are appended to `.rpi/local/contract-events.jsonl`
-at the repository root as `{ts, session_id, hook, decision, rule, file}`; outside
-a repository nothing is written. Pass-through commands are not
+at the repository root as `{ts, session_id, hook, decision, rule, file}`, only
+when that repository has an installed `.rpi/` directory. Pass-through commands are not
 recorded. Optional telemetry failure does not change the decision. Direct native
 event fixtures establish the adapter contract; they do not establish actual
 client trust or invocation. See [compatibility evidence](compatibility.md).

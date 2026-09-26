@@ -1,5 +1,6 @@
 """Transaction failure and containment oracles against explicit temporary roots."""
 import json
+import shlex
 import importlib.util
 from unittest import mock
 from pathlib import Path
@@ -283,8 +284,9 @@ class TransactionTests(unittest.TestCase):
         self.assertEqual(plan['status'], 'conflict')
         reasons = [item['reason'] for item in plan['conflicts'] if item.get('record_id') == 'ask-push']
         self.assertEqual(len(reasons), 1, plan['conflicts'])
-        self.assertIn('entry ask-push', reasons[0])
+        self.assertIn('entry ask-push: "Bash(git push:*)"', reasons[0])
         self.assertIn('--allow-capabilities config:policy', reasons[0])
+        self.assertNotIn('native diff', reasons[0])
         self.apply_ready('update', '--allow-capabilities', 'config:policy')
         settings = json.loads((self.project / '.claude/settings.json').read_text())
         self.assertNotIn('Bash(git push:*)', settings['permissions']['ask'])
@@ -298,7 +300,109 @@ class TransactionTests(unittest.TestCase):
         self.add_policy_component([dict(ask, value='Bash(git push --dry-run:*)')])
         plan, _ = self.plan('update', '--allow-capabilities', 'config:policy')
         reason = next(item['reason'] for item in plan['conflicts'] if item.get('record_id') == 'ask-push')
-        self.assertIn('restore the template value', reason)
+        self.assertIn('replace your edited entry with the new value "Bash(git push --dry-run:*)"', reason)
+        self.assertIn('restore the previous value "Bash(git push:*)"', reason)
+        self.assertNotIn('delete the local entry', reason)
+
+    def edited_hook_update(self):
+        """Owner adds a timeout to the owned hook entry while the template value changes."""
+        previous = {'matcher': 'Bash', 'hooks': [{'type': 'command', 'command': 'guard old'}]}
+        desired = {'matcher': 'Bash', 'hooks': [{'type': 'command', 'command': 'guard new'}]}
+        hook = {'id': 'hook-guard', 'pointer': ['hooks', 'PreToolUse'], 'mode': 'entry', 'value': previous}
+        self.add_policy_component([hook])
+        self.apply_ready('install', '--allow-capabilities', 'config:policy')
+        settings_path = self.project / '.claude/settings.json'
+        settings = json.loads(settings_path.read_text())
+        settings['hooks']['PreToolUse'][0]['hooks'][0]['timeout'] = 20
+        settings_path.write_text(json.dumps(settings, indent=2))
+        self.add_policy_component([dict(hook, value=desired)])
+        plan, _ = self.plan('update', '--allow-capabilities', 'config:policy')
+        conflict = next(item for item in plan['conflicts'] if item.get('record_id') == 'hook-guard')
+        self.assertEqual((conflict['previous'], conflict['desired']), (previous, desired))
+        compact = lambda value: json.dumps(value, sort_keys=True, separators=(',', ':'))
+        self.assertIn('replace your edited entry with the new value ' + compact(desired), conflict['reason'])
+        self.assertIn('restore the previous value ' + compact(previous), conflict['reason'])
+        self.assertIn('--allow-capabilities config:policy', conflict['reason'])
+        return settings_path, settings, previous, desired
+
+    def assert_healthy_after(self, settings_path, settings, value):
+        settings['hooks']['PreToolUse'][0] = value
+        settings_path.write_text(json.dumps(settings, indent=2))
+        self.apply_ready('update', '--allow-capabilities', 'config:policy')
+        result = self.invoke('check', '--source', self.source, '--target', self.project)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(json.loads(result.stdout)['status'], 'healthy')
+        entries = json.loads(settings_path.read_text())['hooks']['PreToolUse']
+        return entries
+
+    def test_replacing_edited_entry_with_new_value_reaches_healthy_update(self):
+        settings_path, settings, _, desired = self.edited_hook_update()
+        self.assertEqual(self.assert_healthy_after(settings_path, settings, desired), [desired])
+        self.apply_ready('detach')
+        self.assertEqual(json.loads(settings_path.read_text())['hooks']['PreToolUse'], [])
+
+    def test_restoring_previous_value_reaches_healthy_update(self):
+        settings_path, settings, previous, desired = self.edited_hook_update()
+        self.assertEqual(self.assert_healthy_after(settings_path, settings, previous), [desired])
+
+    def test_edited_owned_deny_is_reported_by_record_and_value(self):
+        self.add_policy_component([{'id': 'deny-env', 'pointer': ['permissions', 'deny'], 'mode': 'entry', 'value': 'Read(.env)'}])
+        self.apply_ready('install', '--allow-capabilities', 'config:policy')
+        settings_path = self.project / '.claude/settings.json'
+        settings_path.write_text(settings_path.read_text().replace('Read(.env)', 'Read(.env.local)'))
+        result = self.invoke('check', '--source', self.source, '--target', self.project)
+        retained = [item for item in json.loads(result.stdout)['retained'] if item.get('record_id') == 'deny-env']
+        self.assertEqual(len(retained), 1, result.stdout)
+        self.assertEqual(retained[0]['value'], 'Read(.env)')
+        self.assertIn('deny-env', retained[0]['reason'])
+        self.assertIn('not in effect', retained[0]['reason'])
+
+    def test_existing_plan_output_hint_names_a_new_output(self):
+        _, path = self.plan()
+        result = self.invoke('plan', '--source', self.source, '--target', self.project, '--output', path)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('choose a new --output path', result.stderr)
+        self.assertNotIn('distribution.json', result.stderr)
+
+    def test_interrupted_apply_hint_names_exact_rollback_and_check_reports_journal(self):
+        _, path = self.plan()
+        result = self.invoke('apply', '--plan', path, '--fail-after', '2')
+        self.assertEqual(result.returncode, 2)
+        journal = next((self.project / '.rpi/local/transactions').glob('*/journal.json')).resolve()
+        rollback = 'rollback --journal ' + shlex.quote(str(journal))
+        self.assertIn(rollback, json.loads(result.stdout)['fix'])
+        self.assertNotIn('--help', result.stdout + result.stderr)
+        check = self.invoke('check', '--source', self.source, '--target', self.project, '--harness', 'both')
+        summary = json.loads(check.stdout)
+        self.assertEqual(summary['status'], 'action-needed')
+        self.assertEqual(summary['interrupted_transactions'], [str(journal)])
+        self.assertIn(rollback, summary['fix'])
+        for arguments in ((), ('--journal', self.workspace / 'missing-journal.json')):
+            with self.subTest(arguments=arguments):
+                result = self.invoke('rollback', '--target', self.project, *arguments)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn(rollback, result.stderr)
+                self.assertNotIn('distribution.json', result.stderr)
+        self.assertEqual(self.invoke('rollback', '--journal', journal).returncode, 0)
+
+    def test_rollback_refuses_an_older_journal_than_the_latest_transaction(self):
+        before = self.snapshot()
+        self.apply_ready()
+        first = next((self.project / '.rpi/local/transactions').glob('*/journal.json'))
+        self.apply_ready('detach')
+        self.apply_ready()
+        journals = set((self.project / '.rpi/local/transactions').glob('*/journal.json'))
+        installed = self.snapshot()
+        result = self.invoke('rollback', '--journal', first)
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertEqual(self.snapshot(), installed)
+        self.assertIn('not the most recent', result.stdout)
+        latest = [path for path in journals if path != first and json.loads(path.read_text())['sequence'] == 3]
+        self.assertEqual(len(latest), 1)
+        self.assertIn('rollback --journal ' + shlex.quote(str(latest[0].resolve())), json.loads(result.stdout)['fix'])
+        for journal in sorted(journals, key=lambda path: -json.loads(path.read_text())['sequence']):
+            self.assertEqual(self.invoke('rollback', '--journal', journal).returncode, 0)
+        self.assertEqual(self.snapshot(), before)
 
     def test_owner_json_indentation_is_preserved(self):
         self.add_policy_component([{'id': 'deny-env', 'pointer': ['permissions', 'deny'], 'mode': 'entry', 'value': 'Read(.env)'}])

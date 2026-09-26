@@ -16,24 +16,24 @@
     "sha256": "13fd58b9976632553a624e45e362b784e2541d2417d6a64d0ca1b869dbc4e750"
   },
   "claude/.rpi/scripts/rpi-candidate.py": {
-    "bytes": 3913,
-    "sha256": "c889ada05ac8adb82a0c7c6e40006fa064b87b28c1f615778fb9584047906ef0"
+    "bytes": 3949,
+    "sha256": "d9b423274ad75770274fea52926a67595876386c21af2bbe2e27e42a1c46743f"
   },
   "claude/.rpi/scripts/rpi-config.py": {
-    "bytes": 8443,
-    "sha256": "93e9a8fcd0b85af30abfbeb1e3def13b45cec04b7232908851c02ef0553b1c60"
+    "bytes": 9263,
+    "sha256": "d03fb3d1979fbbca46a76fef473ba8902be69e752a3fd404e106c76d52e63d54"
   },
   "claude/.rpi/scripts/rpi-diagnostics.py": {
     "bytes": 34266,
     "sha256": "3439b78d081ef11bb91083336c734145616686b34811b7756e8c2183bb2f4c73"
   },
   "claude/.rpi/scripts/rpi-distribution.py": {
-    "bytes": 35858,
-    "sha256": "6605ff7bff9bac92c7382ce89e2fff5bfff36b38be296fc427c46f0652d34547"
+    "bytes": 35974,
+    "sha256": "2f4eb75a032064ccab38ce3cdb95b2680d7a712197eff8b0be375ef299d27689"
   },
   "claude/.rpi/scripts/rpi-lifecycle.py": {
-    "bytes": 60287,
-    "sha256": "afda0eb11d5c3d7efe5ddc52a08d8b228d763c986b02da6894910e7f0434e42d"
+    "bytes": 66819,
+    "sha256": "8ffbfe0d6112a71cc988a70a48e8a72b7dd74456df5a2b06c2f857b33153f78a"
   },
   "claude/.rpi/scripts/rpi-models.py": {
     "bytes": 9919,
@@ -44,8 +44,8 @@
     "sha256": "0e4dc8aa15b48980d7b789c574e84ab85acf22f26b940ba97f76a8b3d4cb75b6"
   },
   "claude/.rpi/scripts/rpi-policy.py": {
-    "bytes": 31512,
-    "sha256": "e2ada2177ccf988b4b76e74e66cd607bb921af4cac55689fb45bde07c196f258"
+    "bytes": 35553,
+    "sha256": "d2378683bf89ea637960e939ea58345ffa3854b4177044414bdcea474000af6b"
   },
   "claude/.rpi/scripts/rpi-verify.py": {
     "bytes": 10944,
@@ -408,24 +408,24 @@
     "sha256": "13fd58b9976632553a624e45e362b784e2541d2417d6a64d0ca1b869dbc4e750"
   },
   "codex/.rpi/scripts/rpi-candidate.py": {
-    "bytes": 3913,
-    "sha256": "c889ada05ac8adb82a0c7c6e40006fa064b87b28c1f615778fb9584047906ef0"
+    "bytes": 3949,
+    "sha256": "d9b423274ad75770274fea52926a67595876386c21af2bbe2e27e42a1c46743f"
   },
   "codex/.rpi/scripts/rpi-config.py": {
-    "bytes": 8443,
-    "sha256": "93e9a8fcd0b85af30abfbeb1e3def13b45cec04b7232908851c02ef0553b1c60"
+    "bytes": 9263,
+    "sha256": "d03fb3d1979fbbca46a76fef473ba8902be69e752a3fd404e106c76d52e63d54"
   },
   "codex/.rpi/scripts/rpi-diagnostics.py": {
     "bytes": 34266,
     "sha256": "3439b78d081ef11bb91083336c734145616686b34811b7756e8c2183bb2f4c73"
   },
   "codex/.rpi/scripts/rpi-distribution.py": {
-    "bytes": 35858,
-    "sha256": "6605ff7bff9bac92c7382ce89e2fff5bfff36b38be296fc427c46f0652d34547"
+    "bytes": 35974,
+    "sha256": "2f4eb75a032064ccab38ce3cdb95b2680d7a712197eff8b0be375ef299d27689"
   },
   "codex/.rpi/scripts/rpi-lifecycle.py": {
-    "bytes": 60287,
-    "sha256": "afda0eb11d5c3d7efe5ddc52a08d8b228d763c986b02da6894910e7f0434e42d"
+    "bytes": 66819,
+    "sha256": "8ffbfe0d6112a71cc988a70a48e8a72b7dd74456df5a2b06c2f857b33153f78a"
   },
   "codex/.rpi/scripts/rpi-models.py": {
     "bytes": 9919,
@@ -436,8 +436,8 @@
     "sha256": "0e4dc8aa15b48980d7b789c574e84ab85acf22f26b940ba97f76a8b3d4cb75b6"
   },
   "codex/.rpi/scripts/rpi-policy.py": {
-    "bytes": 31512,
-    "sha256": "e2ada2177ccf988b4b76e74e66cd607bb921af4cac55689fb45bde07c196f258"
+    "bytes": 35553,
+    "sha256": "d2378683bf89ea637960e939ea58345ffa3854b4177044414bdcea474000af6b"
   },
   "codex/.rpi/scripts/rpi-verify.py": {
     "bytes": 10944,
@@ -584,12 +584,12 @@
     "sha256": "c6e6ee4e798c31158b7697012afe63d73652bf74485b0529d0c0c2c981bf22c1"
   },
   "codex/runtime/templates/scripts/rpi-candidate.py": {
-    "bytes": 3913,
-    "sha256": "c889ada05ac8adb82a0c7c6e40006fa064b87b28c1f615778fb9584047906ef0"
+    "bytes": 3949,
+    "sha256": "d9b423274ad75770274fea52926a67595876386c21af2bbe2e27e42a1c46743f"
   },
   "codex/runtime/templates/scripts/rpi-config.py": {
-    "bytes": 8443,
-    "sha256": "93e9a8fcd0b85af30abfbeb1e3def13b45cec04b7232908851c02ef0553b1c60"
+    "bytes": 9263,
+    "sha256": "d03fb3d1979fbbca46a76fef473ba8902be69e752a3fd404e106c76d52e63d54"
   },
   "codex/runtime/templates/scripts/rpi-diagnostics.py": {
     "bytes": 34266,
@@ -600,12 +600,12 @@
     "sha256": "18b91c4db6b54591849fb25ad6b41c9d81e9d822a76a92dc25f54cc9689029e9"
   },
   "codex/runtime/templates/scripts/rpi-distribution.py": {
-    "bytes": 35858,
-    "sha256": "6605ff7bff9bac92c7382ce89e2fff5bfff36b38be296fc427c46f0652d34547"
+    "bytes": 35974,
+    "sha256": "2f4eb75a032064ccab38ce3cdb95b2680d7a712197eff8b0be375ef299d27689"
   },
   "codex/runtime/templates/scripts/rpi-lifecycle.py": {
-    "bytes": 60287,
-    "sha256": "afda0eb11d5c3d7efe5ddc52a08d8b228d763c986b02da6894910e7f0434e42d"
+    "bytes": 66819,
+    "sha256": "8ffbfe0d6112a71cc988a70a48e8a72b7dd74456df5a2b06c2f857b33153f78a"
   },
   "codex/runtime/templates/scripts/rpi-models.py": {
     "bytes": 9919,
@@ -616,8 +616,8 @@
     "sha256": "0e4dc8aa15b48980d7b789c574e84ab85acf22f26b940ba97f76a8b3d4cb75b6"
   },
   "codex/runtime/templates/scripts/rpi-policy.py": {
-    "bytes": 31512,
-    "sha256": "e2ada2177ccf988b4b76e74e66cd607bb921af4cac55689fb45bde07c196f258"
+    "bytes": 35553,
+    "sha256": "d2378683bf89ea637960e939ea58345ffa3854b4177044414bdcea474000af6b"
   },
   "codex/runtime/templates/scripts/rpi-triage-state.py": {
     "bytes": 11199,

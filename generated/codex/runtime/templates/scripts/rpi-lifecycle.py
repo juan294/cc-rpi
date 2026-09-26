@@ -23,6 +23,15 @@ import uuid
 
 class Conflict(ValueError):
     """A valid request needs reconciliation before it can mutate files."""
+    fix = None  # A specific runnable repair, when the failure site knows one.
+
+
+class UsageError(ValueError):
+    """An invalid request whose exact repair is known at the failure site."""
+
+    def __init__(self, reason, fix):
+        super().__init__(reason)
+        self.fix = fix
 
 
 class TargetSettingsError(ValueError):
@@ -653,8 +662,10 @@ def make_plan(engine, request):
             local = file_changes.get((root_id, destination), node_bytes(current))
             result = configuration.reconcile(local, previous_records, group['desired'], cid in authorized, allow_removal=request['action'] == 'detach')
             conflicts.extend({'destination': destination, 'reason': entry_conflict_reason(item, cid),
-                              'component_id': cid, 'record_id': item['id']} for item in result['conflicts'])
-            retained.extend({'destination': destination, 'reason': item['reason'], 'component_id': cid}
+                              'component_id': cid, 'record_id': item['id'],
+                              **{k: item[k] for k in ('previous', 'desired') if k in item}} for item in result['conflicts'])
+            retained.extend({'destination': destination, 'reason': item['reason'] + ' (' + entry_label(item) + ')',
+                             'component_id': cid, 'record_id': item['id'], 'value': item['value']}
                             for item in result['retained'])
             if result['content'] != local:
                 file_changes[(root_id, destination)] = result['content']
@@ -815,36 +826,23 @@ def apply_plan(engine, plan, fail_after=None, fail_after_rename=None):
             atomic_node(ignore, file_node(b'*\n', 0o600))
         transaction = uuid.uuid4().hex
         journal_path = bound_path(plan['state_root'], 'local/transactions/' + transaction + '/journal.json')
+        # Apply order lets rollback refuse an older journal once newer work exists.
+        sequence = 1 + max((item[0] for item in journals(plan['state_root'])), default=0)
         journal = {'schema_version': 1, 'transaction': transaction, 'status': 'applying',
                    'roots': plan['roots'], 'state_root': plan['state_root'],
                    'operations': plan['operations'], 'completed': 0, 'pending': None,
-                   'scope': plan['request']['scope']}
-        receipt = {'roots': plan['roots'], 'state_root': plan['state_root'],
+                   'scope': plan['request']['scope'], 'sequence': sequence}
+        receipt = {'roots': plan['roots'], 'state_root': plan['state_root'], 'sequence': sequence,
                    'scope': plan['request']['scope'], 'operations_sha256': digest(serialized(plan['operations']))}
         atomic_node(journal_path.with_name('receipt.json'), file_node(serialized(receipt), 0o600))
         atomic_node(journal_path, file_node(serialized(journal), 0o600))
-        written = {}
-        for operation in plan['operations']:
-            if operation['root_id'] == 'state' and operation['destination'] == 'manifest.json':
-                for observation in plan['observations']:
-                    key = (observation['root_id'], observation['destination'])
-                    expected = written.get(key, observation['node'])
-                    if snapshot(operation_path(plan, observation)) != expected:
-                        raise Conflict('preimage changed before manifest commit: ' + observation['destination'])
-            path = operation_path(plan, operation)
-            if snapshot(path) != operation['before']:
-                raise Conflict('preimage changed during transaction: ' + operation['destination'])
-            journal['pending'] = journal['completed']
-            atomic_node(journal_path, file_node(serialized(journal), 0o600))
-            atomic_node(path, operation['after'])
-            if fail_after_rename == journal['completed'] + 1:
-                raise Conflict('simulated interruption after rename; rollback journal ' + str(journal_path))
-            written[(operation['root_id'], operation['destination'])] = operation['after']
-            journal['completed'] += 1
-            journal['pending'] = None
-            atomic_node(journal_path, file_node(serialized(journal), 0o600))
-            if fail_after == journal['completed']:
-                raise Conflict('simulated interruption; rollback journal ' + str(journal_path))
+        try:
+            apply_operations(plan, journal, journal_path, fail_after, fail_after_rename)
+        except (Conflict, OSError, ValueError) as error:
+            error.fix = ('the transaction stopped after ' + str(journal['completed']) + ' of ' + str(len(plan['operations'])) +
+                         ' operations; undo it exactly with ' + engine_command('rollback', '--journal', journal_path) +
+                         ', then create a new plan')
+            raise
         journal['status'] = 'complete'
         atomic_node(journal_path, file_node(serialized(journal), 0o600))
         atomic_node(bound_path(plan['state_root'], 'local/root-binding.json'), file_node(serialized(plan['roots']), 0o600))
@@ -854,17 +852,47 @@ def apply_plan(engine, plan, fail_after=None, fail_after_rename=None):
         os.close(lock)
 
 
+def apply_operations(plan, journal, journal_path, fail_after, fail_after_rename):
+    written = {}
+    for operation in plan['operations']:
+        if operation['root_id'] == 'state' and operation['destination'] == 'manifest.json':
+            for observation in plan['observations']:
+                key = (observation['root_id'], observation['destination'])
+                expected = written.get(key, observation['node'])
+                if snapshot(operation_path(plan, observation)) != expected:
+                    raise Conflict('preimage changed before manifest commit: ' + observation['destination'])
+        path = operation_path(plan, operation)
+        if snapshot(path) != operation['before']:
+            raise Conflict('preimage changed during transaction: ' + operation['destination'])
+        journal['pending'] = journal['completed']
+        atomic_node(journal_path, file_node(serialized(journal), 0o600))
+        atomic_node(path, operation['after'])
+        if fail_after_rename == journal['completed'] + 1:
+            raise Conflict('simulated interruption after rename; rollback journal ' + str(journal_path))
+        written[(operation['root_id'], operation['destination'])] = operation['after']
+        journal['completed'] += 1
+        journal['pending'] = None
+        atomic_node(journal_path, file_node(serialized(journal), 0o600))
+        if fail_after == journal['completed']:
+            raise Conflict('simulated interruption; rollback journal ' + str(journal_path))
+
+
 def rollback(journal_path):
     journal_path = Path(journal_path).absolute()
     if journal_path.is_symlink():
         raise ValueError('journal cannot be a symlink')
     journal_path = journal_path.resolve()
+    if not journal_path.is_file():
+        raise ValueError('journal is not an existing regular file: ' + str(journal_path))
     journal_node = snapshot(journal_path)
     journal = json.loads(node_bytes(journal_node))
     if (not isinstance(journal, dict) or journal.get('schema_version') != 1 or
             not isinstance(journal.get('transaction'), str) or
             not re.fullmatch('[0-9a-f]{32}', journal['transaction'])):
         raise ValueError('invalid transaction journal')
+    sequence = journal.get('sequence', 0)  # Journals before apply ordering carry none.
+    if 'sequence' in journal and (type(sequence) is not int or sequence < 1):
+        raise ValueError('invalid transaction sequence')
     operations, completed, pending = journal.get('operations'), journal.get('completed'), journal.get('pending')
     if (not isinstance(operations, list) or type(completed) is not int or
             not 0 <= completed <= len(operations) or
@@ -890,7 +918,8 @@ def rollback(journal_path):
     receipt_node = snapshot(receipt_path)
     receipt = json.loads(node_bytes(receipt_node))
     expected_receipt = {'roots': journal['roots'], 'state_root': journal['state_root'],
-                        'scope': journal['scope'], 'operations_sha256': digest(serialized(journal['operations']))}
+                        'scope': journal['scope'], 'operations_sha256': digest(serialized(journal['operations'])),
+                        **({'sequence': sequence} if 'sequence' in journal else {})}
     if receipt != expected_receipt:
         raise Conflict('transaction journal changed from its recovery receipt')
     for operation in journal['operations']:
@@ -908,6 +937,16 @@ def rollback(journal_path):
         for path, validated in ((journal_path, journal_node), (receipt_path, receipt_node), (binding_path, binding_node)):
             if snapshot(path) != validated:
                 raise Conflict('recovery inputs changed before lock acquisition; reread the journal and retry rollback')
+        # A stale journal's postimages can match again (install, detach, install);
+        # undoing it would silently remove newer work, so only the latest applies.
+        newer = [path for order, status, path in journals(journal['state_root'])
+                 if order > sequence and status in ('applying', 'complete') and path != journal_path]
+        if newer:
+            error = Conflict('journal is not the most recent applied transaction for ' + journal['state_root'] +
+                             '; newer transaction ' + str(newer[-1]))
+            error.fix = ('keep this journal; undo newer transactions first, newest first, starting with ' +
+                         engine_command('rollback', '--journal', newer[-1]))
+            raise error
         completed = journal['operations'][:journal['completed']]
         if journal.get('pending') is not None:
             pending = journal['operations'][journal['pending']]
@@ -932,15 +971,62 @@ def rollback(journal_path):
         os.close(lock)
 
 
+def compact(value):
+    return json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=False)
+
+
+def entry_label(item):
+    """Record id plus its public template value(s): previous -> desired."""
+    values = [compact(item[key]) for key in ('value', 'previous', 'desired') if key in item]
+    return 'entry ' + item['id'] + ': ' + ' -> '.join(values) if values else 'entry ' + item['id']
+
+
 def entry_conflict_reason(item, component_id):
-    """Name the native entry and the exact repair for a configuration conflict."""
-    reason = item['reason'] + ' (entry ' + item['id'] + ')'
+    """Name the native entry, its value and the exact repair for a configuration conflict."""
+    reason = item['reason'] + ' (' + entry_label(item) + ')'
+    replan = 'then re-plan with --allow-capabilities ' + component_id
     if 'setup or detach scope' in item['reason'] or 'explicit setup scope' in item['reason']:
-        return reason + '; review the native diff, then re-plan with --allow-capabilities ' + component_id
+        return reason + '; confirm the value shown in this message, ' + replan
     if 'both changed' in item['reason']:
-        return (reason + '; restore the template value of this entry or delete the local entry, then re-plan '
-                'with --allow-capabilities ' + component_id)
+        return (reason + '; replace your edited entry with the new value ' + compact(item['desired']) +
+                ' or restore the previous value ' + compact(item['previous']) + ', ' + replan)
     return reason
+
+
+def engine_command(*parts):
+    return shlex.join([sys.executable, str(Path(__file__).with_name('rpi-distribution.py')), *map(str, parts)])
+
+
+def journals(state_root):
+    """(apply order, status, path) of readable journals, oldest first; never raises."""
+    found = []
+    try:
+        directory = bound_path(state_root, 'local/transactions')
+        paths = sorted(directory.glob('*/journal.json')) if directory.is_dir() else []
+        for path in paths:
+            try:
+                value = json.loads(path.read_bytes()) if not path.is_symlink() else None
+                order = value.get('sequence', 0) if isinstance(value, dict) else None
+                if type(order) is int:
+                    found.append((order, value.get('status'), path.resolve(), path.stat().st_mtime_ns))
+            except (OSError, ValueError):
+                continue
+    except (OSError, ValueError):
+        return []
+    return [item[:3] for item in sorted(found, key=lambda item: (item[0], item[3], str(item[2])))]
+
+
+def journal_fix(args):
+    """Name the newest unfinished-or-applied journal near the request as an exact rollback."""
+    if getattr(args, 'target', None) or not getattr(args, 'journal', None):
+        state = Path(getattr(args, 'target', None) or Path.cwd()).resolve() / '.rpi'
+    else:  # <state>/local/transactions/<transaction>/journal.json
+        state = Path(args.journal).resolve().parents[3]
+    candidates = [path for _, status, path in journals(state) if status in ('applying', 'complete')]
+    if candidates:
+        return 'undo the most recent transaction with ' + engine_command('rollback', '--journal', candidates[-1])
+    return ('pass the journal.json path printed by the interrupted apply; transactions are recorded as ' +
+            str(state / 'local/transactions') + '/<transaction>/journal.json (none found there)')
 
 
 def recorded_harness(args):
@@ -959,19 +1045,30 @@ def recorded_harness(args):
     return 'both'
 
 
-def blocked_hint(args, reason):
-    command = [sys.executable, str(Path(__file__).with_name('rpi-distribution.py'))]
-    if getattr(args, 'target', None):
-        command += ['check', '--source', str(args.source), '--target', str(args.target),
-                    '--harness', args.harness]
-    else:
-        command += ['--help']
-    fix = 'Inspect the local plan/journal conflicts, preserve newer project work, then run ' + shlex.join(command)
+def blocked_hint(args, reason, fix=None):
+    if fix is None:
+        target, source, harness = getattr(args, 'target', None), getattr(args, 'source', None), getattr(args, 'harness', None) or 'both'
+        if not target:
+            try:  # Apply and rollback name their installation inside the plan or journal.
+                if getattr(args, 'plan', None):
+                    request = json.loads(Path(args.plan).read_text())['request']
+                    target, source = request['target'], request['source']
+                    harness = request['harnesses'][0] if len(request['harnesses']) == 1 else 'both'
+                elif getattr(args, 'journal', None):
+                    target = json.loads(Path(args.journal).read_text())['roots']['project']
+            except (OSError, ValueError, KeyError, TypeError, IndexError):
+                target = None
+        if target:
+            fix = ('Inspect the local plan/journal conflicts, preserve newer project work, then run ' +
+                   engine_command('check', '--source', source, '--target', target, '--harness', harness))
+        else:
+            fix = 'Inspect the local plan/journal conflicts and preserve newer project work; ' + journal_fix(args)
     print('BLOCKED / WHY: ' + reason + ' / FIX: ' + fix, file=sys.stderr)
     return fix
 
 
 def cli(engine, args):
+    pending_fix = None
     if args.command == 'detach':
         args.command, args.action = 'plan', 'detach'
     if args.command == 'apply':
@@ -980,8 +1077,13 @@ def cli(engine, args):
         result = apply_plan(engine, json.loads(args.plan.read_text()), args.fail_after, args.fail_after_rename)
     elif args.command == 'rollback':
         if not args.journal:
-            raise ValueError('rollback requires --journal')
-        result = rollback(args.journal)
+            raise UsageError('rollback requires --journal', journal_fix(args))
+        try:
+            result = rollback(args.journal)
+        except Conflict:
+            raise
+        except (ValueError, TypeError) as error:
+            raise UsageError('unusable rollback journal ' + str(args.journal) + ': ' + str(error), journal_fix(args)) from error
     else:
         if args.scope == 'user':
             args.state_root = args.state_root or Path.home() / '.config/cc-rpi/installations/user'
@@ -1012,7 +1114,8 @@ def cli(engine, args):
             output = args.output.parent.resolve() / args.output.name
             bound_path(output.parent, output.name)
             if output.exists() or output.is_symlink():
-                raise ValueError('plan output already exists; choose a new review artifact')
+                raise UsageError('plan output already exists: ' + str(output),
+                                 'choose a new --output path; the existing review artifact is kept unchanged')
             _, state_root = request_roots(request)
             local = Path(state_root) / 'local'
             if output.resolve().is_relative_to(local.resolve()):
@@ -1023,12 +1126,23 @@ def cli(engine, args):
             atomic_node(output, file_node(serialized(result), 0o600))
         else:
             result['status'] = 'healthy' if result['status'] == 'noop' else 'action-needed'
+        try:
+            interrupted = [path for _, status, path in journals(request_roots(request)[1]) if status == 'applying']
+        except (Conflict, OSError, ValueError):
+            interrupted = []
+        if interrupted:
+            result['interrupted_transactions'] = [str(path) for path in interrupted]
+            if result['status'] == 'healthy':
+                result['status'] = 'action-needed'
+            pending_fix = ('an apply stopped before completing; undo it exactly with ' +
+                           engine_command('rollback', '--journal', interrupted[-1]) + ', then create a new plan')
     summary = {key: value for key, value in result.items() if key not in ('observations', 'operations', 'request', 'roots')}
     if 'conflicts' in summary:
         summary['conflicts'] = [{key: value for key, value in item.items() if key != 'diffs'} for item in summary['conflicts']]
     if 'operations' in result:
         summary['operations'] = [{'root_id': op['root_id'], 'destination': op['destination']} for op in result['operations']]
     if result['status'] in ('conflict', 'action-needed'):
-        summary['fix'] = blocked_hint(args, 'installation needs reconciliation; inspect the saved local diff before applying')
+        summary['fix'] = blocked_hint(args, 'installation needs reconciliation; inspect the saved local plan before applying',
+                                      pending_fix)
     print(json.dumps(summary, sort_keys=True))
     return 2 if result['status'] in ('conflict', 'action-needed') else 0

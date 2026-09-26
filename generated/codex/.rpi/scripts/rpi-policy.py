@@ -29,9 +29,10 @@ POLICY_WORD = re.compile(r'\b(?:git|gh|vercel|vc)\b')
 SHELL_KEYWORDS = {'{', '}', '!', 'if', 'then', 'else', 'elif', 'do', 'while', 'until'}
 ASSIGNMENT = re.compile(r'[A-Za-z_][A-Za-z0-9_]*=.*')
 REDIRECTION = re.compile(r'(?:\d*|&)(?:>>?|<)&?(.*)')
-HEREDOC = re.compile(r"(?m)^[ \t]*(?:cat|tee)\b[^\n]*?<<-?(['\"])([A-Za-z_][A-Za-z0-9_]*)\1[^\n]*\n")
+HEREDOC = re.compile(r"\b(?:cat|tee)\b[^\n]*?<<-?(['\"])([A-Za-z_][A-Za-z0-9_]*)\1[^\n]*\n")
 # Wrapper -> its options that take a separate value.
-WRAPPERS = {'env': {'-u', '--unset', '-C', '--chdir', '-S'}, 'command': set(), 'exec': {'-a'},
+WRAPPERS = {'env': {'-u', '--unset', '-C', '--chdir'}, 'command': set(), 'builtin': set(), 'exec': {'-a'},
+            'doas': {'-u', '-C'},
             'sudo': {'-u', '-g', '-C', '-h', '-p', '-U', '-r', '-t'}, 'time': set(), 'nohup': set(),
             'nice': {'-n'}, 'timeout': {'-k', '--kill-after', '-s', '--signal'},
             'stdbuf': {'-i', '-o', '-e'}, 'caffeinate': {'-t', '-w'},
@@ -106,6 +107,8 @@ def git(cwd, *arguments):
 
 
 def repository(cwd):
+    if cwd is None:
+        return None
     top = git(cwd, 'rev-parse', '--show-toplevel')
     return Path(top).resolve() if top else None
 
@@ -133,15 +136,22 @@ def project_policy(root):
     if not path.exists():
         return {}
     try:
-        value = read_json(path.read_text())
-    except (ValueError, OSError):
-        value = None
+        value = read_json(path.read_text(encoding='utf-8'))
+    except OSError as error:
+        fail('Project policy .rpi/policy.json cannot be read (' + type(error).__name__ + ').',
+             'Make .rpi/policy.json a readable regular file, or remove it.', 'policy-file')
+    except ValueError as error:
+        fail('Project policy .rpi/policy.json is not valid JSON (' + str(error) + ').',
+             'Fix the JSON syntax; save it as UTF-8 without a byte-order mark.', 'policy-file')
     if not isinstance(value, dict) or value.get('schema_version') != 1 or set(value) - POLICY_KEYS:
         fail('Invalid project policy in .rpi/policy.json.',
              'Use schema_version 1 and only these keys: ' + ', '.join(sorted(POLICY_KEYS)) + '.', 'policy-file')
     if type(value.get('require_verification_receipt', False)) is not bool:
         fail('In .rpi/policy.json, require_verification_receipt must be true or false.',
              'Set "require_verification_receipt": true to gate integration publication, or remove the key.', 'policy-file')
+    if 'integration_branch' in value and (not isinstance(value['integration_branch'], str) or not value['integration_branch']):
+        fail('In .rpi/policy.json, integration_branch must be one branch name.',
+             'Declare "integration_branch": "main" (or the actual branch), or remove the key.', 'policy-file')
     branches = value.get('production_branches', [])
     if not isinstance(branches, list) or any(not isinstance(item, str) or not item for item in branches):
         fail('In .rpi/policy.json, production_branches must be a list of branch names.',
@@ -223,7 +233,8 @@ def require_receipt(root, policy, commit):
              'Reinstall the declared RPI policy resources, then rerun the declared verification command.', 'receipt-error')
     if commit is not None and commit != evidence['commit']:
         fail('The published ref differs from the verified candidate commit.',
-             'Verify the exact integration/tag commit before publication.', 'ref-evidence')
+             'Push the verified commit: git push ' + policy.get('remote', 'origin') + ' ' + str(integration_branch(root, policy)) +
+             ', or run ' + verification_contract(policy)[1] + ' on the commit you are publishing.', 'ref-evidence')
     return 'verified-publication'
 
 
@@ -236,9 +247,42 @@ def resolved_branch(ref, current):
     return ref.removeprefix('refs/heads/')
 
 
+def parse_refspec(spec, force, delete):
+    """(source, destination, forced, removed) for one push refspec."""
+    forced = force or spec.startswith('+')
+    spec = spec.lstrip('+')
+    if spec == ':':
+        return None, '*', forced, False  # The matching push: every branch present on both sides.
+    source, destination = spec.split(':', 1) if ':' in spec else (spec, spec)
+    return source or None, destination, forced, delete or not source
+
+
+def configured_targets(root, remote, current, force, delete):
+    """Destinations Git derives from configuration when a push names no refspec."""
+    if root is None or current is None:
+        return [(current, current, force, delete)]
+    remote = remote or git(root, 'config', '--get', 'branch.' + current + '.remote') or 'origin'
+    specs = (git(root, 'config', '--get-all', 'remote.' + remote + '.push') or '').splitlines()
+    if specs:
+        return [parse_refspec(spec, force, delete) for spec in specs]
+    mode = git(root, 'config', '--get', 'push.default') or 'simple'
+    if mode in ('upstream', 'tracking'):
+        merge = git(root, 'config', '--get', 'branch.' + current + '.merge')
+        if merge:
+            return [(current, merge, force, delete)]
+    if mode == 'matching':
+        return [(None, '*', force, False)]
+    return [(current, current, force, delete)]
+
+
+def fail_bulk_tags():
+    fail('Bulk tag publication cannot be bound to the verified candidate.',
+         'Push the one verified release tag by name: git push origin vX.Y.Z.', 'named-tag')
+
+
 def push(args, cwd):
-    force = delete = everything = tags = repo = False
-    values, index = [], 0
+    force = delete = everything = tags = broad = dry_run = False
+    remote, values, index = None, [], 0
     while index < len(args):
         arg = args[index]
         index += 1
@@ -247,8 +291,8 @@ def push(args, cwd):
             values.extend(args[index:])
             break
         if name in ('--mirror', '--prune'):
-            fail_broad_push()
-        if name in ('--force', '--force-with-lease'):
+            broad = True
+        elif name in ('--force', '--force-with-lease'):
             force = True
         elif name == '--delete':
             delete = True
@@ -256,30 +300,30 @@ def push(args, cwd):
             everything = True
         elif name in ('--tags', '--follow-tags'):
             tags = True
+        elif name == '--dry-run':
+            dry_run = True
         elif name in PUSH_VALUE_OPTIONS:
-            repo = repo or name == '--repo'
+            value = arg.split('=', 1)[1] if '=' in arg else (args[index] if index < len(args) else None)
+            remote = value if name == '--repo' else remote
             index += '=' not in arg
         elif re.fullmatch(r'-[A-Za-z]+', arg):
             flags = arg[1:].split('o', 1)  # -o takes the rest, or the next word, as its value.
             force, delete = force or 'f' in flags[0], delete or 'd' in flags[0]
+            dry_run = dry_run or 'n' in flags[0]
             index += len(flags) == 2 and not flags[1]
         elif not arg.startswith('-'):
             values.append(arg)
-    if not repo:
-        values = values[1:]  # The first positional names the remote.
-    if everything and (force or delete):
+    if dry_run:
+        return None  # A dry run changes nothing remotely.
+    if remote is None and values:
+        remote, values = values[0], values[1:]  # The first positional names the remote.
+    if broad or everything and (force or delete):
         fail_broad_push()
     root = repository(cwd)
     policy = project_policy(root) if root else {}
     current = git(root, 'symbolic-ref', '--quiet', '--short', 'HEAD') if root else None
-    targets = []
-    for spec in values:
-        forced = force or spec.startswith('+')
-        spec = spec.lstrip('+')
-        source, destination = spec.split(':', 1) if ':' in spec else (spec, spec)
-        targets.append((source or None, destination, forced, delete or not source))
-    if not values:
-        targets.append((current, current, force, delete))
+    targets = ([parse_refspec(spec, force, delete) for spec in values] if values
+               else configured_targets(root, remote, current, force, delete))
     rewritten = [resolved_branch(destination, current) for _, destination, forced, removed in targets if forced or removed]
     gated = root is not None and policy.get('require_verification_receipt')
     if not rewritten and not gated:
@@ -293,22 +337,24 @@ def push(args, cwd):
                  'protected-branch')
     if not gated:
         return None
+    if tags:
+        fail_bulk_tags()
     decision = None
     for source, destination, _, _ in targets:
         if destination and '*' in destination:
-            decision = require_receipt(root, policy, None)  # A glob can publish the integration branch or tags.
-        elif resolved_branch(destination, current) == integration:
+            if not (destination == '*' or destination.startswith('refs/heads/')):
+                fail_bulk_tags()
+            source, destination = 'refs/heads/' + str(integration), integration  # A branch glob publishes the integration branch.
+        if resolved_branch(destination, current) == integration:
             commit = git(root, 'rev-parse', '--verify', '--quiet', (source or 'HEAD') + '^{commit}')
             if commit is None:
                 fail('The pushed integration ref cannot be resolved for receipt verification.',
-                     'Push a literal ref: git push REMOTE ' + integration + '.', 'ref-evidence')
+                     'Push a literal ref: git push ' + (remote or 'origin') + ' ' + str(integration) + '.', 'ref-evidence')
         else:
             commit = tag_commit(root, (destination or '').removeprefix('refs/tags/'))
             if commit is None:
                 continue
         decision = require_receipt(root, policy, commit)
-    if tags:
-        decision = require_receipt(root, policy, None)  # Bulk tag publication: a clean, verified candidate.
     return decision
 
 
@@ -316,15 +362,26 @@ def git_command(args, cwd):
     args = list(args)
     while args and args[0].startswith('-'):
         option = args.pop(0)
-        if option == '-C' and args:
-            cwd = Path(cwd) / Path(args.pop(0)).expanduser()
-        elif option.startswith('-C') and len(option) > 2:
-            cwd = Path(cwd) / Path(option[2:]).expanduser()
+        if option == '-C' and args or option.startswith('-C') and len(option) > 2:
+            cwd = directory(cwd, args.pop(0) if option == '-C' else option[2:])
         elif option in GIT_VALUE_OPTIONS and args:
             args.pop(0)
     if args[:1] == ['push']:
         return push(args[1:], cwd)
     return None
+
+
+def directory(cwd, target):
+    """The literal directory a cd or git -C names, or None when it cannot be known."""
+    if DYNAMIC in target:
+        return None
+    path = Path(target).expanduser()
+    if not path.is_absolute():
+        if cwd is None:
+            return None
+        path = Path(cwd) / path
+    path = path.resolve()
+    return path if path.is_dir() else cwd
 
 
 def deployment(args, cwd):
@@ -528,6 +585,18 @@ def without_redirections(words):
     return output
 
 
+def env_split(words):
+    """Expand env -S/--split-string into the words it runs."""
+    for index, word in enumerate(words):
+        if not word.startswith('-'):
+            break
+        if word in ('-S', '--split-string') and index + 1 < len(words):
+            return words[:index] + words[index + 1].split() + words[index + 2:]
+        if word.startswith('--split-string='):
+            return words[:index] + word.split('=', 1)[1].split() + words[index + 1:]
+    return words
+
+
 def unwrap(words):
     """Strip shell keywords, assignments and common executable wrappers."""
     while True:
@@ -538,6 +607,8 @@ def unwrap(words):
         wrapper, words = Path(words[0]).name, words[1:]
         if wrapper == 'command' and words[:1] in (['-v'], ['-V']):
             return []  # Shell lookup describes operands without executing them.
+        if wrapper == 'env':
+            words = env_split(words)
         words = words[skip_options(words, WRAPPERS[wrapper].__contains__):]
         if wrapper == 'timeout' and words:
             words = words[1:]  # The duration operand.
@@ -589,18 +660,24 @@ def inspect_command(command, cwd, depth=0):
             if package not in ('vercel', 'vc'):
                 continue
             name, args = package, args[1:]
-        if name == 'cd' and len(args) == 1 and DYNAMIC not in args[0]:
-            target = (Path(cwd) / Path(args[0]).expanduser()).resolve()
-            cwd = target if target.is_dir() else cwd
+        if name in ('cd', 'pushd', 'popd'):
+            cwd = directory(cwd, args[0]) if name != 'popd' and len(args) == 1 else None
             continue
-        if name == 'git':
-            decision = git_command(args, cwd)
-        elif name in ('vercel', 'vc'):
-            decision = deployment(args, cwd)
-        elif name == 'gh':
-            decision = github(args, cwd)
-        else:
-            decision = None
+        try:
+            if name == 'git':
+                decision = git_command(args, cwd)
+            elif name in ('vercel', 'vc'):
+                decision = deployment(args, cwd)
+            elif name == 'gh':
+                decision = github(args, cwd)
+            else:
+                decision = None
+        except Blocked:
+            raise
+        except Exception as error:  # One unreadable segment must not hide a later destructive one.
+            print('POLICY UNAVAILABLE: a ' + name + ' segment could not be evaluated (' + type(error).__name__ +
+                  '); later segments are still checked.', file=sys.stderr)
+            continue
         if decision:
             decisions.append(decision)
     return decisions
@@ -628,6 +705,8 @@ def telemetry(event, harness, decision, rule):
         root = repository(cwd) if Path(cwd).is_dir() else None
         if root is None:
             return  # Outside a repository there is no ignored evidence directory to write.
+        if not (root / '.rpi').is_dir():
+            return  # No installed state directory: do not create one.
         directory = root / '.rpi/local'
         if any(path.is_symlink() for path in (root, root / '.rpi', directory, directory / 'contract-events.jsonl')):
             return

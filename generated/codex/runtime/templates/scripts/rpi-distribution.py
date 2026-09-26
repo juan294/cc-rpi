@@ -556,6 +556,8 @@ def load_sibling(name):
 def blocked_fix(error):
     """Corrective hint for a top-level failure. An unrepresentable path is a
     runtime encoding fault, so it must not send the owner to edit healthy source."""
+    if getattr(error, "fix", None):
+        return error.fix  # The failure site knows the exact repair.
     if isinstance(error, UnicodeError):
         return ("a path or name cannot be represented in this runtime's "
                 f"{sys.getfilesystemencoding()} encoding; rerun under a UTF-8 locale, for example "
@@ -607,7 +609,7 @@ def main():
                 print(f"BLOCKED / WHY: {error} / FIX: repair the JSON object in {error.path}, preserving owner settings; rerun {rerun}", file=sys.stderr)
                 return 1
             except lifecycle.Conflict as error:
-                print(json.dumps({"status": "conflict", "reason": str(error), "fix": lifecycle.blocked_hint(args, str(error))}))
+                print(json.dumps({"status": "conflict", "reason": str(error), "fix": lifecycle.blocked_hint(args, str(error), error.fix)}))
                 return 2
         source = args.source.resolve()
         manifest = load_manifest(source)

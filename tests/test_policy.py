@@ -313,6 +313,54 @@ class PolicyTests(PolicyFixture):
         self.assertEqual(result.returncode, 2, result.stderr)
         self.assertNotIn('old-python', result.stderr)
 
+    def test_a_failing_segment_never_hides_a_later_destructive_segment(self):
+        runtime = self.workspace / 'runtime'
+        runtime.mkdir()
+        broken = runtime / 'rpi-policy.py'
+        broken.write_text(POLICY.read_text().replace('def deployment(', 'def deployment(*_):\n    raise RuntimeError\n\n\ndef _unused(', 1))
+        for command in ('vercel --prod; git push -f origin develop', 'vercel --prod && gh repo delete o/r --yes'):
+            with self.subTest(command=command):
+                result = subprocess.run([sys.executable, str(broken), '--harness', 'claude'], input=json.dumps(self.event(command)),
+                                        text=True, capture_output=True, env=self.environment, cwd=self.project)
+                self.assertEqual(result.returncode, 2, result.stderr)
+
+    def test_dynamic_directory_changes_do_not_misattribute_the_repository(self):
+        self.assert_blocked('cd "$REPO" && git push -f origin develop', 'protected branch')
+        self.assert_allowed('cd "$REPO" && git push -f origin feature/x')
+        other = self.workspace / 'other'
+        other.mkdir()
+        self.assert_allowed('pushd ' + str(other) + ' && git push -f origin release')
+        self.policy(production_branches=['release'])
+        self.assert_blocked('pushd . && git push -f origin release', 'protected branch')
+
+    def test_configured_push_destinations_are_resolved(self):
+        self.git('checkout', '-qb', 'feature/tracking')
+        self.git('config', 'branch.feature/tracking.remote', 'origin')
+        self.git('config', 'branch.feature/tracking.merge', 'refs/heads/develop')
+        self.git('config', 'push.default', 'upstream')
+        self.assert_blocked('git push -f', 'protected branch')
+        self.git('config', 'push.default', 'simple')
+        self.git('config', 'remote.origin.push', '+refs/heads/feature/tracking:refs/heads/develop')
+        self.assert_blocked('git push origin', 'protected branch')
+
+    def test_low_severity_charter_shapes(self):
+        self.assert_allowed('git push origin :')
+        self.assert_blocked('git push -f origin :', 'protected branch')
+        self.assert_allowed('git push --dry-run -f origin develop')
+        self.assert_allowed('git push -n --force origin develop')
+        self.assert_allowed("X=1; cat > notes.txt <<'EOF'\ngit push -f origin develop\nEOF\n")
+        for command in ('builtin command git push -f origin develop', 'doas git push -f origin develop',
+                        "env -S 'git push -f origin develop'", "env --split-string='git push -f origin develop'"):
+            with self.subTest(command=command):
+                self.assert_blocked(command, 'protected branch')
+
+    def test_telemetry_needs_an_installed_state_directory(self):
+        nested = self.workspace / 'nested-repo'
+        nested.mkdir()
+        subprocess.run([self.environment['RPI_REAL_GIT'], 'init', '-q', str(nested)], check=True)
+        self.assertEqual(self.invoke(event=dict(self.event('git push -f origin main'), cwd=str(nested))).returncode, 2)
+        self.assertFalse((nested / '.rpi').exists())
+
     def test_literal_text_never_triggers_a_block(self):
         for command in ('printf "%s" "git push -f origin develop"', "echo 'git push --mirror'",
                         "echo '$(git push -f origin develop)'", 'echo gh repo delete x',

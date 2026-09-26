@@ -93,6 +93,16 @@ def local_indent(local):
     return '\t' if unit.startswith(b'\t') else len(unit)
 
 
+def conflict(identity, reason, old=None, new=None):
+    """Carry the public template values so the repair can name them."""
+    item = {'id': identity, 'reason': reason}
+    if old:
+        item['previous'] = copy.deepcopy(old['value'])
+    if new:
+        item['desired'] = copy.deepcopy(new['value'])
+    return item
+
+
 def reconcile(local, previous_records, desired_records, allow_capabilities=False, allow_removal=False):
     if not isinstance(allow_capabilities, bool) or not isinstance(allow_removal, bool):
         raise ValueError('capability setup scope must be an explicit boolean')
@@ -107,22 +117,23 @@ def reconcile(local, previous_records, desired_records, allow_capabilities=False
         old, new = previous.get(identity), desired.get(identity)
         record = new or old
         if old and new and (old['pointer'] != new['pointer'] or old['mode'] != new['mode']):
-            conflicts.append({'id': identity, 'reason': 'ownership pointer/mode changed; remove then add in separate reviewed setup'})
+            conflicts.append(conflict(identity, 'ownership pointer/mode changed; remove then add in separate reviewed setup', old, new))
             continue
         value = read(document, record)
         array = record['mode'] == 'entry'
         old_indices = [i for i, item in enumerate(value) if old and same(item, old['value'])] if array and value is not MISSING else []
+        new_count = sum(same(item, new['value']) for item in value) if new and array and value is not MISSING else 0
         if len(old_indices) > 1:
-            conflicts.append({'id': identity, 'reason': 'duplicate native entries make exact ownership ambiguous'})
+            conflicts.append(conflict(identity, 'duplicate native entries make exact ownership ambiguous', old, new))
             continue
         old_present = old is not None and (bool(old_indices) if array else same(value, old['value']))
-        new_present = new is not None and (value is not MISSING and (any(same(item, new['value']) for item in value) if array else same(value, new['value'])))
+        new_present = new is not None and (bool(new_count) if array else same(value, new['value']))
         if not new:
             if old.get('retain_on_remove') or not old_present:
-                retained.append({'id': identity, 'reason': 'existing explicit opt-in or modified entry remains project-owned'})
+                retained.append({'id': identity, 'value': old['value'], 'reason': 'existing explicit opt-in or modified entry remains project-owned'})
                 continue
             if not (allow_capabilities or allow_removal):
-                conflicts.append({'id': identity, 'reason': 'removing a native boundary requires setup or detach scope'})
+                conflicts.append(conflict(identity, 'removing a native boundary requires setup or detach scope', old))
                 continue
             parent, key = leaf(document, old['pointer'])
             if array:
@@ -131,25 +142,30 @@ def reconcile(local, previous_records, desired_records, allow_capabilities=False
                 del parent[key]
             continue
         if not old and new_present:
-            retained.append({'id': identity, 'reason': 'matching existing entry is project-owned'})
+            retained.append({'id': identity, 'value': new['value'], 'reason': 'matching existing entry is project-owned'})
             continue
         if old and not old_present:
             if same(old['value'], new['value']):
                 entries.append(copy.deepcopy(new))
-                retained.append({'id': identity, 'reason': 'local-only changed or missing entry retained'})
+                retained.append({'id': identity, 'value': new['value'],
+                                 'reason': 'owned entry was edited or removed locally; its template value is not in effect'})
+            elif new_count > 1:
+                conflicts.append(conflict(identity, 'duplicate native entries make exact ownership ambiguous', old, new))
+            elif new_present:
+                entries.append(copy.deepcopy(new))  # The owner already applied the new template value exactly.
             else:
-                conflicts.append({'id': identity, 'reason': 'local and template both changed an owned entry'})
+                conflicts.append(conflict(identity, 'local and template both changed an owned entry', old, new))
             continue
         changing = not old or not same(old['value'], new['value'])
         if changing and old and array and new_present:
-            conflicts.append({'id': identity, 'reason': 'new value already exists without this ownership; reconcile duplicate identity explicitly'})
+            conflicts.append(conflict(identity, 'new value already exists without this ownership; reconcile duplicate identity explicitly', old, new))
             continue
         if changing and not allow_capabilities:
-            conflicts.append({'id': identity, 'reason': 'capability addition/change requires explicit setup scope'})
+            conflicts.append(conflict(identity, 'capability addition/change requires explicit setup scope', old, new))
             continue
         if changing:
             if not array and value is not MISSING and not old:
-                conflicts.append({'id': identity, 'reason': 'unowned scalar would be overwritten'})
+                conflicts.append(conflict(identity, 'unowned scalar would be overwritten', old, new))
                 continue
             parent, key = leaf(document, new['pointer'], create=True)
             if array:

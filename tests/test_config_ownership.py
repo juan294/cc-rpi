@@ -121,5 +121,39 @@ class ConfigurationOwnershipTests(unittest.TestCase):
         self.assertEqual(result['content'], local)
 
 
+    def hook(self, command, **extra):
+        value = {'matcher': 'Bash', 'hooks': [{'type': 'command', 'command': command, **extra}]}
+        return {'id': 'hook:guard', 'pointer': ['hooks', 'PreToolUse'], 'mode': 'entry', 'value': value}
+
+    def test_owner_applied_new_template_value_is_accepted_without_duplication(self):
+        old, new = self.hook('old'), self.hook('new')
+        local = json.dumps({'hooks': {'PreToolUse': [{'matcher': 'Write'}, new['value']]}}).encode()
+        result = reconcile(local, [old], [new])
+        self.assertEqual(result['conflicts'], [])
+        self.assertEqual(result['entries'], [new])
+        self.assertEqual(result['content'], local)
+        doubled = json.dumps({'hooks': {'PreToolUse': [new['value'], new['value']]}}).encode()
+        self.assertTrue(reconcile(doubled, [old], [new], allow_capabilities=True)['conflicts'])
+
+    def test_both_changed_conflict_carries_previous_and_desired_values(self):
+        old, new = self.hook('old'), self.hook('new')
+        local = json.dumps({'hooks': {'PreToolUse': [self.hook('old', timeout=20)['value']]}}).encode()
+        result = reconcile(local, [old], [new], allow_capabilities=True)
+        self.assertEqual(result['content'], local)
+        self.assertEqual(result['conflicts'], [{'id': 'hook:guard', 'reason': 'local and template both changed an owned entry',
+                                                'previous': old['value'], 'desired': new['value']}])
+
+    def test_removal_conflict_carries_the_boundary_value(self):
+        blocked = reconcile(b'{"permissions":{"ask":["Bash(git push:*)"]}}', [record()], [])
+        self.assertEqual(blocked['conflicts'][0]['previous'], 'Bash(git push:*)')
+
+    def test_edited_owned_boundary_is_retained_with_its_record_and_value(self):
+        deny = {'id': 'deny-env', 'pointer': ['permissions', 'deny'], 'mode': 'entry', 'value': 'Read(.env)'}
+        result = reconcile(b'{"permissions":{"deny":["Read(.env.example)"]}}', [deny], [deny])
+        self.assertEqual(result['conflicts'], [])
+        self.assertEqual([(item['id'], item['value']) for item in result['retained']], [('deny-env', 'Read(.env)')])
+        self.assertIn('not in effect', result['retained'][0]['reason'])
+
+
 if __name__ == '__main__':
     unittest.main()
