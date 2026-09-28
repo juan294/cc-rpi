@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Explicitly opted-in, project-scoped local update launcher for Claude Code.
+# Explicitly opted-in, project-scoped local update launcher.
 # Configure RPI_UPDATE_ENABLED=1, absolute CC_RPI_PATH and RPI_PROJECT_ROOT,
 # RPI_HARNESS=claude|codex|both, and RPI_ROUTE=direct|plugin in the scheduler.
 # For direct invocation also bind RPI_UPDATE_SKILL_DIR to the actual discovered
@@ -9,8 +9,11 @@
 # Requires Python 3.11+, Git and a Claude CLI supporting --plugin-dir,
 # --permission-mode dontAsk and --permission-prompts none (verified in 2.1.261).
 # Configure native authentication/permissions through the owner's supported
-# setup before opting in. There is no inference auth probe or permission bypass.
-# A blocked update remains blocked; the process reports both CLI/check exits.
+# setup before opting in. A read-only inference probe detects quota before any
+# update starts; no permission bypass is used.
+# A quota-blocked Claude preflight can use the installed Codex subscription.
+# An update that already began never retries through another provider.
+# A started update reports both CLI/check exits, including provider failure.
 #
 # Optional launchd/cron schedules are installed separately. Diagnose their actual
 # PATH, authentication and resource limits; historical launchd workarounds are not
@@ -35,6 +38,7 @@ command -v python3 >/dev/null || blocked 'Python is missing' 'configure Python 3
 python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 11))' || blocked 'Python is older than 3.11' 'configure a supported interpreter on PATH'
 CLAUDE_BIN=${CLAUDE_BIN:-$(command -v claude || true)}
 [[ -n "$CLAUDE_BIN" && -x "$CLAUDE_BIN" ]] || blocked 'Claude CLI is unavailable' 'set CLAUDE_BIN to its actual executable path'
+CODEX_BIN=${CODEX_BIN:-$(command -v codex || printf '%s' /opt/homebrew/lib/node_modules/@openai/codex/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex)}
 ENGINE="$CC_RPI_PATH/templates/scripts/rpi-distribution.py"
 NATIVE_SKILL="$CC_RPI_PATH/generated/claude/skills/rpi-update"
 for required in "$ENGINE" "$CC_RPI_PATH/templates/distribution.json" "$NATIVE_SKILL/SKILL.md" "$NATIVE_SKILL/references/lifecycle-contract.md"; do
@@ -86,8 +90,45 @@ Never create Vercel Previews. Required unavailable permissions remain blocked.
 Return concrete changes, conflicts and verification; never claim success from prose alone."
 cd -- "$PROJECT_ROOT"
 native_status=0
-"${native_args[@]}" -p "$PROMPT" --permission-mode dontAsk \
-  --permission-prompts none --output-format text > "$REPORT_FILE" 2>&1 || native_status=$?
+probe_output=$(mktemp)
+trap 'rm -f "$probe_output"' EXIT
+probe_status=0
+env -u ANTHROPIC_API_KEY "$CLAUDE_BIN" -p 'Reply READY only. Do not use tools or change files.' \
+  --tools '' --strict-mcp-config --permission-mode dontAsk \
+  --permission-prompts none --output-format text \
+  > "$probe_output" 2>&1 || probe_status=$?
+if [[ $probe_status -ne 0 ]] || grep -qiE 'rate.?limit|usage limit|hit your (weekly )?limit|authentication_error|not logged in|oauth token has expired' "$probe_output"; then
+  if grep -qiE 'rate.?limit|usage limit|hit your (weekly )?limit|authentication_error|not logged in|oauth token has expired' "$probe_output"; then
+    [[ -x "$CODEX_BIN" ]] || blocked 'Claude quota or authentication blocked the update and Codex is unavailable' 'restore subscription authentication or set CODEX_BIN to the installed executable'
+    CODEX_SKILL=${RPI_UPDATE_CODEX_SKILL_DIR:-$HOME/.agents/skills/rpi-update}
+    [[ "$CODEX_SKILL" == /* ]] || blocked 'Codex skill path is not absolute' 'set RPI_UPDATE_CODEX_SKILL_DIR to the discovered user-scope skill'
+    for resource in SKILL.md references/lifecycle-contract.md; do
+      cmp -s "$CODEX_SKILL/$resource" "$CC_RPI_PATH/generated/codex/skills/rpi-update/$resource" || blocked 'Codex lifecycle skill/resources differ from selected source' 'review the separate user-scope update before scheduling; never overwrite it implicitly'
+    done
+    printf 'Claude preflight reported a quota or authentication limit; using Codex subscription fallback. Raw output withheld.\n' > "$REPORT_FILE"
+    env -u OPENAI_API_KEY -u CODEX_API_KEY "$CODEX_BIN" exec --ephemeral \
+      --sandbox workspace-write -c sandbox_workspace_write.network_access=true \
+      -m "${CODEX_MODEL:-gpt-5.5}" -C "$PROJECT_ROOT" \
+      --output-last-message "$REPORT_FILE" - > /dev/null 2>/dev/null <<PROMPT || native_status=$?
+Read $CODEX_SKILL/SKILL.md and its lifecycle contract fully. Follow the installed
+rpi-update skill for this single project. Do not change the user-scope skill.
+
+$PROMPT
+PROMPT
+    if [[ $native_status -eq 0 && ! -s "$REPORT_FILE" ]]; then
+      printf 'Codex returned no final report.\n' > "$REPORT_FILE"
+      native_status=1
+    fi
+  else
+    printf 'Claude preflight failed (exit %s) without a quota or authentication signal. Raw output withheld.\n' "$probe_status" > "$REPORT_FILE"
+    native_status=${probe_status:-1}
+  fi
+else
+  env -u ANTHROPIC_API_KEY "${native_args[@]}" -p "$PROMPT" --permission-mode dontAsk \
+    --permission-prompts none --output-format text > "$REPORT_FILE" 2>&1 || native_status=$?
+fi
+rm -f "$probe_output"
+trap - EXIT
 check_status=0
 python3 "$ENGINE" check --source "$CC_RPI_PATH" --target "$PROJECT_ROOT" \
   --harness "$RPI_HARNESS" --route "$RPI_ROUTE" > "$RUN_DIR/check.json" 2>&1 || check_status=$?
