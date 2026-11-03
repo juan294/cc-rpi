@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Added
+
+- A shared local resource-lifecycle rule for Claude and Codex, selected by Docker/Supabase paths and local-stack/database-test tasks even without a Dockerfile. It requires ownership and lifecycle classification before allocation, scoped teardown or an explicit retained-resource handoff, and protection of shared/recovery data. Project commands remain project-owned; host maintenance stays opt-in. Task completion, Supabase verification, worktree cleanup and handoffs reference the same contract. Update tests cover task-only reachability and preservation of project contracts and private receipts.
+
 ## [2.1.0] - 2026-09-26
 
 Nothing retired this cycle: no rule or error ID is retired. Index rules #33,

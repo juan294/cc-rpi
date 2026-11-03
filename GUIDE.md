@@ -26,6 +26,8 @@ already-authorized documentation update should not trigger a duplicate question.
 
 ## Installation
 
+For Docker, Supabase and other local task services, follow [resource lifecycle](methodology/resource-lifecycle.md). Project setup records actual lifecycle commands and protected data; the common rule is maintained once in the blueprint and distributed to both harnesses.
+
 Installation requires Git and Python 3.11 or newer, plus the native clients you
 choose to use. See [compatibility evidence](docs/compatibility.md) for tested
 versions and limitations. The engine itself uses the Python standard library;

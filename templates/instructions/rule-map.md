@@ -9,6 +9,7 @@ root-to-current-directory instruction chain. Preserve project-specific overrides
 
 | Task or path | Required resource | Essential constraint |
 | --- | --- | --- |
+| Docker, local stacks, database tests, task services or resource cleanup (even without a Dockerfile) | `.rpi/rules/resource-lifecycle.md` | Prove ownership; finish disposable lifecycles; preserve shared/recovery data and report retained resources. |
 | Deployment, CI, release or infrastructure configuration | `.rpi/rules/deployment-safety.md` | Local gates first; no Vercel Preview; production needs authorization. |
 | SQL, Supabase migrations, schema, data access or database tests | `.rpi/rules/supabase.md` | Reset/test locally; privileges and RLS are distinct; remote targets need authorization. |
 | Behavioral changes, tests, fixtures and validation | `.rpi/rules/testing.md` | TDD for behavioral code; every required check must run and pass. |

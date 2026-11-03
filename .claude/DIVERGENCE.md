@@ -17,7 +17,7 @@ Shared universal RPI and push policies render once into marked root AGENTS block
 CLAUDE imports AGENTS. The old local `rules/rpi-details.md` divergence is removed:
 project facts in AGENTS specify main, so a second always-loaded workflow body is
 unnecessary. The remote-budget rule is consolidated into push accountability.
-Six rule bodies remain available under `.rpi/rules/`; only four conditional rules
+Seven rule bodies remain available under `.rpi/rules/`; only five conditional rules
 are native Claude registrations. Codex uses the explicit root task/path map.
 
 `rpi-distribution.py check-generated` compares a fresh render, and `check-self`

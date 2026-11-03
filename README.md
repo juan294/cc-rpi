@@ -93,6 +93,8 @@ Native `/plan` and `/status` are not the RPI workflows: use `rpi-plan` and
 
 ## Workflow and model selection
 
+Local stacks and task services follow the shared [resource lifecycle](methodology/resource-lifecycle.md). The blueprint distributes ownership and cleanup requirements; projects retain their own commands and protected-data contracts. Updating instructions does not activate a host cleanup service.
+
 Use descriptive `rpi-research`, evaluative `rpi-assess` when requested, then
 `rpi-plan`, `rpi-implement` and `rpi-validate`. Implementation preserves TDD,
 independent review, repair, simplify and complete applicable local verification.

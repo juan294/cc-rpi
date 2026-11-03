@@ -1,0 +1,1 @@
+../../generated/claude/rules/resource-lifecycle.md

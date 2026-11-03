@@ -90,6 +90,8 @@ is the execution authority; this checklist does not authorize remote operations.
 
 ## Verify actual native behavior
 
+- [ ] For projects using local stacks or task services, follow `rules/resource-lifecycle.md`. Link the project-owned resource contract from AGENTS.md: exact lifecycle commands, protected data, ownership records, consumer coordination and retention. Preserve an existing equivalent; document missing implementation without claiming automatic cleanup. Reuse the host's existing maintenance, and do not schedule deletion during instruction setup.
+
 - [ ] Confirm native skill discovery and bundled resource access. Direct Claude
   workflows use `/rpi-research`; plugin Claude workflows use
   `/cc-rpi:rpi-research`. Codex direct skills use `$rpi-research`; choose the

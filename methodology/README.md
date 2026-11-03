@@ -19,6 +19,8 @@
 
 ## The One-Paragraph Summary
 
+For local stacks and task services, read [resource lifecycle](resource-lifecycle.md): shared ownership/completion policy, project-specific commands and host maintenance responsibilities.
+
 Every significant change goes through **Research** (describe the code as written),
 **Plan** (create an implementation specification), **Implement** (TDD, independent
 review, repair and simplify), and **Validate** (verify the approved scope against
