@@ -185,3 +185,11 @@ changes. Run all required phase/final gates locally, sequentially with failure
 aggregation; a later success cannot erase an earlier failure. Reuse evidence
 only for unchanged tested inputs, never as a substitute for an invalidated gate.
 <!-- rpi:rpi-details:end -->
+
+## Project-owned PostgreSQL recipe lifecycle
+
+For `tests/recipes/check_postgres.py`, also read
+[the project resource contract](docs/development/resource-lifecycle.md). Use its
+private ownership receipt and guarded `--finish` command. Retained or unresolved
+allocations require an explicit handoff before removing the source worktree;
+the disposable recipe does not grant cleanup authority over inherited resources.
