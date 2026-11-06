@@ -130,9 +130,13 @@ class RecoveryGuidanceTests(unittest.TestCase):
         self.assertEqual(operation['root_id'], 'project')
         return before, operation['destination'], self.journals('applying')[-1]
 
-    def follow(self, fix):
+    def follow(self, fix, cwd=None):
         self.assertEqual(fix.count('; run: '), 1, fix)
-        return subprocess.run(fix.split('; run: ', 1)[1], shell=True, capture_output=True, text=True, cwd=self.workspace)
+        return subprocess.run(fix.split('; run: ', 1)[1], shell=True, capture_output=True, text=True, cwd=cwd or self.workspace)
+
+    @staticmethod
+    def owner_edit(target):
+        target.write_bytes(target.read_bytes() + b'Owner edit.\n')
 
     def saved_edits(self, destination):
         return sorted((self.project / '.rpi/local/saved-edits').glob('*/*/project/' + destination + '*'))
@@ -212,7 +216,7 @@ class RecoveryGuidanceTests(unittest.TestCase):
     def test_restored_file_has_the_recorded_mode_and_replaces_the_path_atomically(self):
         before, destination, journal, target = self.blocked_update()
         recorded = json.loads(journal.read_text())['operations'][0]['before']['mode']
-        target.write_bytes(target.read_bytes() + b'Owner edit.\n')
+        self.owner_edit(target)
         target.chmod(0o600 if recorded != 0o600 else 0o644)
         followed = self.follow(self.refused(journal))
         self.assertEqual(followed.returncode, 0, followed.stdout + followed.stderr)
@@ -345,9 +349,7 @@ class RecoveryGuidanceTests(unittest.TestCase):
     # S-7: hostile inputs, each executing the printed FIX.
 
     def run_fix_for(self, journal, cwd=None):
-        fix = self.refused(journal)
-        self.assertEqual(fix.count('; run: '), 1, fix)
-        return subprocess.run(fix.split('; run: ', 1)[1], shell=True, capture_output=True, text=True, cwd=cwd or self.workspace)
+        return self.follow(self.refused(journal), cwd)
 
     def test_a_hard_link_to_an_outside_file_is_replaced_not_written_through(self):
         before, destination, journal, target = self.blocked_update()
@@ -365,7 +367,7 @@ class RecoveryGuidanceTests(unittest.TestCase):
 
     def test_the_restore_replaces_the_path_instead_of_rewriting_its_inode(self):
         before, destination, journal, target = self.blocked_update()
-        target.write_bytes(target.read_bytes() + b'Owner edit.\n')
+        self.owner_edit(target)
         old_inode = target.stat().st_ino
         result = self.run_fix_for(journal)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -397,7 +399,7 @@ class RecoveryGuidanceTests(unittest.TestCase):
     def test_a_read_only_edit_is_replaced_with_the_recorded_mode(self):
         before, destination, journal, target = self.blocked_update()
         recorded = json.loads(journal.read_text())['operations'][0]['before']['mode']
-        target.write_bytes(target.read_bytes() + b'Owner edit.\n')
+        self.owner_edit(target)
         target.chmod(0o444)
         result = self.run_fix_for(journal)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -414,7 +416,7 @@ class RecoveryGuidanceTests(unittest.TestCase):
 
     def test_the_fix_runs_from_any_working_directory(self):
         before, destination, journal, target = self.blocked_update()
-        target.write_bytes(target.read_bytes() + b'Owner edit.\n')
+        self.owner_edit(target)
         result = self.run_fix_for(journal, cwd='/')
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(self.snapshot(), before)
@@ -424,7 +426,7 @@ class RecoveryGuidanceTests(unittest.TestCase):
         self.project = self.workspace / 'p $HOME `touch PWNED` "q" \'s\' é ; & (x)'
         self.project.mkdir()
         before, destination, journal, target = self.blocked_update()
-        target.write_bytes(target.read_bytes() + b'Owner edit.\n')
+        self.owner_edit(target)
         result = self.run_fix_for(journal)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(self.snapshot(), before)

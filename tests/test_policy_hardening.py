@@ -165,7 +165,8 @@ class ReceiptGateAgreesWithPolicyHookTests(test_prepush.PrePushFixture):
         self.assert_blocked('git push -f origin release', 'protected branch')
 
 
-    def test_dirty_tree_refusal_prints_the_full_first_file_name(self):
+class DirtyTreeRefusalTests(test_prepush.PrePushFixture):
+    def test_dirty_tree_refusal_lists_tracked_and_untracked_names_in_full(self):
         self.policy(require_verification_receipt=True)
         self.commit('Opt in')
         self.evidence()

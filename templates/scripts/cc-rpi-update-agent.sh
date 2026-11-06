@@ -50,7 +50,9 @@ NATIVE_SKILL="$CC_RPI_PATH/generated/claude/skills/rpi-update"
 for required in "$ENGINE" "$CC_RPI_PATH/templates/distribution.json" "$NATIVE_SKILL/SKILL.md" "$NATIVE_SKILL/references/lifecycle-contract.md"; do
   [[ -f "$required" ]] || blocked "missing source resource: $required" 'restore the complete verified local package before scheduling'
 done
-if [[ ${RPI_UPDATE_LOCK_OWNER:-} != "$$" ]]; then  # The re-executed pass validated already; it verifies the lock instead.
+lock_reexecuted=0
+[[ ${RPI_UPDATE_LOCK_OWNER:-} == "$$" ]] && lock_reexecuted=1
+if [[ $lock_reexecuted == 0 ]]; then  # The re-executed pass validated already; it verifies the lock instead.
   python3 "$ENGINE" validate --source "$CC_RPI_PATH"
   python3 "$ENGINE" check-generated --source "$CC_RPI_PATH"
 fi
@@ -78,9 +80,9 @@ PY
 RUN_ID=$(python3 -c 'import secrets; print(secrets.token_hex(8))')
 RUN_DIR="$REPORT_ROOT/run.$RUN_ID"
 LOCK_FILE="$REPORT_ROOT/launcher.lock"
-for artifact in "$RUN_DIR/report.md" "$RUN_DIR/check.json" "$RUN_DIR/status.txt" "$LOCK_FILE"; do
-  git -C "$PROJECT_ROOT" check-ignore --quiet -- "$artifact" || blocked 'scheduled output is not ignored' 'review .rpi/local exclusions before scheduling (reports and the launcher.lock file must be ignored); existing ignore rules are preserved'
-done
+# One call: check-ignore prints each ignored path, so all four must come back.
+ignored_outputs=$(git -C "$PROJECT_ROOT" check-ignore -- "$RUN_DIR/report.md" "$RUN_DIR/check.json" "$RUN_DIR/status.txt" "$LOCK_FILE" || true)
+[[ $(printf '%s\n' "$ignored_outputs" | grep -c .) -eq 4 ]] || blocked 'scheduled output is not ignored' 'review .rpi/local exclusions before scheduling (reports and the launcher.lock file must be ignored); existing ignore rules are preserved'
 mkdir -p -- "$REPORT_ROOT"
 
 # Single-flight. LOCK_ACQUIRE opens the lock file, takes flock(LOCK_EX | LOCK_NB) and execs this script
@@ -123,7 +125,7 @@ try:
 except (ValueError, OSError):
     sys.exit(1)
 PY
-if [[ ${RPI_UPDATE_LOCK_OWNER:-} == "$$" ]]; then
+if [[ $lock_reexecuted == 1 ]]; then
   python3 -c "$LOCK_VERIFY" "$LOCK_FILE" "${RPI_UPDATE_LOCK_FD:-}" || blocked 'this run does not hold the launcher lock' 'run the launcher again'
 else
   unset RPI_UPDATE_LOCK_OWNER RPI_UPDATE_LOCK_FD

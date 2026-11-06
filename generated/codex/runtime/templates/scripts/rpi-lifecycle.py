@@ -956,6 +956,15 @@ def operation_path(plan, operation):
     return bound_path(root, operation['destination'])
 
 
+# Plan fields that never invalidate a saved plan: a hook edit after planning, and the identifier a plan file gets when saved.
+INFORMATIONAL_KEYS = ("notices", "plan_id")
+
+
+def plan_identity(value):
+    """The plan_id field, present only when the plan carries one (journal, receipt and plan share this shape)."""
+    return {'plan_id': value['plan_id']} if value.get('plan_id') else {}
+
+
 def validate_plan(engine, plan):
     if plan.get('schema_version') != 1 or not isinstance(plan.get('request'), dict):
         raise ValueError('invalid plan schema')
@@ -965,7 +974,7 @@ def validate_plan(engine, plan):
     plan_id = plan.get('plan_id')
     if plan_id is not None and not (isinstance(plan_id, str) and re.fullmatch('[0-9a-f]{32}', plan_id)):
         raise ValueError('invalid plan identifier')
-    informational = lambda value: {key: item for key, item in value.items() if key not in ('notices', 'plan_id')}
+    informational = lambda value: {key: item for key, item in value.items() if key not in INFORMATIONAL_KEYS}
     if informational(fresh) != informational(plan):  # A hook edit after planning never invalidates it.
         raise Conflict('plan changed or source/installation preimages changed; create a new plan')
     if plan.get('status') == 'conflict':
@@ -1021,8 +1030,8 @@ def already_applied(plan):
         ordered = journals(plan['state_root'], bound=True)
         for index in range(len(ordered) - 1, -1, -1):
             _, status, path = ordered[index]
-            if (status == 'complete' and json.loads(path.read_bytes()).get('plan_id') == plan_id and
-                    json.loads(path.with_name('receipt.json').read_bytes()).get('operations_sha256') == wanted):
+            receipt = json.loads(path.with_name('receipt.json').read_bytes()) if status == 'complete' else {}
+            if receipt.get('plan_id') == plan_id and receipt.get('operations_sha256') == wanted:
                 return path, any(later in ('applying', 'complete') for _, later, _ in ordered[index + 1:])
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         pass
@@ -1074,11 +1083,10 @@ def apply_plan(engine, plan, fail_after=None, fail_after_rename=None):
         journal = {'schema_version': 1, 'transaction': transaction, 'status': 'applying',
                    'roots': plan['roots'], 'state_root': plan['state_root'],
                    'operations': plan['operations'], 'completed': 0, 'pending': None,
-                   'scope': plan['request']['scope'], 'sequence': sequence,
-                   **({'plan_id': plan['plan_id']} if plan.get('plan_id') else {})}
+                   'scope': plan['request']['scope'], 'sequence': sequence, **plan_identity(plan)}
         receipt = {'roots': plan['roots'], 'state_root': plan['state_root'], 'sequence': sequence,
                    'scope': plan['request']['scope'], 'operations_sha256': digest(serialized(plan['operations'])),
-                   **({'plan_id': plan['plan_id']} if plan.get('plan_id') else {})}
+                   **plan_identity(plan)}
         atomic_node(journal_path.with_name('receipt.json'), file_node(serialized(receipt), 0o600))
         atomic_node(journal_path, file_node(serialized(journal), 0o600))
         try:
@@ -1164,7 +1172,7 @@ def rollback(journal_path):
     receipt = json.loads(node_bytes(receipt_node))
     expected_receipt = {'roots': journal['roots'], 'state_root': journal['state_root'],
                         'scope': journal['scope'], 'operations_sha256': digest(serialized(journal['operations'])),
-                        **({'plan_id': journal['plan_id']} if 'plan_id' in journal else {}),
+                        **plan_identity(journal),
                         **({'sequence': sequence} if 'sequence' in journal else {})}
     if receipt != expected_receipt:
         raise Conflict('transaction journal changed from its recovery receipt')
