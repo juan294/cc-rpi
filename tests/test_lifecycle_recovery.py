@@ -457,6 +457,42 @@ class RecoveryGuidanceTests(unittest.TestCase):
         check = self.invoke('check', '--source', self.source, '--target', self.project)
         self.assertEqual(check.returncode, 2, 'check reports the drift the apply message does not claim is absent')
 
+    def test_the_printed_line_carries_the_restore_script_once_however_many_paths_are_blocked(self):
+        self.apply_ready()
+        for name in ('references/playbook.md', 'references/nested/detail.md', 'scripts/validate.py'):
+            self.write(self.source, 'templates/skills/rpi-plan/' + name, 'Upstream change to ' + name + '.\n')
+        before = self.snapshot()
+        plan, path = self.plan('update')
+        paths = [op['destination'] for op in plan['operations'] if op['root_id'] == 'project']
+        self.assertGreaterEqual(len(paths), 6, paths)
+        self.assertEqual(self.invoke('apply', '--plan', path, '--fail-after', str(len(paths))).returncode, 2)
+        journal = self.journals('applying')[-1]
+        lengths = {}
+        for count in (1, len(paths)):
+            for destination in paths[:count]:
+                (self.project / destination).write_bytes(b'Owner edit of ' + destination.encode() + b'\n')
+            lengths[count] = len(self.refused(journal))
+        fix = self.refused(journal)
+        self.assertEqual(fix.count('import base64'), 1, 'the script is not repeated per path')
+        self.assertLess((lengths[len(paths)] - lengths[1]) / (len(paths) - 1), 700, 'only arguments are added per path')
+        followed = self.follow(fix)
+        self.assertEqual(followed.returncode, 0, followed.stdout + followed.stderr)
+        self.assertEqual(self.snapshot(), before)
+        for destination in paths:
+            saved = self.saved_edits(destination)
+            self.assertEqual([entry.read_bytes() for entry in saved], [b'Owner edit of ' + destination.encode() + b'\n'])
+
+    def test_a_failure_on_one_path_stops_the_line_before_the_rollback(self):
+        before, destination, journal, target = self.blocked_update()
+        self.owner_edit(target)
+        fix = self.refused(journal)
+        line = fix.split('; run: ', 1)[1]
+        failing = line.replace(shlex.quote(str(journal)), shlex.quote(str(self.workspace / 'missing-journal.json')), 1)
+        self.assertNotEqual(failing, line)
+        result = subprocess.run(failing, shell=True, capture_output=True, text=True, cwd=self.workspace)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(json.loads(journal.read_text())['status'], 'applying', 'the && chain stopped before the rollback')
+
     def test_every_edited_file_is_named_not_only_the_first(self):
         self.apply_ready()
         self.write(self.source, 'templates/skills/rpi-plan/references/playbook.md', 'Upstream planning change.\n')
