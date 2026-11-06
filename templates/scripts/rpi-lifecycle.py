@@ -961,6 +961,10 @@ def validate_plan(engine, plan):
         operation_path(plan, operation)
 
 
+LOCK_BUSY = ('installation actively locked; wait for the other lifecycle operation to finish, then run check and '
+             'create a new plan if one is still needed')
+
+
 def acquire_lock(state):
     try:
         import fcntl
@@ -978,7 +982,7 @@ def acquire_lock(state):
         try:
             fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as error:
-            raise Conflict('installation actively locked; wait for the other lifecycle operation, then retry') from error
+            raise Conflict(LOCK_BUSY) from error
         current = os.stat(path, follow_symlinks=False)
         if (current.st_dev, current.st_ino) != (node.st_dev, node.st_ino) or current.st_nlink != 1 or current.st_size:
             raise Conflict('installation lock changed during acquisition; preserve state and inspect concurrent writers')
@@ -990,11 +994,51 @@ def acquire_lock(state):
         raise
 
 
+def already_applied(plan):
+    """(journal path, newer work followed) when a completed journal recorded exactly this plan's operations."""
+    try:
+        if not plan.get('operations'):
+            return None
+        wanted = digest(serialized(plan['operations']))
+        ordered = journals(plan['state_root'], bound=True)
+        for index in range(len(ordered) - 1, -1, -1):
+            _, status, path = ordered[index]
+            if status == 'complete' and json.loads(path.with_name('receipt.json').read_bytes()).get('operations_sha256') == wanted:
+                return path, any(later in ('applying', 'complete') for _, later, _ in ordered[index + 1:])
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        pass
+    return None
+
+
+def validate_unapplied_plan(engine, plan):
+    """validate_plan, but a plan the installation already recorded says so instead of 'create a new plan'."""
+    try:
+        validate_plan(engine, plan)
+    except Conflict as error:
+        applied = already_applied(plan) if str(error).startswith('plan changed') else None
+        if applied is None:
+            raise
+        journal, followed = applied
+        reason = ('this plan was already applied by transaction journal ' + str(journal) + ' (status complete); ' +
+                  ('later transactions have since changed the installation' if followed else 'nothing needs doing'))
+        conflict = Conflict(reason)
+        conflict.fix = ('no action is needed for this plan; to see the installation state run ' +
+                        replan_command(plan['request'], [], None, 'check') +
+                        ', and create a new plan only if it reports action-needed')
+        raise conflict from error
+
+
 def apply_plan(engine, plan, fail_after=None, fail_after_rename=None):
-    validate_plan(engine, plan)
+    validate_unapplied_plan(engine, plan)
     if plan['status'] == 'noop':
         return {'status': 'noop'}
-    lock = acquire_lock(plan['state_root'])
+    try:
+        lock = acquire_lock(plan['state_root'])
+    except Conflict as error:
+        if str(error) == LOCK_BUSY:
+            error.fix = ('wait for the other lifecycle operation to finish, then run ' + replan_command(plan['request'], [], None, 'check') +
+                         '; create a new plan only if it reports action-needed')
+        raise
     try:
         validate_plan(engine, plan)
         binding_path = bound_path(plan['state_root'], 'local/root-binding.json')
@@ -1131,28 +1175,66 @@ def rollback(journal_path):
             error.fix = ('keep this journal; undo newer transactions first, newest first, starting with ' +
                          engine_command('rollback', '--journal', newer[-1]))
             raise error
-        completed = journal['operations'][:journal['completed']]
+        completed = list(enumerate(journal['operations'][:journal['completed']]))
         if journal.get('pending') is not None:
             pending = journal['operations'][journal['pending']]
             actual = snapshot(operation_path(journal, pending))
             if actual == pending['after']:
-                completed.append(pending)
+                completed.append((journal['pending'], pending))
             elif actual != pending['before']:
-                raise Conflict('interrupted operation has a newer unrecognized preimage')
-        for operation in completed:
-            if snapshot(operation_path(journal, operation)) not in (operation['before'], operation['after']):
-                raise Conflict('postimage changed; rollback would overwrite newer work: ' + operation['destination'])
-        for operation in reversed(completed):
+                raise newer_work_conflict(journal, journal_path, [(journal['pending'], pending)],
+                                          'interrupted operation has a newer unrecognized preimage: ' + pending['destination'])
+        newer_work = [(index, operation) for index, operation in completed
+                      if snapshot(operation_path(journal, operation)) not in (operation['before'], operation['after'])]
+        if newer_work:
+            raise newer_work_conflict(journal, journal_path, newer_work, 'postimage changed; rollback would overwrite newer work: ' +
+                                      ', '.join(operation['destination'] for _, operation in newer_work))
+        for index, operation in reversed(completed):
             if snapshot(operation_path(journal, operation)) == operation['before']:
                 continue
             if snapshot(operation_path(journal, operation)) != operation['after']:
-                raise Conflict('postimage changed during rollback: ' + operation['destination'])
+                raise newer_work_conflict(journal, journal_path, [(index, operation)],
+                                          'postimage changed during rollback: ' + operation['destination'])
             atomic_node(operation_path(journal, operation), operation['before'])
         journal['status'] = 'rolled-back'
         atomic_node(journal_path, file_node(serialized(journal), 0o600))
         return {'status': 'rolled-back'}
     finally:
         os.close(lock)
+
+
+RESTORE_PREIMAGE = ("import base64, json, sys; node = json.load(open(sys.argv[1]))['operations'][int(sys.argv[2])]['before']; "
+                    "open(sys.argv[3], 'wb').write(base64.b64decode(node['data']))")
+
+
+def newer_work_conflict(journal, journal_path, blocked, reason):
+    """A rollback refused because an owner changed files after the transaction wrote them.
+
+    The fix is one runnable command line: it saves each edited file under the
+    installation's ignored local state (never overwriting a saved copy), puts the
+    file back to the content the journal recorded before the transaction, and
+    re-runs the rollback. Nothing is written by the refusal itself."""
+    saved = Path(journal['state_root']) / 'local/saved-edits' / journal['transaction'] / time.strftime('%Y%m%d-%H%M%S')
+    steps = []
+    for index, operation in blocked:
+        live = operation_path(journal, operation)
+        copy = saved / operation['root_id'] / operation['destination']
+        keep = ['mkdir', '-p', '--', str(copy.parent)]
+        before = operation['before']
+        if before['kind'] == 'file':
+            steps += [shlex.join(keep), '{ test -e ' + shlex.quote(str(copy)) + ' || ' + shlex.join(['cp', '-p', '--', str(live), str(copy)]) + '; }',
+                      shlex.join([sys.executable, '-c', RESTORE_PREIMAGE, str(journal_path), str(index), str(live)]),
+                      shlex.join(['chmod', format(before['mode'], 'o'), str(live)])]
+        else:  # The transaction created this path (or replaced a symlink): setting the edit aside restores it.
+            steps += [shlex.join(keep), '{ test -e ' + shlex.quote(str(copy)) + ' || ' + shlex.join(['mv', '--', str(live), str(copy)]) + '; }']
+            if before['kind'] == 'symlink':
+                steps.append(shlex.join(['ln', '-s', '--', before['target'], str(live)]))
+    names = ', '.join(operation['destination'] for _, operation in blocked)
+    error = Conflict(reason)
+    error.fix = ('your newer edit of ' + names + ' would be overwritten and nothing was changed; the command line after "run: " keeps the edit under ' +
+                 str(saved) + ', restores the installed content so the rollback can proceed, then re-runs it; run: ' +
+                 ' && '.join(steps + [engine_command('rollback', '--journal', journal_path)]))
+    return error
 
 
 def compact(value):
@@ -1244,11 +1326,15 @@ def interrupted_recovery(state_root):
     return [path for status, path in ordered if status == 'applying'], lead + chain + ', then create a new plan'
 
 
-def replan_command(request, flags, output):
-    """The same explicit plan request with the named capability flags and a new output."""
+def replan_command(request, flags, output, command='plan'):
+    """The same explicit plan request with the named capability flags and a new output.
+
+    `command='check'` names the read-only check of that request instead (no action, no output)."""
     harnesses = request['harnesses']
-    parts = ['plan', '--source', request['source'], '--target', request['target'],
-             '--harness', harnesses[0] if len(harnesses) == 1 else 'both', '--action', request['action']]
+    parts = [command, '--source', request['source'], '--target', request['target'],
+             '--harness', harnesses[0] if len(harnesses) == 1 else 'both']
+    if command == 'plan':
+        parts += ['--action', request['action']]
     if request.get('route'):
         parts += ['--route', request['route']]
     for domain in request.get('domains') or []:
@@ -1262,7 +1348,7 @@ def replan_command(request, flags, output):
         parts += ['--legacy-base', request['legacy_base']]
     for flag in flags:
         parts += ['--allow-capabilities', flag]
-    return engine_command(*parts, '--output', output)
+    return engine_command(*parts, *(['--output', output] if command == 'plan' else []))
 
 
 def conflict_fix(request, conflicts, saved, output):
@@ -1289,6 +1375,39 @@ def journal_fix(args):
         return 'undo the most recent transaction with ' + engine_command('rollback', '--journal', candidates[-1])
     return ('pass the journal.json path printed by the interrupted apply; transactions are recorded as ' +
             str(state / 'local/transactions') + '/<transaction>/journal.json (none found there)')
+
+
+def recorded_detached(request):
+    """The installation manifest when it records a detach (route detached), else None."""
+    try:
+        recorded = load_state(request_roots(request)[1])
+    except (Conflict, OSError, TypeError, ValueError):
+        return None
+    return recorded if recorded and recorded.get('route') == 'detached' else None
+
+
+def detached_check(request, recorded):
+    """check of a project whose manifest records a detach.
+
+    A completed detach leaves owner files and baselines and no installed harness: that
+    is the requested end state, not drift. A manifest that says detached but still lists
+    owned entries or installations is a half-finished detach and stays action-needed."""
+    stamp = time.strftime('%Y%m%d-%H%M%S')
+    plans = Path(request_roots(request)[1]) / 'local/plans'
+    result = {'schema_version': 1, 'request': request, 'operations': [], 'conflicts': [], 'retained': []}
+    leftovers = len(recorded.get('entries') or []) + len(recorded.get('installations') or {})
+    if leftovers:
+        output = plans / ('detach-' + stamp + '.json')
+        return {**result, 'status': 'action-needed',
+                'conflicts': [{'destination': '', 'reason': 'the manifest records route detached but still lists ' + str(leftovers) +
+                               ' owned entries or installations; a detach was left half finished'}],
+                'detach_fix': ('finish the detach: create the plan with ' + replan_command({**request, 'action': 'detach'}, [], output) +
+                               ', review it, then apply it with ' + engine_command('apply', '--plan', output))}
+    output = plans / ('install-' + stamp + '.json')
+    return {**result, 'status': 'detached',
+            'note': ('this project was detached from cc-rpi: no harness is installed and nothing is owed. Owner content that detach '
+                     'retained and the portable baselines under .rpi/baselines remain. To install again, create a reviewable plan with ' +
+                     replan_command({**request, 'action': 'install'}, [], output) + ', review it, then apply it; retained owner files that differ from the template appear in that plan as conflicts to reconcile')}
 
 
 def recorded_harness(args):
@@ -1413,7 +1532,8 @@ def cli(engine, args):
                    'claude_skill_root': str(args.claude_skill_root.absolute()) if args.claude_skill_root else None,
                    'codex_skill_root': str(args.codex_skill_root.absolute()) if args.codex_skill_root else None}
         try:
-            result = make_plan(engine, request)
+            recorded = recorded_detached(request) if args.command == 'check' else None
+            result = detached_check(request, recorded) if recorded else make_plan(engine, request)
         except UsageError as error:
             if error.drop:
                 error.fix += '; rerun ' + rerun(drop=error.drop)
@@ -1447,7 +1567,8 @@ def cli(engine, args):
         else:
             if result['status'] == 'ready' and status_bookkeeping_only(result):
                 result['status'], result['operations'] = 'noop', []  # Retained customization is healthy.
-            result['status'] = 'healthy' if result['status'] == 'noop' else 'action-needed'
+            if result['status'] != 'detached':
+                result['status'] = 'healthy' if result['status'] == 'noop' else 'action-needed'
         try:
             state_root = request_roots(request)[1]
             interrupted, recovery = interrupted_recovery(state_root)
@@ -1455,9 +1576,12 @@ def cli(engine, args):
             state_root, interrupted, recovery = None, [], None
         if interrupted:
             result['interrupted_transactions'] = [str(path) for path in interrupted]
-            if result['status'] == 'healthy':
+            if result['status'] in ('healthy', 'detached'):
                 result['status'] = 'action-needed'
+                result.pop('note', None)
             pending_fix = recovery
+        elif result.get('detach_fix'):
+            pending_fix = result.pop('detach_fix')
         if pending_fix is None and state_root:
             stamp = time.strftime('%Y%m%d-%H%M%S')
             output = (saved.with_name(saved.stem + '-' + stamp + saved.suffix) if saved else
