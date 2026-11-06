@@ -292,10 +292,27 @@ def environment_config(assigned):
     return pairs
 
 
-def git_command(args, cwd, depth=0, assigned=None):
+# Alias expansions and nested shells followed before the command is left to native permissions.
+MAX_NESTING = 100
+_BUILTINS = None
+
+
+def git_builtins(cwd):
+    """The builtin command names, listed by git once per process (a static list is the fallback)."""
+    global _BUILTINS
+    if _BUILTINS is None:
+        listed = git(cwd or '.', '--list-cmds=builtins')
+        _BUILTINS = set(listed.split()) if listed else set()
+    return _BUILTINS
+
+
+def git_command(args, cwd, depth=0, assigned=None, inherited=None):
     """A git invocation: -C, -c, --config-env and inline GIT_CONFIG_* are applied, a command-line alias is
     expanded, and push is evaluated. Variables exported by an earlier command are not known."""
-    args, overrides, assigned = list(args), {}, assigned or {}
+    args, assigned = list(args), assigned or {}
+    # A shell alias runs a child git that inherits this command line's -c settings, as git passes them on.
+    overrides = {key: list(values) for key, values in inherited[0].items()} if inherited else {}
+    seen = set(inherited[1]) if inherited else set()
     try:
         for name, value in environment_config(assigned):
             overrides.setdefault(config_key(name), []).append(value)
@@ -319,27 +336,25 @@ def git_command(args, cwd, depth=0, assigned=None):
         return cwd
 
     cwd = global_options(args, cwd)
-    builtins = None
-    for _ in range(5):  # Aliases given with git -c; aliases in configuration files are not read.
-        alias = overrides.get(config_key('alias.' + args[0]), [None])[-1] if args else None
-        if alias is None:
-            break
-        if args[0] in GIT_BUILTINS:
-            break  # Git ignores an alias named like a builtin.
-        if builtins is None:
-            listed = git(cwd or '.', '--list-cmds=builtins')
-            builtins = set(listed.split()) if listed else set()
-        if args[0] in builtins:
-            break
+    for _ in range(MAX_NESTING):  # Aliases given with git -c; aliases in configuration files are not read.
+        name = args[0] if args else None
+        alias = overrides.get(config_key('alias.' + name), [None])[-1] if name else None
+        if alias is None or name in GIT_BUILTINS or name in git_builtins(cwd):
+            break  # No alias, or one named like a builtin, which Git ignores.
+        if name in seen:
+            return  # An alias loop: Git rejects it, and it is not a push.
+        seen.add(name)
         if alias.startswith('!'):
-            if depth < 5:
-                inspect_command(alias[1:] + ' ' + ' '.join(shlex.quote(arg) for arg in args[1:]), cwd, depth + 1)
+            inspect_command(alias[1:] + ' ' + ' '.join(shlex.quote(arg) for arg in args[1:]), cwd, depth + 1,
+                            (overrides, frozenset(seen)))
             return
         try:
             args = shlex.split(alias) + args[1:]
         except ValueError:
             return
         cwd = global_options(args, cwd)  # An alias may begin with global options such as -c or -p.
+    else:
+        return  # More than MAX_NESTING expansions: unclassifiable, so it passes to native permissions.
     if args[:1] == ['push']:
         push(args[1:], cwd, overrides)
 
@@ -412,18 +427,33 @@ def api_methods(args):
 
 
 def api_path(arg):
-    """The endpoint path of a gh api operand: query, fragment and percent-encoding removed."""
+    """The endpoint path of a gh api operand, normalised: query and fragment removed, percent-decoded,
+    repeated slashes collapsed and . and .. segments resolved. A host prefix is peeled off first."""
+    import posixpath
     from urllib.parse import unquote
-    return unquote(re.split(r'[?#]', arg, 1)[0])
+    path = unquote(re.split(r'[?#]', arg, maxsplit=1)[0])
+    host = re.match(r'https?://[^/]+', path)
+    path = path[host.end():] if host else path
+    return posixpath.normpath(re.sub(r'/+', '/', path)) if path else path
+
+
+def api_path_raw(arg):
+    """The decoded operand before normalisation, for recognising a ref path that normalisation resolved away."""
+    from urllib.parse import unquote
+    return unquote(re.split(r'[?#]', arg, maxsplit=1)[0])
 
 
 def api_delete(args, cwd):
     """Block API deletion of a repository or a protected branch ref."""
     if not any(method.upper() == 'DELETE' for method in api_methods(args)):
         return
-    prefix = r'(?:https?://[^/]+)?/?(?:api/v3/)?repos/[^/]+/[^/]+'
+    prefix = r'/?(?:api/v3/)?repos/[^/]+/[^/]+'
     for arg in args:
         path = api_path(arg)
+        if '..' in path.split('/') and 'refs/heads' in api_path_raw(arg):
+            fail('This API path climbs out of its endpoint, so a protected branch deletion cannot be ruled out.',
+                 'Use the plain endpoint, for example repos/OWNER/REPO/git/refs/heads/BRANCH, and delete only working branches.',
+                 'protected-branch')
         if re.fullmatch(prefix + r'/?', path):
             fail('Deleting a repository is irreversible.',
                  'The owner runs the exact deletion after confirming the target.', 'destructive-remote')
@@ -607,17 +637,17 @@ def unwrap(words, assigned=None):
             words = words[1:]  # The duration operand.
 
 
-def inspect_command(command, cwd, depth=0):
+def inspect_command(command, cwd, depth=0, inherited=None):
     # Substitution bodies are part of the raw text, so no policy word anywhere
     # means nothing below can match.
-    if depth > 5 or not POLICY_WORD.search(command):
+    if depth > MAX_NESTING or not POLICY_WORD.search(command):
         return
     try:
         tokens, embedded = tokenize(command)
     except Unclassifiable:
         return
     for inner in embedded:
-        inspect_command(inner, cwd, depth + 1)
+        inspect_command(inner, cwd, depth + 1, inherited)
     segments, current = [], []
     for kind, token in tokens:
         if kind == 'operator':
@@ -639,10 +669,10 @@ def inspect_command(command, cwd, depth=0):
         if name in SHELLS:
             script = shell_script(args)
             if script is not None:
-                inspect_command(script, cwd, depth + 1)
+                inspect_command(script, cwd, depth + 1, inherited)
             continue
         if name == 'eval':
-            inspect_command(' '.join(args), cwd, depth + 1)
+            inspect_command(' '.join(args), cwd, depth + 1, inherited)
             continue
         if name in ('npx', 'pnpm', 'npm', 'yarn', 'bunx'):
             args = args[skip_options(args, NPX_VALUE_OPTIONS.__contains__):]
@@ -658,7 +688,7 @@ def inspect_command(command, cwd, depth=0):
             continue
         try:
             if name == 'git':
-                git_command(args, cwd, depth, assigned)
+                git_command(args, cwd, depth, assigned, inherited)
             elif name in ('vercel', 'vc'):
                 deployment(args)
             elif name == 'gh':

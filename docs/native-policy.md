@@ -48,7 +48,10 @@ with literal arguments, redirections such as `2>&1`, `git -C`, literal `cd`/`pus
 and loop bodies are inspected for the blocked forms above. `git -c` is applied
 for exactly three kinds of setting on the same command line: `alias.<name>` (a
 plain alias expands to its command and the expansion is read again, so an alias
-that begins with global options such as `-c`, `-C` or `-p` is handled; a `!` alias is inspected as shell text; an
+that begins with global options such as `-c`, `-C` or `-p` is handled, and chains of aliases are followed until
+none matches, with a loop treated as not a push; a `!` alias is inspected as shell text and passes its `-c`
+settings on to the git commands in it, as Git does to child processes, so chains of shell aliases are followed
+too; the chain and the nesting are capped at 100, beyond which the command is unclassifiable and passes; an
 alias named like a Git builtin such as `push` or `status` is ignored, as Git
 ignores it, using `git --list-cmds=builtins` and a static list as fallback),
 `remote.<name>.push` (added to the configured push specs) and `push.default` /
@@ -60,8 +63,9 @@ is assigned inline in that command. `gh api` DELETE is recognised as
 `-X DELETE`, `-XDELETE`, `-X=DELETE`, `--method DELETE` and `--method=DELETE` in any case, and with `-X`
 inside a cluster of `gh api`'s boolean `-i` flag (`-iX DELETE`, `-iXDELETE`). The endpoint may be a
 relative or absolute path or an `https://HOST/` or `https://HOST/api/v3/` URL; a query string or
-fragment is ignored and percent-encoding (`heads%2Fmain`) and a trailing slash are normalised before the
-repository and branch-ref patterns are matched. After `cd "$DIR"` or `popd` the
+fragment is ignored and percent-encoding (`heads%2Fmain`), repeated slashes, `.` and `..` segments
+and a trailing slash are normalised before the repository and branch-ref patterns are matched; a path
+under `refs/heads` that still climbs out with `..` after normalisation is blocked as unclassifiable. After `cd "$DIR"` or `popd` the
 repository is unknown, so only the default protected branches apply. Each command
 segment is evaluated on its own: a segment the policy cannot evaluate prints
 `POLICY UNAVAILABLE` and never hides a later destructive segment.
@@ -70,7 +74,7 @@ here-document bodies are text.
 
 Anything the parser cannot read, including unterminated quotes, unknown wrappers,
 package scripts, Git aliases defined in configuration files (only `git -c`
-aliases are read) and deeply nested shells, passes to native permissions.
+aliases are read), a chain of more than 100 alias expansions and shells or shell aliases nested more than 100 levels deep, passes to native permissions.
 These forms are known to be unclassifiable and are not blocked, even when they
 rewrite a protected branch: arguments supplied at run time, such as
 `echo main | xargs git push -f origin`; scripts piped or fed to a shell, such as

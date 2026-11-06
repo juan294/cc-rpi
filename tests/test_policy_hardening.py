@@ -91,6 +91,25 @@ class ShellAndApiSpellingTests(test_policy.PolicyFixture):
             with self.subTest(command=command):
                 self.assert_allowed(command)
 
+    def test_api_delete_paths_are_normalised_before_matching(self):
+        for command in ('gh api -X DELETE repos/o/r/git/refs/heads//main', 'gh api -X DELETE repos/o/r/git/refs/heads/./main',
+                        'gh api -X DELETE repos/o/r/git/refs/heads/x/../main', 'gh api -X DELETE //repos/o/r/git/refs/heads/main',
+                        'gh api -X DELETE https://api.github.com//repos/o/r/git/refs/heads/main',
+                        'gh api -X DELETE https://api.github.com/repos//o/r/git/refs/heads/main',
+                        'gh api -X DELETE repos/o/r/git/refs/heads/x/%2e%2e/main',
+                        'gh api -X DELETE repos/o/r/git/refs/heads/x/%2E%2E%2Fmain',
+                        'gh api -X DELETE repos/o/r/git/refs/heads/../../../../../../../../x',
+                        'gh api -X DELETE repos/o/r/./git/refs/heads/main'):
+            with self.subTest(command=command):
+                self.assert_blocked(command, 'protected branch')
+        self.assert_blocked('gh api -X DELETE repos/o/r/git/refs/heads/../../..', 'irreversible')
+        self.assert_blocked('gh api -X DELETE repos//o/r', 'irreversible')
+        for command in ('gh api -X DELETE repos/o/r/git/refs/heads/feature', 'gh api repos/o/r/pulls',
+                        'gh api -X GET repos/o/r/git/refs/heads//main', 'gh api -X DELETE repos/o/r/git/refs/heads/x/../feature',
+                        'gh api -X DELETE repos/o/r/issues/comments/../comments/1'):
+            with self.subTest(command=command):
+                self.assert_allowed(command)
+
     def test_a_shell_without_c_does_not_inspect_its_first_word_as_a_script(self):
         self.assert_allowed("bash -e 'git push -f origin main'")  # A script file name, not a -c command.
         self.assert_allowed("bash -c 'git status'")
@@ -124,6 +143,49 @@ class GitCommandLineConfigTests(test_policy.PolicyFixture):
                         "git -c alias.p=status p -f", "git -c alias.p='!git push origin main' p", "git -c alias.p=push p origin main"):
             with self.subTest(command=command):
                 self.assert_allowed(command)
+
+    @staticmethod
+    def chain(length, tail, *, bang=False, first='a1'):
+        """-c options for a chain a1 -> a2 -> ... -> aN, whose last alias runs `tail` (a git command line)."""
+        links = ["-c 'alias.a%d=%sa%d'" % (number, '!git ' if bang else '', number + 1) for number in range(1, length)]
+        links.append("-c 'alias.a%d=%s'" % (length, ('!git ' if bang else '') + tail))
+        return ' '.join(links), first
+
+    def test_alias_chains_of_any_realistic_length_are_followed(self):
+        for length in (6, 10, 50):
+            options, first = self.chain(length, 'push -f origin main')
+            with self.subTest(length=length, form='plain'):
+                self.assert_blocked('git %s %s' % (options, first), 'protected branch')
+            options, first = self.chain(length, 'push -f origin main', bang=True)
+            with self.subTest(length=length, form='shell'):
+                self.assert_blocked('git %s %s' % (options, first), 'protected branch')
+        for length in (6, 10, 50):
+            for bang in (False, True):
+                options, first = self.chain(length, 'push -f origin feature/work', bang=bang)
+                with self.subTest(length=length, bang=bang, allowed=True):
+                    self.assert_allowed('git %s %s' % (options, first))
+
+    def test_alias_cycles_terminate_and_are_not_pushes(self):
+        for command in ("git -c alias.a=b -c alias.b=a a", "git -c alias.a=b -c alias.b=a status",
+                        "git -c alias.a='!git b' -c alias.b='!git a' a", "git -c alias.a=a a -f origin main",
+                        "git -c alias.a='!git a' a"):
+            with self.subTest(command=command):
+                self.assert_allowed(command)
+
+    def test_a_chain_beyond_the_hard_cap_is_unclassifiable_and_passes(self):
+        options, first = self.chain(150, 'push -f origin main')
+        self.assert_allowed('git %s %s' % (options, first))
+
+    def test_environment_forms_follow_chains_the_same_way(self):
+        pairs = ['GIT_CONFIG_KEY_%d=alias.a%d GIT_CONFIG_VALUE_%d=%s' % (number, number + 1, number, 'a%d' % (number + 2) if number < 7 else 'push')
+                 for number in range(0, 8)]
+        env = 'GIT_CONFIG_COUNT=8 ' + ' '.join(pairs)
+        self.assert_blocked(env + ' git a1 -f origin main', 'protected branch')
+        self.assert_allowed(env + ' git a1 -f origin feature/work')
+        variables = ' '.join('V%d=a%d' % (number, number + 1) for number in range(1, 7)) + ' V7=push'
+        options = ' '.join('--config-env=alias.a%d=V%d' % (number, number) for number in range(1, 8))
+        self.assert_blocked('%s git %s a1 -f origin main' % (variables, options), 'protected branch')
+        self.assert_allowed('%s git %s a1 -f origin feature/work' % (variables, options))
 
     def test_an_alias_value_that_starts_with_global_options_is_re_stripped(self):
         for command in ("git -c 'alias.p=-c a.b=c push' p -f origin main", "git -c 'alias.p=-p push' p -f origin main",
