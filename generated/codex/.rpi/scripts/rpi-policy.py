@@ -21,6 +21,7 @@ if sys.version_info < (3, 11):
 import json  # noqa: E402
 from pathlib import Path  # noqa: E402
 import re  # noqa: E402
+import shlex  # noqa: E402
 
 POLICY_WORD = re.compile(r'\b(?:git|gh|vercel|vc)\b')
 SHELL_KEYWORDS = {'{', '}', '!', 'if', 'then', 'else', 'elif', 'do', 'while', 'until'}
@@ -183,17 +184,32 @@ def parse_refspec(spec, force, delete):
     return source or None, destination, forced, delete or not source
 
 
-def configured_targets(root, remote, current, force, delete):
-    """Destinations Git derives from configuration when a push names no refspec."""
+def config_key(key):
+    """Git config key with a case-insensitive section and variable and a case-sensitive subsection."""
+    parts = key.split('.')
+    return '.'.join([parts[0].lower(), *parts[1:-1], parts[-1].lower()]) if len(parts) > 1 else key
+
+
+def configured_targets(root, remote, current, force, delete, overrides=None):
+    """Destinations Git derives from configuration when a push names no refspec.
+
+    `overrides` are the git -c settings of this command line: they append to a multi-valued
+    remote.<name>.push and replace a single-valued setting."""
+    overrides = overrides or {}
+
+    def setting(key, default=None):
+        return overrides[key][-1] if key in overrides else git(root, 'config', '--get', key) or default
+
     if root is None or current is None:
         return [(current, current, force, delete)]
-    remote = remote or git(root, 'config', '--get', 'branch.' + current + '.remote') or 'origin'
-    specs = (git(root, 'config', '--get-all', 'remote.' + remote + '.push') or '').splitlines()
+    remote = remote or setting('branch.' + current + '.remote') or 'origin'
+    key = config_key('remote.' + remote + '.push')
+    specs = (git(root, 'config', '--get-all', key) or '').splitlines() + overrides.get(key, [])
     if specs:
         return [parse_refspec(spec, force, delete) for spec in specs]
-    mode = git(root, 'config', '--get', 'push.default') or 'simple'
+    mode = setting('push.default', 'simple')
     if mode in ('upstream', 'tracking'):
-        merge = git(root, 'config', '--get', 'branch.' + current + '.merge')
+        merge = setting('branch.' + current + '.merge')
         if merge:
             return [(current, merge, force, delete)]
     if mode == 'matching':
@@ -201,7 +217,7 @@ def configured_targets(root, remote, current, force, delete):
     return [(current, current, force, delete)]
 
 
-def push(args, cwd):
+def push(args, cwd, overrides=None):
     force = delete = everything = broad = dry_run = False
     remote, values, index = None, [], 0
     while index < len(args):
@@ -241,7 +257,7 @@ def push(args, cwd):
     root = repository(cwd)
     current = git(root, 'symbolic-ref', '--quiet', '--short', 'HEAD') if root else None
     targets = ([parse_refspec(spec, force, delete) for spec in values] if values
-               else configured_targets(root, remote, current, force, delete))
+               else configured_targets(root, remote, current, force, delete, overrides))
     rewritten = [resolved_branch(destination, current) for _, destination, forced, removed in targets if forced or removed]
     if not rewritten:
         return
@@ -254,16 +270,32 @@ def push(args, cwd):
                  'protected-branch')
 
 
-def git_command(args, cwd):
-    args = list(args)
+def git_command(args, cwd, depth=0):
+    """A git invocation: -C and -c are applied, a command-line alias is expanded, and push is evaluated."""
+    args, overrides = list(args), {}
     while args and args[0].startswith('-'):
         option = args.pop(0)
         if option == '-C' and args or option.startswith('-C') and len(option) > 2:
             cwd = directory(cwd, args.pop(0) if option == '-C' else option[2:])
+        elif option == '-c' and args:
+            name, _, value = args.pop(0).partition('=')
+            overrides.setdefault(config_key(name), []).append(value)
         elif option in GIT_VALUE_OPTIONS and args:
             args.pop(0)
+    for _ in range(5):  # Aliases given with git -c; aliases in configuration files are not read.
+        alias = overrides.get(config_key('alias.' + args[0]), [None])[-1] if args else None
+        if alias is None:
+            break
+        if alias.startswith('!'):
+            if depth < 5:
+                inspect_command(alias[1:] + ' ' + ' '.join(shlex.quote(arg) for arg in args[1:]), cwd, depth + 1)
+            return
+        try:
+            args = shlex.split(alias) + args[1:]
+        except ValueError:
+            return
     if args[:1] == ['push']:
-        push(args[1:], cwd)
+        push(args[1:], cwd, overrides)
 
 
 def directory(cwd, target):
@@ -555,7 +587,7 @@ def inspect_command(command, cwd, depth=0):
             continue
         try:
             if name == 'git':
-                git_command(args, cwd)
+                git_command(args, cwd, depth)
             elif name in ('vercel', 'vc'):
                 deployment(args)
             elif name == 'gh':

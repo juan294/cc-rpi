@@ -70,6 +70,40 @@ class ShellAndApiSpellingTests(test_policy.PolicyFixture):
         self.assert_allowed('gh api -XDELETE repos/o/r/git/refs/heads/feature/old')
 
 
+class GitCommandLineConfigTests(test_policy.PolicyFixture):
+    """`git -c key=value` settings change what a push does, so they are evaluated, not skipped."""
+
+    def setUp(self):
+        super().setUp()
+        self.git('checkout', '-qb', 'feature/work')
+
+    def test_command_line_aliases_are_expanded(self):
+        for command in ("git -c alias.p=push p -f origin main", "git -c alias.p='push -f' p origin main",
+                        "git -c alias.p='push --force-with-lease origin' p main",
+                        "git -c alias.p='!git push -f origin main' p", "git -c alias.q=p -c alias.p=push q --force origin develop",
+                        "git -C . -c alias.p=push p -f origin main"):
+            with self.subTest(command=command):
+                self.assert_blocked(command, 'protected branch')
+        for command in ("git -c alias.p=push p origin feature/work", "git -c alias.p=push p -f origin feature/work",
+                        "git -c alias.p=status p -f", "git -c alias.p='!git push origin main' p", "git -c alias.p=push p origin main"):
+            with self.subTest(command=command):
+                self.assert_allowed(command)
+
+    def test_command_line_push_configuration_is_applied_to_unnamed_pushes(self):
+        for command in ("git -c push.default=matching push -f", "git -c push.default=matching push --force origin",
+                        "git -c remote.origin.push=+refs/heads/*:refs/heads/* push",
+                        "git -c remote.origin.push=+HEAD:main push", "git -c remote.origin.push=:main push",
+                        "git -c remote.origin.push=refs/heads/feature/work:main push -f",
+                        "git -c remote.origin.push=refs/heads/*:refs/heads/* push -f"):
+            with self.subTest(command=command):
+                self.assert_blocked(command, 'protected branch')
+        for command in ("git -c push.default=current push -f", "git -c push.default=matching push",
+                        "git -c remote.origin.push=+refs/heads/feature/work:refs/heads/feature/work push",
+                        "git -c user.name=x push -f", "git -c remote.other.push=+HEAD:main push -f origin"):
+            with self.subTest(command=command):
+                self.assert_allowed(command)
+
+
 class ReceiptGateAgreesWithPolicyHookTests(test_prepush.PrePushFixture):
     def test_prefixed_integration_branch_is_the_branch_the_gate_guards(self):
         self.policy(integration_branch='refs/heads/release', require_verification_receipt=True)

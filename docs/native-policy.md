@@ -20,10 +20,15 @@ and explicit skill invocation never prove consent, and the hook never grants it.
 
 Protected branches are `main`, `master` and `develop`, plus the project's
 `integration_branch` and `production_branches` from `.rpi/policy.json` when they
-are declared. Force-pushing or deleting a working branch is allowed, and so is
-any `--dry-run`/`-n` push. A push that names no refspec is resolved from Git's
+are declared, each written as a bare name or as `refs/heads/NAME` (both mean the
+same branch). Force-pushing or deleting a working branch is allowed. This hook
+also lets any `--dry-run`/`-n` push through; the optional receipt gate below does
+not (Git runs the pre-push hook for a dry run and does not tell it, so the gate
+evaluates a dry-run push of the integration branch or a version tag like a real
+one). A push that names no refspec is resolved from Git's
 configuration: `remote.<name>.push`, and `push.default` `upstream`, `matching`
-or the current branch.
+or the current branch, with the `git -c` settings of the same command line
+applied.
 
 Everything else passes through: ordinary `git push` of any branch or tag,
 `gh pr create/merge/update-branch`, `gh workflow run`, `gh run rerun`, other `gh api` calls,
@@ -35,10 +40,17 @@ user govern them. `git pull` is never blocked.
 
 Shell text is parsed and never executed. Chains, pipes, subshells, command and
 process substitutions, `bash`/`sh`/`zsh -c` (including forms such as `-ec`,
-`-e -c` and `-o pipefail -c`), `eval`, `env` (including `-S`)/`command`/`builtin`/
-`sudo`/`doas`/`timeout`/`nice`/`nohup`/`stdbuf`/`caffeinate`/`xargs` wrappers,
-redirections such as `2>&1`, `git -C`, `git -c`, literal `cd`/`pushd` and loop
-bodies are inspected for the blocked forms above. After `cd "$DIR"` or `popd` the
+`-e -c`, `-c -e` and `-o pipefail -c`; options before and after `-c` are skipped
+to the first non-option word, which is the script), `eval`, `env` (including `-S`)/`command`/`builtin`/
+`sudo`/`doas`/`timeout`/`nice`/`nohup`/`stdbuf`/`caffeinate`/`xargs` wrappers
+with literal arguments, redirections such as `2>&1`, `git -C`, literal `cd`/`pushd`
+and loop bodies are inspected for the blocked forms above. `git -c` is applied
+for exactly three kinds of setting on the same command line: `alias.<name>` (a
+plain alias expands to its command, a `!` alias is inspected as shell text),
+`remote.<name>.push` (added to the configured push specs) and `push.default` /
+`branch.<name>.remote` / `branch.<name>.merge` (which replace the repository
+value). Any other `-c` setting is ignored. `gh api` DELETE is recognised as
+`-X DELETE`, `-XDELETE`, `--method DELETE` and the `=` forms, in any case. After `cd "$DIR"` or `popd` the
 repository is unknown, so only the default protected branches apply. Each command
 segment is evaluated on its own: a segment the policy cannot evaluate prints
 `POLICY UNAVAILABLE` and never hides a later destructive segment.
@@ -46,8 +58,14 @@ Literal `echo`, `printf`, `cat`, `grep` and `rg` arguments and quoted `cat`/`tee
 here-document bodies are text.
 
 Anything the parser cannot read, including unterminated quotes, unknown wrappers,
-package scripts, Git aliases and deeply nested shells, passes to native
-permissions. A missing working directory or missing Git passes silently. The
+package scripts, Git aliases defined in configuration files (only `git -c`
+aliases are read) and deeply nested shells, passes to native permissions.
+These forms are known to be unclassifiable and are not blocked, even when they
+rewrite a protected branch: arguments supplied at run time, such as
+`echo main | xargs git push -f origin`; scripts piped or fed to a shell, such as
+`echo 'git push -f origin main' | bash` and `bash <<< '...'`; and commands run
+through `ssh host '...'` or `find . -exec git push -f origin main ';'`. A shell
+function or alias, and a Git alias from `.gitconfig`, are never expanded. A missing working directory or missing Git passes silently. The
 wrapper prefers `python3.14` through `python3.11` over an older default `python3`
 (macOS ships 3.9). With no supported runtime, or a missing policy script, it
 prints `RPI POLICY SKIPPED`. The opt-in receipt gate is a separate Git hook and
@@ -216,7 +234,11 @@ Other runtime differences name the changed keys, and a
 locale, timezone or Python settings difference prints the gate's current
 `LANG`, `LC_*`, `TZ` and `PYTHON*` values. The gate ignores the Git exec-path entry that Git
 prepends to `PATH` for hooks. It validates local evidence, not user
-authorization. `gh release create` and Vercel production deploys are not gated;
+authorization: `.rpi/local/verification.json` is an ordinary file in the working
+tree, so a receipt edited by hand is accepted whenever its candidate identity and
+runtime identity match the pushed commit and the environment. The gate guards
+against mistakes and stale evidence; it does not prove that the checks ran, and
+it is neither an approval nor a security boundary. `gh release create` and Vercel production deploys are not gated;
 push the verified tag first.
 
 Pushes where neither the checkout nor the pushed commit opts in (no key, or no

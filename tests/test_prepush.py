@@ -424,6 +424,19 @@ class InstalledHookTests(PrePushFixture):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(self.hook().read_text(), custom)
 
+    def test_dry_run_push_is_still_evaluated_by_the_gate(self):
+        # Git runs pre-push for --dry-run and does not tell the hook, so the gate cannot exempt it.
+        self.install()
+        self.git('branch', 'feature/work')
+        result = self.push('--dry-run', 'develop')
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('verification evidence is missing', result.stderr)
+        self.assertEqual(self.push('--dry-run', 'feature/work').returncode, 0)
+        self.assertIsNone(self.remote_ref('refs/heads/develop'))
+        self.evidence()
+        self.assertEqual(self.push('--dry-run', 'develop').returncode, 0)
+        self.assertIsNone(self.remote_ref('refs/heads/develop'), 'a dry run publishes nothing')
+
     def test_documented_command_is_the_tested_command(self):
         self.assertIn('```bash\n' + INSTALL + '```', DOCS.read_text())
 
