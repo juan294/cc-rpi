@@ -278,9 +278,29 @@ def push(args, cwd, overrides=None):
                  'protected-branch')
 
 
-def git_command(args, cwd, depth=0):
-    """A git invocation: -C and -c are applied, a command-line alias is expanded, and push is evaluated."""
-    args, overrides = list(args), {}
+def environment_config(assigned):
+    """(key, value) pairs Git reads from inline GIT_CONFIG_COUNT/KEY_n/VALUE_n and GIT_CONFIG_PARAMETERS."""
+    pairs = []
+    for item in shlex.split(assigned.get('GIT_CONFIG_PARAMETERS', '')):
+        name, _, value = item.partition('=')
+        pairs.append((name, value))
+    count = assigned.get('GIT_CONFIG_COUNT', '')
+    for number in range(int(count) if count.isdigit() and int(count) <= 100 else 0):
+        key = assigned.get('GIT_CONFIG_KEY_%d' % number)
+        if key is not None and ('GIT_CONFIG_VALUE_%d' % number) in assigned:
+            pairs.append((key, assigned['GIT_CONFIG_VALUE_%d' % number]))
+    return pairs
+
+
+def git_command(args, cwd, depth=0, assigned=None):
+    """A git invocation: -C, -c, --config-env and inline GIT_CONFIG_* are applied, a command-line alias is
+    expanded, and push is evaluated. Variables exported by an earlier command are not known."""
+    args, overrides, assigned = list(args), {}, assigned or {}
+    try:
+        for name, value in environment_config(assigned):
+            overrides.setdefault(config_key(name), []).append(value)
+    except ValueError:
+        pass  # Unreadable GIT_CONFIG_PARAMETERS pass to native permissions.
     while args and args[0].startswith('-'):
         option = args.pop(0)
         if option == '-C' and args or option.startswith('-C') and len(option) > 2:
@@ -288,6 +308,10 @@ def git_command(args, cwd, depth=0):
         elif option == '-c' and args:
             name, _, value = args.pop(0).partition('=')
             overrides.setdefault(config_key(name), []).append(value)
+        elif (option == '--config-env' and args) or option.startswith('--config-env='):
+            name, _, variable = (args.pop(0) if option == '--config-env' else option.split('=', 1)[1]).partition('=')
+            if variable in assigned:  # Only a variable assigned in this very command is known.
+                overrides.setdefault(config_key(name), []).append(assigned[variable])
         elif option in GIT_VALUE_OPTIONS and args:
             args.pop(0)
     builtins = None
@@ -536,10 +560,15 @@ def env_split(words):
     return words
 
 
-def unwrap(words):
-    """Strip shell keywords, assignments and common executable wrappers."""
+def unwrap(words, assigned=None):
+    """Strip shell keywords, assignments and common executable wrappers.
+
+    Inline assignments (`VAR=value cmd`, `env VAR=value cmd`) are recorded in `assigned`."""
     while True:
         while words and (words[0] in SHELL_KEYWORDS or ASSIGNMENT.fullmatch(words[0])):
+            if assigned is not None and ASSIGNMENT.fullmatch(words[0]):
+                name, _, value = words[0].partition('=')
+                assigned[name] = value
             words = words[1:]
         if not words or Path(words[0]).name not in WRAPPERS:
             return words
@@ -575,7 +604,8 @@ def inspect_command(command, cwd, depth=0):
     if current:
         segments.append(current)
     for words in segments:
-        words = unwrap(without_redirections(words))
+        assigned = {}
+        words = unwrap(without_redirections(words), assigned)
         if not words:
             continue
         name, args = Path(words[0]).name, words[1:]
@@ -603,7 +633,7 @@ def inspect_command(command, cwd, depth=0):
             continue
         try:
             if name == 'git':
-                git_command(args, cwd, depth)
+                git_command(args, cwd, depth, assigned)
             elif name in ('vercel', 'vc'):
                 deployment(args)
             elif name == 'gh':

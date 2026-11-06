@@ -52,7 +52,10 @@ alias named like a Git builtin such as `push` or `status` is ignored, as Git
 ignores it, using `git --list-cmds=builtins` and a static list as fallback),
 `remote.<name>.push` (added to the configured push specs) and `push.default` /
 `branch.<name>.remote` / `branch.<name>.merge` (which replace the repository
-value). Any other `-c` setting is ignored. `gh api` DELETE is recognised as
+value). Any other `-c` setting is ignored. The same settings are read, with the same rules, from
+environment variables assigned inline in the same command (`GIT_CONFIG_COUNT` with `GIT_CONFIG_KEY_<n>` and
+`GIT_CONFIG_VALUE_<n>`, `GIT_CONFIG_PARAMETERS`, also through `env`) and from `--config-env=NAME=VAR` when `VAR`
+is assigned inline in that command. `gh api` DELETE is recognised as
 `-X DELETE`, `-XDELETE`, `--method DELETE` and the `=` forms, in any case. After `cd "$DIR"` or `popd` the
 repository is unknown, so only the default protected branches apply. Each command
 segment is evaluated on its own: a segment the policy cannot evaluate prints
@@ -67,8 +70,10 @@ These forms are known to be unclassifiable and are not blocked, even when they
 rewrite a protected branch: arguments supplied at run time, such as
 `echo main | xargs git push -f origin`; scripts piped or fed to a shell, such as
 `echo 'git push -f origin main' | bash` and `bash <<< '...'`; and commands run
-through `ssh host '...'` or `find . -exec git push -f origin main ';'`. A shell
-function or alias, and a Git alias from `.gitconfig`, are never expanded. A missing working directory or missing Git passes silently. The
+through `ssh host '...'` or `find . -exec git push -f origin main ';'`. Variables
+exported by an earlier command (`export GIT_CONFIG_COUNT=1 ...` followed by a later
+`git` call, or a `--config-env` variable set elsewhere) are not known to the parser.
+A shell function or alias, and a Git alias from `.gitconfig`, are never expanded. A missing working directory or missing Git passes silently. The
 wrapper prefers `python3.14` through `python3.11` over an older default `python3`
 (macOS ships 3.9). With no supported runtime, or a missing policy script, it
 prints `RPI POLICY SKIPPED`. The opt-in receipt gate is a separate Git hook and

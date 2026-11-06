@@ -109,6 +109,29 @@ class GitCommandLineConfigTests(test_policy.PolicyFixture):
             with self.subTest(command=command):
                 self.assert_allowed(command)
 
+    def test_environment_injected_git_configuration_is_applied_like_git_c(self):
+        for command in ("GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=alias.p GIT_CONFIG_VALUE_0='push -f' git p origin main",
+                        "GIT_CONFIG_PARAMETERS=\"'alias.p'='push -f'\" git p origin main",
+                        "PUSHF='push -f' git --config-env=alias.p=PUSHF p origin main",
+                        "PUSHF='push -f' git --config-env alias.p=PUSHF p origin main",
+                        "env GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=alias.p GIT_CONFIG_VALUE_0='push -f' git p origin main",
+                        "GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=user.name GIT_CONFIG_VALUE_0=x GIT_CONFIG_KEY_1=push.default "
+                        "GIT_CONFIG_VALUE_1=matching git push -f",
+                        "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=remote.origin.push GIT_CONFIG_VALUE_0=+HEAD:main git push",
+                        "GIT_CONFIG_PARAMETERS=\"'remote.origin.push'='+HEAD:main'\" git push"):
+            with self.subTest(command=command):
+                self.assert_blocked(command, 'protected branch')
+        for command in ("GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=user.name GIT_CONFIG_VALUE_0=x git push origin feature/work",
+                        "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=alias.status GIT_CONFIG_VALUE_0=push git status",
+                        "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=alias.push GIT_CONFIG_VALUE_0=status git push origin feature/work",
+                        "GIT_CONFIG_COUNT=0 GIT_CONFIG_KEY_0=alias.p GIT_CONFIG_VALUE_0='push -f' git p origin main",
+                        "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=alias.p GIT_CONFIG_VALUE_0='push -f' git p origin feature/work",
+                        "git --config-env=alias.p=NOT_SET_HERE p -f origin main",
+                        "GIT_CONFIG_PARAMETERS=\"'user.name'='x'\" git push origin feature/work",
+                        "FOO=bar git push origin feature/work"):
+            with self.subTest(command=command):
+                self.assert_allowed(command)
+
     def test_builtins_outside_the_static_list_come_from_git_itself(self):
         listed = subprocess.run(['git', '--list-cmds=builtins'], capture_output=True, text=True).stdout.split()
         if 'maintenance' not in listed:
