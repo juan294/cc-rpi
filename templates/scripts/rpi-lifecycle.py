@@ -962,7 +962,10 @@ def validate_plan(engine, plan):
     # Reconstruct all authority from the explicitly bound request. Untrusted plan
     # operations cannot introduce ownership, permissions or arbitrary destinations.
     fresh = make_plan(engine, plan['request'])
-    informational = lambda value: {key: item for key, item in value.items() if key != 'notices'}
+    plan_id = plan.get('plan_id')
+    if plan_id is not None and not (isinstance(plan_id, str) and re.fullmatch('[0-9a-f]{32}', plan_id)):
+        raise ValueError('invalid plan identifier')
+    informational = lambda value: {key: item for key, item in value.items() if key not in ('notices', 'plan_id')}
     if informational(fresh) != informational(plan):  # A hook edit after planning never invalidates it.
         raise Conflict('plan changed or source/installation preimages changed; create a new plan')
     if plan.get('status') == 'conflict':
@@ -1005,15 +1008,18 @@ def acquire_lock(state):
 
 
 def already_applied(plan):
-    """(journal path, newer work followed) when a completed journal recorded exactly this plan's operations."""
+    """(journal path, newer work followed) when a completed journal recorded this very plan.
+
+    The match is the plan's own identifier, written into the journal at apply time. Plans and
+    journals without one never claim it: identical operations do not make a plan the same plan."""
     try:
-        if not plan.get('operations'):
+        plan_id = plan.get('plan_id')
+        if not plan_id or not plan.get('operations'):
             return None
-        wanted = digest(serialized(plan['operations']))
         ordered = journals(plan['state_root'], bound=True)
         for index in range(len(ordered) - 1, -1, -1):
             _, status, path = ordered[index]
-            if status == 'complete' and json.loads(path.with_name('receipt.json').read_bytes()).get('operations_sha256') == wanted:
+            if status == 'complete' and json.loads(path.read_bytes()).get('plan_id') == plan_id:
                 return path, any(later in ('applying', 'complete') for _, later, _ in ordered[index + 1:])
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         pass
@@ -1064,9 +1070,11 @@ def apply_plan(engine, plan, fail_after=None, fail_after_rename=None):
         journal = {'schema_version': 1, 'transaction': transaction, 'status': 'applying',
                    'roots': plan['roots'], 'state_root': plan['state_root'],
                    'operations': plan['operations'], 'completed': 0, 'pending': None,
-                   'scope': plan['request']['scope'], 'sequence': sequence}
+                   'scope': plan['request']['scope'], 'sequence': sequence,
+                   **({'plan_id': plan['plan_id']} if plan.get('plan_id') else {})}
         receipt = {'roots': plan['roots'], 'state_root': plan['state_root'], 'sequence': sequence,
-                   'scope': plan['request']['scope'], 'operations_sha256': digest(serialized(plan['operations']))}
+                   'scope': plan['request']['scope'], 'operations_sha256': digest(serialized(plan['operations'])),
+                   **({'plan_id': plan['plan_id']} if plan.get('plan_id') else {})}
         atomic_node(journal_path.with_name('receipt.json'), file_node(serialized(receipt), 0o600))
         atomic_node(journal_path, file_node(serialized(journal), 0o600))
         try:
@@ -1152,6 +1160,7 @@ def rollback(journal_path):
     receipt = json.loads(node_bytes(receipt_node))
     expected_receipt = {'roots': journal['roots'], 'state_root': journal['state_root'],
                         'scope': journal['scope'], 'operations_sha256': digest(serialized(journal['operations'])),
+                        **({'plan_id': journal['plan_id']} if 'plan_id' in journal else {}),
                         **({'sequence': sequence} if 'sequence' in journal else {})}
     if receipt != expected_receipt:
         raise Conflict('transaction journal changed from its recovery receipt')
@@ -1188,21 +1197,21 @@ def rollback(journal_path):
         completed = list(enumerate(journal['operations'][:journal['completed']]))
         if journal.get('pending') is not None:
             pending = journal['operations'][journal['pending']]
-            actual = snapshot(operation_path(journal, pending))
+            actual = live_node(operation_path(journal, pending))
             if actual == pending['after']:
                 completed.append((journal['pending'], pending))
             elif actual != pending['before']:
                 raise newer_work_conflict(journal, journal_path, [(journal['pending'], pending)],
                                           'interrupted operation has a newer unrecognized preimage: ' + pending['destination'])
         newer_work = [(index, operation) for index, operation in completed
-                      if snapshot(operation_path(journal, operation)) not in (operation['before'], operation['after'])]
+                      if live_node(operation_path(journal, operation)) not in (operation['before'], operation['after'])]
         if newer_work:
             raise newer_work_conflict(journal, journal_path, newer_work, 'postimage changed; rollback would overwrite newer work: ' +
                                       ', '.join(operation['destination'] for _, operation in newer_work))
         for index, operation in reversed(completed):
-            if snapshot(operation_path(journal, operation)) == operation['before']:
+            if live_node(operation_path(journal, operation)) == operation['before']:
                 continue
-            if snapshot(operation_path(journal, operation)) != operation['after']:
+            if live_node(operation_path(journal, operation)) != operation['after']:
                 raise newer_work_conflict(journal, journal_path, [(index, operation)],
                                           'postimage changed during rollback: ' + operation['destination'])
             atomic_node(operation_path(journal, operation), operation['before'])
@@ -1213,36 +1222,62 @@ def rollback(journal_path):
         os.close(lock)
 
 
-RESTORE_PREIMAGE = ("import base64, json, sys; node = json.load(open(sys.argv[1]))['operations'][int(sys.argv[2])]['before']; "
-                    "open(sys.argv[3], 'wb').write(base64.b64decode(node['data']))")
+def live_node(path):
+    """snapshot(path), or an unrecognized node (never equal to a recorded one) for a directory or special file."""
+    try:
+        return snapshot(path)
+    except Conflict:
+        return {'kind': 'unrecognized'}
+
+
+# Runs outside the engine, from the printed fix: it moves whatever is at the path aside (a file, a
+# symlink or a directory, never following a link) to a fresh numbered name, then writes the recorded
+# preimage to a temporary file in the same directory and renames it over the path.
+RESTORE_PREIMAGE = r"""
+import base64, json, os, shutil, sys, tempfile
+journal, index, live, saved = sys.argv[1:5]
+node = json.load(open(journal))['operations'][int(index)]['before']
+parent = os.path.dirname(live)
+if os.path.realpath(parent) != parent:
+    sys.exit('refusing to restore through a symlinked parent directory: ' + parent)
+if os.path.lexists(live):
+    target, number = saved, 0
+    while os.path.lexists(target):
+        number += 1
+        target = saved + '.' + str(number)
+    os.makedirs(os.path.dirname(target), exist_ok=True)
+    shutil.move(live, target)
+    print('kept your edit of ' + live + ' as ' + target)
+if node['kind'] == 'file':
+    os.makedirs(parent, exist_ok=True)
+    descriptor, temporary = tempfile.mkstemp(dir=parent, prefix='.rpi-restore-')
+    with os.fdopen(descriptor, 'wb') as handle:
+        handle.write(base64.b64decode(node['data']))
+    os.chmod(temporary, node['mode'])
+    os.replace(temporary, live)
+elif node['kind'] == 'symlink':
+    os.makedirs(parent, exist_ok=True)
+    temporary = live + '.rpi-restore'
+    os.symlink(node['target'], temporary)
+    os.replace(temporary, live)
+"""
 
 
 def newer_work_conflict(journal, journal_path, blocked, reason):
     """A rollback refused because an owner changed files after the transaction wrote them.
 
-    The fix is one runnable command line: it saves each edited file under the
-    installation's ignored local state (never overwriting a saved copy), puts the
-    file back to the content the journal recorded before the transaction, and
+    The fix is one runnable command line. For each path it moves the owner's version (a file,
+    a link or a directory, never followed) to a fresh name under the installation's ignored
+    local state, puts the recorded preimage back without writing through anything, and
     re-runs the rollback. Nothing is written by the refusal itself."""
     saved = Path(journal['state_root']) / 'local/saved-edits' / journal['transaction'] / time.strftime('%Y%m%d-%H%M%S')
-    steps = []
-    for index, operation in blocked:
-        live = operation_path(journal, operation)
-        copy = saved / operation['root_id'] / operation['destination']
-        keep = ['mkdir', '-p', '--', str(copy.parent)]
-        before = operation['before']
-        if before['kind'] == 'file':
-            steps += [shlex.join(keep), '{ test -e ' + shlex.quote(str(copy)) + ' || ' + shlex.join(['cp', '-p', '--', str(live), str(copy)]) + '; }',
-                      shlex.join([sys.executable, '-c', RESTORE_PREIMAGE, str(journal_path), str(index), str(live)]),
-                      shlex.join(['chmod', format(before['mode'], 'o'), str(live)])]
-        else:  # The transaction created this path (or replaced a symlink): setting the edit aside restores it.
-            steps += [shlex.join(keep), '{ test -e ' + shlex.quote(str(copy)) + ' || ' + shlex.join(['mv', '--', str(live), str(copy)]) + '; }']
-            if before['kind'] == 'symlink':
-                steps.append(shlex.join(['ln', '-s', '--', before['target'], str(live)]))
+    steps = [shlex.join([sys.executable, '-c', RESTORE_PREIMAGE, str(journal_path), str(index),
+                         str(operation_path(journal, operation)), str(saved / operation['root_id'] / operation['destination'])])
+             for index, operation in blocked]
     names = ', '.join(operation['destination'] for _, operation in blocked)
     error = Conflict(reason)
-    error.fix = ('your newer edit of ' + names + ' would be overwritten and nothing was changed; the command line after "run: " keeps the edit under ' +
-                 str(saved) + ', restores the installed content so the rollback can proceed, then re-runs it; run: ' +
+    error.fix = ('your newer version of ' + names + ' would be overwritten and nothing was changed; the command line after "run: " moves it to ' +
+                 str(saved) + ' (a number is added when that name is taken), restores the installed content so the rollback can proceed, then re-runs it; run: ' +
                  ' && '.join(steps + [engine_command('rollback', '--journal', journal_path)]))
     return error
 
@@ -1572,6 +1607,7 @@ def cli(engine, args):
                 original_ignore = node_bytes(snapshot(ignore)) or b''
                 if b'*' not in original_ignore.splitlines():
                     atomic_node(ignore, file_node(original_ignore + (b'\n' if original_ignore else b'') + b'*\n', 0o600))
+            result['plan_id'] = uuid.uuid4().hex  # Names this plan file in the journal that applies it.
             atomic_node(output, file_node(serialized(result), 0o600))
             saved = output
         else:

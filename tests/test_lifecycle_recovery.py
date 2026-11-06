@@ -125,7 +125,7 @@ class RecoveryGuidanceTests(unittest.TestCase):
         return subprocess.run(fix.split('; run: ', 1)[1], shell=True, capture_output=True, text=True, cwd=self.workspace)
 
     def saved_edits(self, destination):
-        return sorted((self.project / '.rpi/local/saved-edits').glob('*/*/project/' + destination))
+        return sorted((self.project / '.rpi/local/saved-edits').glob('*/*/project/' + destination + '*'))
 
     def test_owner_edit_over_an_interrupted_update_is_kept_and_rollback_proceeds(self):
         self.apply_ready()
@@ -153,7 +153,9 @@ class RecoveryGuidanceTests(unittest.TestCase):
         # Following the same instructions again is harmless and never overwrites the saved edit.
         again = self.follow(fix)
         self.assertEqual(again.returncode, 0, again.stdout + again.stderr)
-        self.assertEqual([path.read_bytes() for path in self.saved_edits(destination)], [edited])
+        # Every run keeps what it finds under a fresh name, so the first saved copy is never replaced.
+        self.assertEqual(self.saved_edits(destination)[0].read_bytes(), edited)
+        self.assertIn(edited, [path.read_bytes() for path in self.saved_edits(destination)])
         self.assertEqual(self.snapshot(), before)
 
     def test_owner_edit_of_a_file_the_transaction_created_is_moved_aside(self):
@@ -168,6 +170,93 @@ class RecoveryGuidanceTests(unittest.TestCase):
         self.assertEqual(followed.returncode, 0, followed.stdout + followed.stderr)
         self.assertEqual(self.snapshot(), before)
         self.assertEqual([path.read_bytes() for path in self.saved_edits(destination)], [edited])
+
+    def blocked_update(self):
+        self.apply_ready()
+        self.write(self.source, 'templates/skills/rpi-plan/references/playbook.md', 'Upstream planning change.\n')
+        before, destination, journal = self.interrupted('update')
+        return before, destination, journal, self.project / destination
+
+    def refused(self, journal):
+        return self.conflict(self.invoke('rollback', '--journal', journal))['fix']
+
+    def test_a_symlink_edit_is_set_aside_and_never_written_through(self):
+        before, destination, journal, target = self.blocked_update()
+        outside = self.workspace / 'outside-owner-file.txt'
+        outside.write_bytes(b'Outside the project; must never change.\n')
+        target.unlink()
+        target.symlink_to(outside)
+        frozen = self.snapshot(include_local=True)
+        fix = self.refused(journal)
+        self.assertEqual(self.snapshot(include_local=True), frozen)
+        followed = self.follow(fix)
+        self.assertEqual(followed.returncode, 0, followed.stdout + followed.stderr)
+        self.assertEqual(outside.read_bytes(), b'Outside the project; must never change.\n')
+        self.assertEqual(self.snapshot(), before)
+        self.assertFalse(target.is_symlink())
+        saved = self.saved_edits(destination)
+        self.assertEqual(len(saved), 1)
+        self.assertTrue(saved[0].is_symlink(), 'the saved edit is the link itself')
+        self.assertEqual(Path(os.readlink(saved[0])), outside)
+        self.assertEqual(json.loads(journal.read_text())['status'], 'rolled-back')
+
+    def test_restored_file_has_the_recorded_mode_and_replaces_the_path_atomically(self):
+        before, destination, journal, target = self.blocked_update()
+        recorded = json.loads(journal.read_text())['operations'][0]['before']['mode']
+        target.write_bytes(target.read_bytes() + b'Owner edit.\n')
+        target.chmod(0o600 if recorded != 0o600 else 0o644)
+        followed = self.follow(self.refused(journal))
+        self.assertEqual(followed.returncode, 0, followed.stdout + followed.stderr)
+        self.assertEqual(target.stat().st_mode & 0o777, recorded)
+        self.assertEqual(sorted(path.name for path in target.parent.iterdir() if path.name.startswith('.rpi-restore')), [])
+
+    def test_a_second_edit_after_a_failed_rollback_never_replaces_the_first_saved_copy(self):
+        before, destination, journal, target = self.blocked_update()
+        target.write_bytes(target.read_bytes() + b'First owner edit.\n')
+        first = target.read_bytes()
+        fix = self.refused(journal)
+        lock = self.project / '.rpi/local/lock'
+        lock.parent.mkdir(parents=True, exist_ok=True)
+        descriptor = os.open(lock, os.O_RDWR | os.O_CREAT, 0o600)
+        self.addCleanup(lambda: os.close(descriptor) if descriptor is not None else None)
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        failed = self.follow(fix)  # Saves and restores, then the rollback itself is refused by the held lock.
+        self.assertNotEqual(failed.returncode, 0, failed.stdout + failed.stderr)
+        self.assertEqual([path.read_bytes() for path in self.saved_edits(destination)], [first])
+        target.write_bytes(target.read_bytes() + b'Second owner edit.\n')
+        second = target.read_bytes()
+        fcntl.flock(descriptor, fcntl.LOCK_UN)
+        again = self.follow(fix)  # The same printed line.
+        self.assertEqual(again.returncode, 0, again.stdout + again.stderr)
+        self.assertEqual(sorted(path.read_bytes() for path in self.saved_edits(destination)), sorted([first, second]))
+        self.assertEqual(self.snapshot(), before)
+
+    def test_a_deleted_file_is_restored_without_a_failing_save_step(self):
+        before, destination, journal, target = self.blocked_update()
+        target.unlink()
+        fix = self.refused(journal)
+        self.assertIn(destination, fix)
+        followed = self.follow(fix)
+        self.assertEqual(followed.returncode, 0, followed.stdout + followed.stderr)
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(self.saved_edits(destination), [])
+
+    def test_a_directory_in_place_of_the_file_is_set_aside_with_its_own_fix(self):
+        before, destination, journal, target = self.blocked_update()
+        target.unlink()
+        target.mkdir()
+        (target / 'owner-notes.txt').write_text('Owner notes inside a directory.\n')
+        frozen = self.snapshot(include_local=True)
+        summary = self.conflict(self.invoke('rollback', '--journal', journal))
+        self.assertEqual(self.snapshot(include_local=True), frozen)
+        self.assertIn(destination, summary['reason'])
+        self.assertNotIn('Inspect the local plan/journal conflicts', summary['fix'])
+        followed = self.follow(summary['fix'])
+        self.assertEqual(followed.returncode, 0, followed.stdout + followed.stderr)
+        self.assertEqual(self.snapshot(), before)
+        saved = self.saved_edits(destination)
+        self.assertEqual([path.is_dir() for path in saved], [True])
+        self.assertEqual((saved[0] / 'owner-notes.txt').read_text(), 'Owner notes inside a directory.\n')
 
     def test_every_edited_file_is_named_not_only_the_first(self):
         self.apply_ready()
@@ -212,6 +301,36 @@ class RecoveryGuidanceTests(unittest.TestCase):
         self.assertIn('later', summary['reason'])
         self.assertNotIn('nothing needs doing', summary['reason'])
         self.assertIn('check', summary['fix'])
+
+    def test_a_replanned_install_with_identical_operations_is_not_reported_as_applied(self):
+        first_plan, first = self.plan()
+        self.assertEqual(self.invoke('apply', '--plan', first).returncode, 0)
+        first_journal = self.journals('complete')[-1]
+        self.apply_ready('detach')
+        # A later plan whose operations coincide with the first one's but that was never applied.
+        third_plan = dict(first_plan, plan_id='f' * 32)
+        third = self.plans / 'third.json'
+        third.write_text(json.dumps(third_plan))
+        self.assertEqual(third_plan['operations'], first_plan['operations'])
+        summary = self.conflict(self.invoke('apply', '--plan', third))
+        self.assertIn('plan changed or source/installation preimages changed; create a new plan', summary['reason'])
+        self.assertNotIn('already applied', summary['reason'])
+        again = self.conflict(self.invoke('apply', '--plan', first))
+        self.assertIn('already applied by transaction journal ' + str(first_journal), again['reason'])
+        self.assertIn('later transactions', again['reason'])
+
+    def test_a_journal_without_a_plan_identifier_never_claims_the_plan_was_applied(self):
+        _, path = self.plan()
+        self.assertEqual(self.invoke('apply', '--plan', path).returncode, 0)
+        journal = self.journals('complete')[-1]
+        for name in ('journal.json', 'receipt.json'):  # As written before plans carried an identifier.
+            file = journal.with_name(name)
+            value = json.loads(file.read_text())
+            value.pop('plan_id', None)
+            file.write_text(json.dumps(value, sort_keys=True, indent=2) + '\n')
+        summary = self.conflict(self.invoke('apply', '--plan', path))
+        self.assertIn('plan changed or source/installation preimages changed', summary['reason'])
+        self.assertEqual(self.invoke('rollback', '--journal', journal).returncode, 0)
 
     def test_a_plan_that_was_never_applied_keeps_the_stale_plan_message(self):
         self.apply_ready()
