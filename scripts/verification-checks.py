@@ -142,6 +142,17 @@ def contract_tests(root, github_output):
     return 0
 
 
+def interpreter_fix(root):
+    """Which interpreter must come first on PATH; the checks need Python 3.11+ with PyYAML, coverage and uv."""
+    venv = root / ".rpi/local/venv"
+    version = ".".join(map(str, sys.version_info[:3]))
+    text = ("a Python 3.11 or newer with PyYAML==6.0.3, coverage==7.16.0 and uv must come first on PATH "
+            f"(this run used {sys.executable}, Python {version})")
+    if venv.is_dir():
+        text += f"; this repository has a local virtual environment, so run PATH=\"{venv / 'bin'}:$PATH\" and rerun the same command"
+    return text + "; then "
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("check", choices=("prerequisites", "syntax", "shellcheck", "unit-tests", "coverage", "contract-tests"))
@@ -157,7 +168,7 @@ def main():
         return {"prerequisites": prerequisites, "syntax": syntax, "shellcheck": shellcheck,
                 "unit-tests": unit_tests}[args.check](root) or 0
     except (OSError, ValueError, ImportError, subprocess.CalledProcessError) as error:
-        print(f"BLOCKED / WHY: {error} / FIX: install Git, Bash, ShellCheck, Node, gh; "
+        print(f"BLOCKED / WHY: {error} / FIX: {interpreter_fix(args.root.resolve())}install Git, Bash, ShellCheck, Node, gh; "
               "python3 -m pip install PyYAML==6.0.3 coverage==7.16.0 uv==0.12.10; then repair missing or invalid inputs", file=sys.stderr)
         return 1
 
