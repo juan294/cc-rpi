@@ -1010,16 +1010,19 @@ def acquire_lock(state):
 def already_applied(plan):
     """(journal path, newer work followed) when a completed journal recorded this very plan.
 
-    The match is the plan's own identifier, written into the journal at apply time. Plans and
-    journals without one never claim it: identical operations do not make a plan the same plan."""
+    The match is the plan's own identifier, written into the journal at apply time, together with
+    the operations the receipt recorded. Plans and journals without an identifier never claim it:
+    identical operations do not make a plan the same plan."""
     try:
         plan_id = plan.get('plan_id')
         if not plan_id or not plan.get('operations'):
             return None
+        wanted = digest(serialized(plan['operations']))
         ordered = journals(plan['state_root'], bound=True)
         for index in range(len(ordered) - 1, -1, -1):
             _, status, path = ordered[index]
-            if status == 'complete' and json.loads(path.read_bytes()).get('plan_id') == plan_id:
+            if (status == 'complete' and json.loads(path.read_bytes()).get('plan_id') == plan_id and
+                    json.loads(path.with_name('receipt.json').read_bytes()).get('operations_sha256') == wanted):
                 return path, any(later in ('applying', 'complete') for _, later, _ in ordered[index + 1:])
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         pass
@@ -1035,10 +1038,11 @@ def validate_unapplied_plan(engine, plan):
         if applied is None:
             raise
         journal, followed = applied
-        reason = ('this plan was already applied by transaction journal ' + str(journal) + ' (status complete); ' +
-                  ('later transactions have since changed the installation' if followed else 'nothing needs doing'))
+        reason = ('this plan was already applied by transaction journal ' + str(journal) + ' (status complete)' +
+                  ('; later transactions have since changed the installation' if followed else '') +
+                  '; run check to see the current state of the installation')
         conflict = Conflict(reason)
-        conflict.fix = ('no action is needed for this plan; to see the installation state run ' +
+        conflict.fix = ('this plan needs no further apply; to see whether the installation has drifted since, run ' +
                         replan_command(plan['request'], [], None, 'check') +
                         ', and create a new plan only if it reports action-needed')
         raise conflict from error
@@ -1165,7 +1169,14 @@ def rollback(journal_path):
     if receipt != expected_receipt:
         raise Conflict('transaction journal changed from its recovery receipt')
     for operation in journal['operations']:
-        operation_path(journal, operation)
+        try:
+            operation_path(journal, operation)
+        except Conflict as error:
+            if error.fix is None and str(error).startswith(('symlink parent: ', 'non-directory parent: ')):
+                error.fix = ('rollback never writes through a link or into a non-directory; make ' + str(error).split(': ', 1)[1] +
+                             ' the real directory it was when the transaction ran (move whatever replaced it aside and keep your content), then run ' +
+                             engine_command('rollback', '--journal', journal_path))
+            raise
         for node in (operation['before'], operation['after']):
             if node['kind'] == 'file':
                 if digest(decoded(node['data'])) != node['sha256'] or not 0 <= node['mode'] <= 0o777:
@@ -1230,16 +1241,30 @@ def live_node(path):
         return {'kind': 'unrecognized'}
 
 
-# Runs outside the engine, from the printed fix: it moves whatever is at the path aside (a file, a
-# symlink or a directory, never following a link) to a fresh numbered name, then writes the recorded
-# preimage to a temporary file in the same directory and renames it over the path.
+# Runs outside the engine, from the printed fix. When the path already holds the recorded preimage it
+# does nothing. Otherwise it moves whatever is there (a file, a symlink or a directory, never following
+# a link) to a fresh numbered name, then writes the recorded preimage to a uniquely named temporary entry
+# in the same directory and renames it over the path; the temporary entry never survives a failure.
 RESTORE_PREIMAGE = r"""
-import base64, json, os, shutil, sys, tempfile
+import base64, json, os, secrets, shutil, stat, sys, tempfile
 journal, index, live, saved = sys.argv[1:5]
 node = json.load(open(journal))['operations'][int(index)]['before']
 parent = os.path.dirname(live)
 if os.path.realpath(parent) != parent:
     sys.exit('refusing to restore through a symlinked parent directory: ' + parent)
+
+def present():
+    if not os.path.lexists(live):
+        return {'kind': 'missing'}
+    if os.path.islink(live):
+        return {'kind': 'symlink', 'target': os.readlink(live)}
+    if os.path.isfile(live):
+        with open(live, 'rb') as handle:
+            return {'kind': 'file', 'data': base64.b64encode(handle.read()).decode(), 'mode': stat.S_IMODE(os.stat(live).st_mode)}
+    return {'kind': 'other'}
+
+if present() == {key: node[key] for key in node if key in ('kind', 'data', 'mode', 'target')}:
+    sys.exit(0)
 if os.path.lexists(live):
     target, number = saved, 0
     while os.path.lexists(target):
@@ -1248,18 +1273,29 @@ if os.path.lexists(live):
     os.makedirs(os.path.dirname(target), exist_ok=True)
     shutil.move(live, target)
     print('kept your edit of ' + live + ' as ' + target)
-if node['kind'] == 'file':
-    os.makedirs(parent, exist_ok=True)
-    descriptor, temporary = tempfile.mkstemp(dir=parent, prefix='.rpi-restore-')
-    with os.fdopen(descriptor, 'wb') as handle:
-        handle.write(base64.b64decode(node['data']))
-    os.chmod(temporary, node['mode'])
-    os.replace(temporary, live)
-elif node['kind'] == 'symlink':
-    os.makedirs(parent, exist_ok=True)
-    temporary = live + '.rpi-restore'
-    os.symlink(node['target'], temporary)
-    os.replace(temporary, live)
+temporary = None
+try:
+    if node['kind'] == 'file':
+        os.makedirs(parent, exist_ok=True)
+        descriptor, temporary = tempfile.mkstemp(dir=parent, prefix='.rpi-restore-')
+        with os.fdopen(descriptor, 'wb') as handle:
+            handle.write(base64.b64decode(node['data']))
+        os.chmod(temporary, node['mode'])
+    elif node['kind'] == 'symlink':
+        os.makedirs(parent, exist_ok=True)
+        while True:
+            temporary = os.path.join(parent, '.rpi-restore-' + secrets.token_hex(8))
+            try:
+                os.symlink(node['target'], temporary)
+                break
+            except FileExistsError:
+                continue
+    if temporary:
+        os.replace(temporary, live)
+        temporary = None
+finally:
+    if temporary and os.path.lexists(temporary):
+        os.unlink(temporary)
 """
 
 

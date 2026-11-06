@@ -4,15 +4,25 @@ Every message is exercised through the public CLI. A printed FIX is executed
 verbatim where it is a command, so a repair that does not work fails here.
 """
 import fcntl
+import importlib.util
 import json
 import os
 from pathlib import Path
 import shlex
+import shutil
+import stat
 import subprocess
 import sys
 import unittest
 
 import test_lifecycle_adopters as adopters
+
+
+def adopters_module(name):
+    spec = importlib.util.spec_from_file_location('recovery_' + name.replace('-', '_'), adopters.ENGINE.with_name(name + '.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 class RecoveryGuidanceTests(unittest.TestCase):
@@ -153,9 +163,8 @@ class RecoveryGuidanceTests(unittest.TestCase):
         # Following the same instructions again is harmless and never overwrites the saved edit.
         again = self.follow(fix)
         self.assertEqual(again.returncode, 0, again.stdout + again.stderr)
-        # Every run keeps what it finds under a fresh name, so the first saved copy is never replaced.
-        self.assertEqual(self.saved_edits(destination)[0].read_bytes(), edited)
-        self.assertIn(edited, [path.read_bytes() for path in self.saved_edits(destination)])
+        # Nothing is left to move aside once the recorded content is back, so a second run changes nothing.
+        self.assertEqual([path.read_bytes() for path in self.saved_edits(destination)], [edited])
         self.assertEqual(self.snapshot(), before)
 
     def test_owner_edit_of_a_file_the_transaction_created_is_moved_aside(self):
@@ -258,6 +267,194 @@ class RecoveryGuidanceTests(unittest.TestCase):
         self.assertEqual([path.is_dir() for path in saved], [True])
         self.assertEqual((saved[0] / 'owner-notes.txt').read_text(), 'Owner notes inside a directory.\n')
 
+    # S-3: temporary names are unique and never left behind.
+
+    def helper(self, journal, index, live, saved, *, prelude=''):
+        lifecycle = adopters_module('rpi-lifecycle')
+        code = 'import os, sys\n' + prelude + '\n' + lifecycle.RESTORE_PREIMAGE
+        return subprocess.run([sys.executable, '-c', code, str(journal), str(index), str(live), str(saved)],
+                              capture_output=True, text=True)
+
+    def synthetic_journal(self, before):
+        path = self.workspace / 'synthetic-journal.json'
+        path.write_text(json.dumps({'operations': [{'before': before}]}))
+        return path
+
+    def test_symlink_preimage_restore_survives_a_stale_temporary_name(self):
+        parent = self.workspace.resolve() / 'restore-parent'
+        parent.mkdir()
+        live = parent / 'link'
+        live.write_text('Owner file that must be kept.\n')
+        (parent / 'link.rpi-restore').write_text('stale temporary name\n')
+        journal = self.synthetic_journal({'kind': 'symlink', 'target': '../somewhere'})
+        result = self.helper(journal, 0, live, self.workspace / 'kept/link')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(os.readlink(live), '../somewhere')
+        self.assertEqual((self.workspace / 'kept/link').read_text(), 'Owner file that must be kept.\n')
+        self.assertEqual((parent / 'link.rpi-restore').read_text(), 'stale temporary name\n')
+
+    def test_a_failure_after_the_temporary_write_leaves_no_temporary_file_and_a_rerun_works(self):
+        data = adopters.base64.b64encode(b'Recorded content.\n').decode()
+        cases = {'file': {'kind': 'file', 'data': data, 'mode': 0o644}, 'symlink': {'kind': 'symlink', 'target': 'elsewhere'}}
+        for kind, before in cases.items():
+            with self.subTest(kind=kind):
+                parent = self.workspace.resolve() / ('fail-' + kind)
+                parent.mkdir()
+                live = parent / 'target'
+                live.write_text('Owner version.\n')
+                journal = self.synthetic_journal(before)
+                failing = "def boom(*a, **k):\n    raise OSError('injected failure')\nos.replace = boom"
+                result = self.helper(journal, 0, live, self.workspace / ('kept-' + kind) / 'target', prelude=failing)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(sorted(path.name for path in parent.iterdir()), [], 'no temporary file is left behind')
+                self.assertEqual((self.workspace / ('kept-' + kind) / 'target').read_text(), 'Owner version.\n')
+                again = self.helper(journal, 0, live, self.workspace / ('kept-' + kind) / 'target')
+                self.assertEqual(again.returncode, 0, again.stdout + again.stderr)
+                self.assertEqual(sorted(path.name for path in parent.iterdir()), ['target'])
+
+    # S-5: a symlinked parent is refused with its own message.
+
+    def test_a_symlinked_parent_directory_is_refused_with_its_own_message(self):
+        before, destination, journal, target = self.blocked_update()
+        parent = self.project.resolve() / Path(destination).parent
+        outside = self.workspace / 'outside-dir'
+        outside.mkdir()
+        (outside / 'keep.txt').write_text('Outside the project.\n')
+        parent.rename(parent.with_name('references-aside'))
+        parent.symlink_to(outside)
+        frozen = self.snapshot(include_local=True)
+        summary = self.conflict(self.invoke('rollback', '--journal', journal))
+        self.assertEqual(self.snapshot(include_local=True), frozen)
+        self.assertIn('symlink parent', summary['reason'])
+        self.assertIn(str(parent), summary['fix'])
+        self.assertNotIn('Inspect the local plan/journal conflicts', summary['fix'])
+        self.assertIn('rollback --journal', summary['fix'])
+        self.assertEqual(sorted(path.name for path in outside.iterdir()), ['keep.txt'])
+
+    def test_the_restore_helper_refuses_a_parent_that_became_a_symlink(self):
+        outside = self.workspace.resolve() / 'outside-dir'
+        outside.mkdir()
+        parent = self.workspace.resolve() / 'linked-parent'
+        parent.symlink_to(outside)
+        journal = self.synthetic_journal({'kind': 'missing'})
+        result = self.helper(journal, 0, parent / 'file', self.workspace / 'kept/file')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('symlinked parent', result.stderr)
+        self.assertEqual(list(outside.iterdir()), [])
+
+    # S-7: hostile inputs, each executing the printed FIX.
+
+    def run_fix_for(self, journal, cwd=None):
+        fix = self.refused(journal)
+        self.assertEqual(fix.count('; run: '), 1, fix)
+        return subprocess.run(fix.split('; run: ', 1)[1], shell=True, capture_output=True, text=True, cwd=cwd or self.workspace)
+
+    def test_a_hard_link_to_an_outside_file_is_replaced_not_written_through(self):
+        before, destination, journal, target = self.blocked_update()
+        outside = self.workspace / 'outside-hardlink.txt'
+        outside.write_bytes(b'Content of the other link.\n')
+        target.unlink()
+        os.link(outside, target)
+        old_inode = outside.stat().st_ino
+        result = self.run_fix_for(journal)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(outside.read_bytes(), b'Content of the other link.\n')
+        self.assertNotEqual(target.stat().st_ino, old_inode)
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(self.saved_edits(destination)[0].stat().st_ino, old_inode)
+
+    def test_the_restore_replaces_the_path_instead_of_rewriting_its_inode(self):
+        before, destination, journal, target = self.blocked_update()
+        target.write_bytes(target.read_bytes() + b'Owner edit.\n')
+        old_inode = target.stat().st_ino
+        result = self.run_fix_for(journal)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotEqual(target.stat().st_ino, old_inode, 'the recorded content is a new file renamed into place')
+        self.assertEqual(self.saved_edits(destination)[0].stat().st_ino, old_inode, 'the edit keeps its inode')
+
+    def test_a_symlink_to_a_directory_is_set_aside(self):
+        before, destination, journal, target = self.blocked_update()
+        outside = self.workspace / 'outside-directory'
+        outside.mkdir()
+        (outside / 'inside.txt').write_text('Untouched.\n')
+        target.unlink()
+        target.symlink_to(outside, target_is_directory=True)
+        result = self.run_fix_for(journal)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(sorted(path.name for path in outside.iterdir()), ['inside.txt'])
+        self.assertEqual(self.snapshot(), before)
+        self.assertTrue(self.saved_edits(destination)[0].is_symlink())
+
+    def test_a_fifo_is_set_aside(self):
+        before, destination, journal, target = self.blocked_update()
+        target.unlink()
+        os.mkfifo(target)
+        result = self.run_fix_for(journal)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.snapshot(), before)
+        self.assertTrue(stat.S_ISFIFO(self.saved_edits(destination)[0].lstat().st_mode))
+
+    def test_a_read_only_edit_is_replaced_with_the_recorded_mode(self):
+        before, destination, journal, target = self.blocked_update()
+        recorded = json.loads(journal.read_text())['operations'][0]['before']['mode']
+        target.write_bytes(target.read_bytes() + b'Owner edit.\n')
+        target.chmod(0o444)
+        result = self.run_fix_for(journal)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(target.stat().st_mode & 0o777, recorded)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_a_deleted_parent_directory_is_recreated(self):
+        before, destination, journal, target = self.blocked_update()
+        shutil.rmtree(target.parent)  # The owner's deletion of the neighbouring files is theirs; only the recorded path returns.
+        result = self.run_fix_for(journal)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(target.read_bytes(), before[destination])
+        self.assertEqual(json.loads(journal.read_text())['status'], 'rolled-back')
+
+    def test_the_fix_runs_from_any_working_directory(self):
+        before, destination, journal, target = self.blocked_update()
+        target.write_bytes(target.read_bytes() + b'Owner edit.\n')
+        result = self.run_fix_for(journal, cwd='/')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_a_project_path_with_shell_metacharacters_is_handled(self):
+        self.project.rmdir()
+        self.project = self.workspace / 'p $HOME `touch PWNED` "q" \'s\' é ; & (x)'
+        self.project.mkdir()
+        before, destination, journal, target = self.blocked_update()
+        target.write_bytes(target.read_bytes() + b'Owner edit.\n')
+        result = self.run_fix_for(journal)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.snapshot(), before)
+        self.assertFalse((self.workspace / 'PWNED').exists())
+        self.assertFalse(Path('/PWNED').exists())
+
+    # S-6: the plan identifier is not enough on its own.
+
+    def test_a_plan_whose_operations_were_edited_keeping_its_identifier_is_not_reported_as_applied(self):
+        plan, path = self.plan()
+        self.assertEqual(self.invoke('apply', '--plan', path).returncode, 0)
+        edited = json.loads(path.read_text())
+        edited['operations'][0]['destination'] = 'elsewhere/' + edited['operations'][0]['destination']
+        path.write_text(json.dumps(edited))
+        summary = self.conflict(self.invoke('apply', '--plan', path))
+        self.assertIn('plan changed or source/installation preimages changed', summary['reason'])
+        self.assertNotIn('already applied', summary['reason'])
+
+    def test_an_installation_that_drifted_after_apply_is_not_called_complete(self):
+        _, path = self.plan()
+        self.assertEqual(self.invoke('apply', '--plan', path).returncode, 0)
+        (self.project / '.claude/skills/rpi-plan/SKILL.md').unlink()
+        summary = self.conflict(self.invoke('apply', '--plan', path))
+        self.assertIn('already applied', summary['reason'])
+        self.assertNotIn('nothing needs doing', summary['reason'])
+        self.assertIn('run check', summary['reason'])
+        self.assertIn('rpi-distribution.py check', summary['fix'])
+        check = self.invoke('check', '--source', self.source, '--target', self.project)
+        self.assertEqual(check.returncode, 2, 'check reports the drift the apply message does not claim is absent')
+
     def test_every_edited_file_is_named_not_only_the_first(self):
         self.apply_ready()
         self.write(self.source, 'templates/skills/rpi-plan/references/playbook.md', 'Upstream planning change.\n')
@@ -284,8 +481,9 @@ class RecoveryGuidanceTests(unittest.TestCase):
         self.assertIn('already applied', summary['reason'])
         self.assertIn(str(journal), summary['reason'])
         self.assertNotIn('create a new plan', summary['reason'])
-        self.assertIn('nothing needs doing', summary['reason'])
-        self.assertIn('no action is needed', summary['fix'])
+        self.assertNotIn('nothing needs doing', summary['reason'], 'the installation can drift after a plan was applied')
+        self.assertIn('check', summary['reason'])
+        self.assertIn('needs no further apply', summary['fix'])
         self.assertIn('rpi-distribution.py check', summary['fix'])
         self.assertEqual(self.snapshot(include_local=True), frozen)
 
