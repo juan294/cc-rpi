@@ -10,6 +10,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 - A shared local resource-lifecycle rule for Claude and Codex, selected by Docker/Supabase paths and local-stack/database-test tasks even without a Dockerfile. It requires ownership and lifecycle classification before allocation, scoped teardown or an explicit retained-resource handoff, and protection of shared/recovery data. Project commands remain project-owned; host maintenance stays opt-in. Task completion, Supabase verification, worktree cleanup and handoffs reference the same contract. Update tests cover task-only reachability and preservation of project contracts and private receipts.
 
+### Changed
+
+- The opted-in scheduled update launcher (`templates/scripts/cc-rpi-update-agent.sh`) runs a read-only Claude probe (no tools, no file changes) before it starts an update. A quota or authentication signal selects the installed Codex subscription, provided the `SKILL.md` and lifecycle contract of its user-scope `rpi-update` skill match the selected source byte for byte. Any other probe failure is reported and blocks the update. An update that has already started never retries through another provider. `GUIDE.md` no longer says the launcher performs no inference probe.
+- The project-owned PostgreSQL recipe (`tests/recipes/check_postgres.py`) now uses a local image only (`--pull never`, immutable image ID), a unique container name with ownership labels, a private receipt and a guarded `--finish` command. It is a cc-rpi test fixture, not a distributed template. Its contract is in `docs/development/resource-lifecycle.md` and is linked from `AGENTS.md`.
+
 ## [2.1.0] - 2026-09-26
 
 Nothing retired this cycle: no rule or error ID is retired. Index rules #33,

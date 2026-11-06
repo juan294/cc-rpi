@@ -247,8 +247,13 @@ Required unavailable permissions are denied rather than bypassed.
 
 The launcher checks installation state after the native attempt and preserves
 both exit statuses in unique ignored `.rpi/local/update-runs/` reports. It refuses
-unignored output paths, performs no separate inference auth probe and does not
-blindly retry a partial update. It neither pulls source nor updates global user
+unignored output paths and runs a read-only Claude probe (no tools, no file
+changes) before any update starts. A quota or authentication signal from the
+probe selects the installed Codex subscription when the `SKILL.md` and lifecycle
+contract of its user-scope `rpi-update` skill match the selected source byte for
+byte; any other probe failure is reported and blocks the update. An update that
+has started never retries through another provider and is not blindly retried
+after a partial result. It neither pulls source nor updates global user
 skills, native caches, models or schedules. Plugin manager updates remain separate.
 Verify the actual scheduler environment/authentication and keep local recovery
 records; do not assume a universal launchd file-descriptor requirement.
