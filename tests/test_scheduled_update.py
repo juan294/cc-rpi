@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -38,6 +39,12 @@ class ScheduledUpdateTests(unittest.TestCase):
             'import json, os, sys\n'
             'with open(os.environ["FAKE_CLI_LOG"],"a") as log: log.write(json.dumps({"argv":sys.argv[1:],"cwd":os.getcwd(),"home":os.environ.get("HOME")})+"\\n")\n'
             'probe = "Reply READY only" in " ".join(sys.argv)\n'
+            'hold = os.environ.get("FAKE_CLI_HOLD")\n'
+            'if hold and probe:\n'
+            '    import time\n'
+            '    open(hold + ".ready", "w").close()\n'
+            '    deadline = time.time() + 20\n'
+            '    while not os.path.exists(hold + ".release") and time.time() < deadline: time.sleep(0.05)\n'
             'print(os.environ.get("FAKE_CLI_PROBE_BODY", "READY") if probe else "Fake update result")\n'
             'raise SystemExit(int(os.environ.get("FAKE_CLI_PROBE_CODE" if probe else "FAKE_CLI_CODE", "0")))\n')
         self.cli.chmod(0o700)
@@ -61,6 +68,30 @@ class ScheduledUpdateTests(unittest.TestCase):
     def run_launcher(self):
         return subprocess.run(['bash', str(ROOT / 'templates/scripts/cc-rpi-update-agent.sh')],
                               env=self.env, capture_output=True, text=True, timeout=10)
+
+    def start_held_run(self, name='first'):
+        """A launcher run that parks inside its provider probe until the test releases it."""
+        hold = self.root / ('hold-' + name)
+        process = subprocess.Popen(['bash', str(ROOT / 'templates/scripts/cc-rpi-update-agent.sh')],
+                                   env={**self.env, 'FAKE_CLI_HOLD': str(hold)},
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.addCleanup(lambda: (process.kill() if process.poll() is None else None, process.communicate()))
+        deadline = time.time() + 15
+        while not Path(str(hold) + '.ready').exists():
+            if process.poll() is not None:
+                self.fail('held run exited early: ' + str(process.communicate()))
+            self.assertLess(time.time(), deadline, 'held run never reached its provider probe')
+            time.sleep(0.05)
+        return process, hold
+
+    def release(self, process, hold):
+        Path(str(hold) + '.release').touch()
+        out, err = process.communicate(timeout=20)
+        return process.returncode, out, err
+
+    @property
+    def lock_dir(self):
+        return self.project / '.rpi/local/update-runs/launcher.lock'
 
     def calls(self, kind):
         path = self.root / f'{kind}.jsonl'
@@ -235,6 +266,99 @@ class ScheduledUpdateTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(len(self.calls('cli')), 1)
         self.assertEqual(self.calls('codex'), [])
+
+    def test_overlapping_runs_start_one_provider_session_and_name_the_holder(self):
+        first, hold = self.start_held_run()
+        self.assertEqual((self.lock_dir / 'pid').read_text().strip(), str(first.pid))
+        for _ in range(2):  # Two further overlapping runs, as the scheduler can produce.
+            second = self.run_launcher()
+            self.assertEqual(second.returncode, 1, second.stdout + second.stderr)
+            message = second.stderr
+            self.assertTrue(message.startswith('BLOCKED / WHY: '), message)
+            self.assertIn('pid ' + str(first.pid), message.split(' / FIX: ')[0])
+            self.assertIn('wait for pid ' + str(first.pid), message.split(' / FIX: ')[1])
+            self.assertIn('ps -p ' + str(first.pid), message)
+        self.assertEqual(len(self.calls('cli')), 1, 'only the holder started a provider session')
+        self.assertEqual(self.calls('codex'), [])
+        self.assertEqual(len(list((self.project / '.rpi/local/update-runs').glob('run.*'))), 1,
+                         'refused runs create no report directory')
+        code, out, err = self.release(first, hold)
+        self.assertEqual(code, 0, out + err)
+        self.assertFalse(self.lock_dir.exists(), 'the holder releases the lock on exit')
+        self.assertEqual(self.run_launcher().returncode, 0, 'a later run proceeds normally')
+
+    def test_three_simultaneous_starts_admit_exactly_one_provider_session(self):
+        hold = self.root / 'hold-race'
+        env = {**self.env, 'FAKE_CLI_HOLD': str(hold)}
+        processes = [subprocess.Popen(['bash', str(ROOT / 'templates/scripts/cc-rpi-update-agent.sh')], env=env,
+                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) for _ in range(3)]
+        self.addCleanup(lambda: [(process.kill() if process.poll() is None else None, process.communicate()) for process in processes])
+        deadline = time.time() + 15
+        while sum(process.poll() is not None for process in processes) < 2 or not Path(str(hold) + '.ready').exists():
+            self.assertLess(time.time(), deadline, [process.poll() for process in processes])
+            time.sleep(0.05)
+        self.assertEqual(sorted(process.poll() for process in processes if process.poll() is not None), [1, 1])
+        self.assertEqual(len(self.calls('cli')), 1)
+        Path(str(hold) + '.release').touch()
+        survivors = [process for process in processes if process.poll() is None]
+        self.assertEqual(len(survivors), 1)
+        self.assertEqual(survivors[0].wait(timeout=20), 0)
+
+    def test_lock_is_released_on_every_exit_path(self):
+        self.env['FAKE_CLI_CODE'] = '7'
+        self.assertEqual(self.run_launcher().returncode, 7)
+        self.assertFalse(self.lock_dir.exists(), 'provider failure')
+        del self.env['FAKE_CLI_CODE']
+        self.env['FAKE_ENGINE_CODES'] = json.dumps({'check': 2})
+        self.assertEqual(self.run_launcher().returncode, 2)
+        self.assertFalse(self.lock_dir.exists(), 'drift reported by check')
+        del self.env['FAKE_ENGINE_CODES']
+        self.env['FAKE_CLI_PROBE_BODY'] = 'rate_limit_error'
+        self.env['FAKE_CLI_PROBE_CODE'] = '1'
+        self.env['CODEX_BIN'] = str(self.root / 'missing-codex')
+        blocked = self.run_launcher()
+        self.assertNotEqual(blocked.returncode, 0)
+        self.assertIn('Codex is unavailable', blocked.stderr)
+        self.assertFalse(self.lock_dir.exists(), 'blocked after the lock was taken')
+
+    def test_terminated_run_releases_its_lock(self):
+        first, hold = self.start_held_run()
+        first.terminate()  # bash runs its trap once the provider child it waits for has exited.
+        code, out, err = self.release(first, hold)
+        self.assertEqual(code, 143, out + err)
+        self.assertFalse(self.lock_dir.exists())
+
+    def test_stale_lock_of_a_dead_holder_is_recovered(self):
+        dead = subprocess.Popen(['true'])
+        dead.wait()
+        self.lock_dir.mkdir(parents=True)
+        (self.lock_dir / 'pid').write_text(str(dead.pid) + '\n')
+        result = self.run_launcher()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(len(self.calls('cli')), 2)
+        self.assertFalse(self.lock_dir.exists())
+        self.assertEqual([path.name for path in (self.project / '.rpi/local/update-runs').iterdir() if 'stale' in path.name], [])
+
+    def test_lock_without_a_pid_is_recovered_after_a_grace_period(self):
+        self.lock_dir.mkdir(parents=True)  # A holder that died between mkdir and writing its pid.
+        result = self.run_launcher()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(len(self.calls('cli')), 2)
+        self.assertFalse(self.lock_dir.exists())
+
+    def test_unreadable_pid_is_not_mistaken_for_a_live_run(self):
+        self.lock_dir.mkdir(parents=True)
+        (self.lock_dir / 'pid').write_text('not a pid\n')
+        self.assertEqual(self.run_launcher().returncode, 0)
+
+    def test_lock_area_must_be_ignored_before_any_provider_call(self):
+        (self.project / '.git/info/exclude').write_text('')
+        (self.project / '.gitignore').write_text('.rpi/local/update-runs/run.*/*\n')
+        result = self.run_launcher()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('launcher.lock', result.stderr)
+        self.assertEqual(self.calls('cli'), [])
+        self.assertFalse((self.project / '.rpi').exists())
 
 
 if __name__ == '__main__':

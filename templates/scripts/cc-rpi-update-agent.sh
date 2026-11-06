@@ -20,6 +20,9 @@
 # universal requirements. Never rewrite HOME or source an interactive rc file.
 # Reports use unique task-owned .rpi/local/update-runs directories. Preserve these
 # and lifecycle journals on failure; there is no blind retry of partial mutation.
+# One launcher run per project at a time: an atomic mkdir lock in
+# .rpi/local/update-runs/launcher.lock holds the owner's pid. An overlapping run
+# exits without calling a provider. A lock whose pid is gone is recovered.
 set -euo pipefail
 
 blocked() {
@@ -69,10 +72,53 @@ if not Path(sys.argv[2]).resolve().is_relative_to(Path(sys.argv[1])):
 PY
 RUN_ID=$(python3 -c 'import secrets; print(secrets.token_hex(8))')
 RUN_DIR="$REPORT_ROOT/run.$RUN_ID"
-for artifact in report.md check.json status.txt; do
-  git -C "$PROJECT_ROOT" check-ignore --quiet -- "$RUN_DIR/$artifact" || blocked 'scheduled output is not ignored' 'review .rpi/local exclusions before scheduling; existing ignore rules are preserved'
+LOCK_DIR="$REPORT_ROOT/launcher.lock"
+for artifact in "$RUN_DIR/report.md" "$RUN_DIR/check.json" "$RUN_DIR/status.txt" "$LOCK_DIR/pid"; do
+  git -C "$PROJECT_ROOT" check-ignore --quiet -- "$artifact" || blocked 'scheduled output is not ignored' 'review .rpi/local exclusions before scheduling (reports and the launcher.lock directory must be ignored); existing ignore rules are preserved'
 done
 mkdir -p -- "$REPORT_ROOT"
+
+# Single-flight: mkdir is atomic. The holder writes its pid; every exit path releases
+# the lock only while the pid file still names this process.
+probe_output=
+release_lock() {
+  [[ -n "$probe_output" ]] && rm -f "$probe_output"
+  if [[ $(cat "$LOCK_DIR/pid" 2>/dev/null || true) == "$$" ]]; then
+    rm -rf -- "$LOCK_DIR"
+  fi
+}
+acquire_lock() {
+  local holder aside attempt=0
+  while ! mkdir -- "$LOCK_DIR" 2>/dev/null; do
+    holder=$(cat "$LOCK_DIR/pid" 2>/dev/null || true)
+    if [[ $holder =~ ^[0-9]+$ ]]; then
+      if kill -0 "$holder" 2>/dev/null; then
+        blocked "another update run (pid $holder) holds the project lock $LOCK_DIR" "wait for pid $holder to finish and run again, or investigate it with: ps -p $holder"
+      fi
+    elif [[ -z $holder && -d "$LOCK_DIR" ]] && (( ++attempt <= 10 )); then
+      # Another run may be between mkdir and writing its pid; a lock that never gets one is stale.
+      sleep 0.2
+      continue
+    fi
+    # Stale (dead pid, unreadable pid or no pid): move it aside atomically so only one competing
+    # run recovers it, then retry the mkdir. The rare case where a live run took the lock between
+    # the check and the move is handed back.
+    aside="$LOCK_DIR.stale.$$"
+    if mv -- "$LOCK_DIR" "$aside" 2>/dev/null; then
+      if [[ $(cat "$aside/pid" 2>/dev/null || true) == "$holder" ]]; then
+        rm -rf -- "$aside"
+      else
+        mv -- "$aside" "$LOCK_DIR" 2>/dev/null || rm -rf -- "$aside"
+      fi
+    fi
+    attempt=0
+  done
+  printf '%s\n' "$$" > "$LOCK_DIR/pid"
+}
+acquire_lock
+trap release_lock EXIT
+trap 'exit 143' TERM
+trap 'exit 130' INT HUP
 mkdir -- "$RUN_DIR"
 REPORT_FILE="$RUN_DIR/report.md"
 PROMPT="$invocation
@@ -91,7 +137,6 @@ Return concrete changes, conflicts and verification; never claim success from pr
 cd -- "$PROJECT_ROOT"
 native_status=0
 probe_output=$(mktemp)
-trap 'rm -f "$probe_output"' EXIT
 probe_status=0
 env -u ANTHROPIC_API_KEY "$CLAUDE_BIN" -p 'Reply READY only. Do not use tools or change files.' \
   --tools '' --strict-mcp-config --permission-mode dontAsk \
@@ -128,7 +173,7 @@ else
     --permission-prompts none --output-format text > "$REPORT_FILE" 2>&1 || native_status=$?
 fi
 rm -f "$probe_output"
-trap - EXIT
+probe_output=
 check_status=0
 python3 "$ENGINE" check --source "$CC_RPI_PATH" --target "$PROJECT_ROOT" \
   --harness "$RPI_HARNESS" --route "$RPI_ROUTE" > "$RUN_DIR/check.json" 2>&1 || check_status=$?

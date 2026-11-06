@@ -234,8 +234,11 @@ An update compares current installed bytes even when the source revision has not
 changed, so missing resources are still detected. `ready`, `noop` and `conflict`
 plans are distinct. Preserve `.rpi/manifest.json`, nonsecret baselines and durable
 journals; use the recorded rollback path for interrupted transactions and retain
-concurrent user edits. Detach removes only unchanged proven ownership and leaves
-research, plans, decisions, custom files and separate user/plugin installations.
+concurrent user edits. A rollback that a newer edit blocks prints one command line
+that saves the edit under `.rpi/local/saved-edits/`, restores the recorded content
+and re-runs it. Detach removes only unchanged proven ownership and leaves
+research, plans, decisions, custom files and separate user/plugin installations;
+`check` then reports `detached` with exit 0 and the command that installs again.
 
 Schedules require explicit setup and resource authorization. The optional
 `templates/scripts/cc-rpi-update-agent.sh` launcher requires `RPI_UPDATE_ENABLED=1`,
@@ -247,8 +250,10 @@ Required unavailable permissions are denied rather than bypassed.
 
 The launcher checks installation state after the native attempt and preserves
 both exit statuses in unique ignored `.rpi/local/update-runs/` reports. It refuses
-unignored output paths and runs a read-only Claude probe (no tools, no file
-changes) before any update starts. A quota or authentication signal from the
+unignored output paths, allows one run per project at a time (an overlapping run
+exits with a `BLOCKED` message naming the holder pid before it calls a provider,
+and a lock left by a dead process is recovered), and runs a read-only Claude probe
+(no tools, no file changes) before any update starts. A quota or authentication signal from the
 probe selects the installed Codex subscription when the `SKILL.md` and lifecycle
 contract of its user-scope `rpi-update` skill match the selected source byte for
 byte; any other probe failure is reported and blocks the update. An update that
