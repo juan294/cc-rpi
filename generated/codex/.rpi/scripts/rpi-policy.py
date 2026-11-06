@@ -144,10 +144,19 @@ def project_policy(root):
     return value
 
 
+def branch_name(name):
+    """A declared branch as a bare name: refs/heads/NAME and NAME are the same branch."""
+    return name.removeprefix('refs/heads/')
+
+
+def production_branches(policy):
+    return {branch_name(name) for name in policy.get('production_branches', [])}
+
+
 def integration_branch(root, policy):
     declared = policy.get('integration_branch')
     if isinstance(declared, str) and declared:
-        return declared
+        return branch_name(declared)
     return next((name for name in PROTECTED if git(root, 'rev-parse', '--verify', '--quiet', 'refs/heads/' + name)), None)
 
 
@@ -157,7 +166,11 @@ def resolved_branch(ref, current):
         return None  # Unresolved or a glob that can match any branch.
     if ref in ('HEAD', '@'):
         return current
-    return ref.removeprefix('refs/heads/')
+    return branch_name(ref)
+
+
+def protected_branches(root, policy):
+    return set(PROTECTED) | production_branches(policy) | {integration_branch(root, policy) if root else None}
 
 
 def parse_refspec(spec, force, delete):
@@ -233,8 +246,7 @@ def push(args, cwd):
     if not rewritten:
         return
     policy = project_policy(root) if root else {}
-    integration = integration_branch(root, policy) if root else None
-    protected = set(PROTECTED) | set(policy.get('production_branches', [])) | {integration}
+    protected = protected_branches(root, policy)
     for branch in rewritten:
         if branch is None or branch in protected:
             fail('Force-pushing or deleting a protected branch (' + (branch or 'unresolved target') + ') rewrites shared history.',
@@ -290,19 +302,28 @@ def github(args, cwd):
 
 
 def shell_script(args):
-    """The -c script of a shell invocation such as bash -ec 'CMD' or sh -e -c 'CMD'."""
-    index = 0
-    while index < len(args) and args[index][:1] in ('-', '+'):
-        if re.fullmatch(r'-[A-Za-z]*c[A-Za-z]*', args[index]):
-            return args[index + 1] if index + 1 < len(args) else None
-        index += 2 if args[index] in ('-o', '+o', '-O', '+O') else 1  # -o takes an option name.
-    return None
+    """The -c script of a shell invocation such as bash -ec 'CMD', sh -e -c 'CMD' or bash -c -e 'CMD'.
+
+    A shell takes options (before and after -c) until its first non-option word, and with -c
+    that word is the script. -o and -O take an option name."""
+    index, command = 0, False
+    while index < len(args):
+        word = args[index]
+        if word == '--':
+            index += 1
+            break
+        if word[:1] not in ('-', '+') or word in ('-', '+'):
+            break
+        command = command or bool(re.fullmatch(r'-[A-Za-z]*c[A-Za-z]*', word))
+        index += 2 if word in ('-o', '+o', '-O', '+O') else 1  # -o takes an option name.
+    return args[index] if command and index < len(args) else None
 
 
 def api_delete(args, cwd):
     """Block API deletion of a repository or a protected branch ref."""
     methods = [args[index + 1] for index, arg in enumerate(args[:-1]) if arg in ('-X', '--method')]
     methods += [arg.split('=', 1)[1] for arg in args if arg.startswith(('--method=', '-X='))]
+    methods += [arg[2:] for arg in args if re.fullmatch(r'-X[A-Za-z]+', arg)]  # gh accepts the attached -XDELETE.
     if not any(method.upper() == 'DELETE' for method in methods):
         return
     for arg in args:
@@ -313,8 +334,7 @@ def api_delete(args, cwd):
         if match:
             root = repository(cwd)
             policy = project_policy(root) if root else {}
-            integration = integration_branch(root, policy) if root else None
-            if match[1] in set(PROTECTED) | set(policy.get('production_branches', [])) | {integration}:
+            if match[1] in protected_branches(root, policy):
                 fail('Deleting a protected branch (' + match[1] + ') through the API rewrites shared history.',
                      'Delete only working branches; if it is truly intended, the owner runs the exact command.', 'protected-branch')
 

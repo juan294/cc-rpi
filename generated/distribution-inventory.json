@@ -44,8 +44,8 @@
     "sha256": "0e4dc8aa15b48980d7b789c574e84ab85acf22f26b940ba97f76a8b3d4cb75b6"
   },
   "claude/.rpi/scripts/rpi-policy.py": {
-    "bytes": 27477,
-    "sha256": "8eb9dbd2f7dd5ee5bce57c2e508ebd4d5a191bd43a183ecb1b6dd8dee6c029f5"
+    "bytes": 28099,
+    "sha256": "4ba2f4681d4334342406a22f0f6731be623c5e8df1a953707a893b20dc22951a"
   },
   "claude/.rpi/scripts/rpi-prepush.py": {
     "bytes": 20515,
@@ -444,8 +444,8 @@
     "sha256": "0e4dc8aa15b48980d7b789c574e84ab85acf22f26b940ba97f76a8b3d4cb75b6"
   },
   "codex/.rpi/scripts/rpi-policy.py": {
-    "bytes": 27477,
-    "sha256": "8eb9dbd2f7dd5ee5bce57c2e508ebd4d5a191bd43a183ecb1b6dd8dee6c029f5"
+    "bytes": 28099,
+    "sha256": "4ba2f4681d4334342406a22f0f6731be623c5e8df1a953707a893b20dc22951a"
   },
   "codex/.rpi/scripts/rpi-prepush.py": {
     "bytes": 20515,
@@ -636,8 +636,8 @@
     "sha256": "0e4dc8aa15b48980d7b789c574e84ab85acf22f26b940ba97f76a8b3d4cb75b6"
   },
   "codex/runtime/templates/scripts/rpi-policy.py": {
-    "bytes": 27477,
-    "sha256": "8eb9dbd2f7dd5ee5bce57c2e508ebd4d5a191bd43a183ecb1b6dd8dee6c029f5"
+    "bytes": 28099,
+    "sha256": "4ba2f4681d4334342406a22f0f6731be623c5e8df1a953707a893b20dc22951a"
   },
   "codex/runtime/templates/scripts/rpi-prepush.py": {
     "bytes": 20515,
