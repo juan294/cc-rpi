@@ -82,5 +82,21 @@ class ReceiptGateAgreesWithPolicyHookTests(test_prepush.PrePushFixture):
         self.assert_blocked('git push -f origin release', 'protected branch')
 
 
+    def test_dirty_tree_refusal_prints_the_full_first_file_name(self):
+        self.policy(require_verification_receipt=True)
+        self.commit('Opt in')
+        self.evidence()
+        (self.project / 'README.md').write_text('Changed after verification.\n')
+        (self.project / 'new file.txt').write_text('Untracked.\n')
+        result = self.assert_refused(self.line('refs/heads/develop'), reason='clean')
+        reason = result.stderr.split(' / FIX:')[0]
+        self.assertIn('(README.md, new file.txt)', reason)
+        self.git('checkout', '--', 'README.md')
+        (self.project / 'new file.txt').unlink()
+        (self.project / 'a.txt').write_text('Untracked only.\n')
+        result = self.assert_refused(self.line('refs/heads/develop'), reason='clean')
+        self.assertIn('(a.txt)', result.stderr.split(' / FIX:')[0])
+
+
 if __name__ == '__main__':
     unittest.main()

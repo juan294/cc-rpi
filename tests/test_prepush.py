@@ -16,8 +16,17 @@ DOCS = test_policy.ROOT / 'docs/native-policy.md'
 # The documented enable command, verbatim: a shared (or committed) wrapper that runs the
 # pushing worktree's own gate and refuses with BLOCKED / WHY / FIX when that checkout has none.
 INSTALL = r'''hooks=$(git config --type=path --get core.hooksPath || echo "$(git rev-parse --path-format=absolute --git-common-dir)/hooks")
-mkdir -p "$hooks" && cat > "$hooks/pre-push" <<'EOF'
+if [ -e "$hooks/pre-push" ] && ! grep -q 'cc-rpi receipt gate wrapper' "$hooks/pre-push"; then
+  if grep -q 'rpi-prepush\.py' "$hooks/pre-push"; then
+    echo "$hooks/pre-push already invokes rpi-prepush.py; left unchanged."
+  else
+    echo "BLOCKED / WHY: $hooks/pre-push already exists and does not invoke rpi-prepush.py, and this command never overwrites an existing hook. / FIX: add this line to that hook before any command that reads standard input (replace python3.13 with any Python 3.11 or newer on PATH), then push again: python3.13 \"\$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py\" \"\$@\" || exit 1" >&2
+    false
+  fi
+else
+  mkdir -p "$hooks" && cat > "$hooks/pre-push" <<'EOF'
 #!/bin/sh
+# cc-rpi receipt gate wrapper: written by the documented enable command; run it again to update.
 top=$(git rev-parse --show-toplevel 2>/dev/null)
 gate="$top/.rpi/scripts/rpi-prepush.py"
 case $0 in /*) hook=$0 ;; *) hook=$PWD/$0 ;; esac
@@ -35,7 +44,8 @@ if [ -z "$python" ] || ! "$python" -c 'import sys; sys.exit(sys.version_info < (
 fi
 exec "$python" "$gate" "$@"
 EOF
-chmod +x "$hooks/pre-push"
+  chmod +x "$hooks/pre-push"
+fi
 '''
 
 
@@ -364,6 +374,55 @@ class InstalledHookTests(PrePushFixture):
     def git_in(self, cwd, *arguments):
         subprocess.run([self.environment['RPI_REAL_GIT'], '-C', str(cwd), '-c', 'user.name=Fixture',
                         '-c', 'user.email=fixture@example.invalid', *arguments], check=True, capture_output=True)
+
+    def hook(self):
+        return self.project / '.git/hooks/pre-push'
+
+    def enable(self):
+        return subprocess.run(['bash', '-c', INSTALL], cwd=self.project, env=self.environment,
+                              capture_output=True, text=True)
+
+    def test_existing_owner_hook_is_refused_untouched_with_the_line_to_add(self):
+        self.hook().parent.mkdir(parents=True, exist_ok=True)
+        owner = '#!/bin/sh\necho "owner hook ran" >&2\n'
+        self.hook().write_text(owner)
+        self.hook().chmod(0o755)
+        result = self.enable()
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.hook().read_text(), owner, 'the owner hook is never overwritten')
+        self.assertTrue(result.stderr.startswith('BLOCKED / WHY: '), result.stderr)
+        why, fix = result.stderr.strip().split(' / FIX: ', 1)
+        self.assertIn('already exists', why)
+        self.assertIn('rpi-prepush.py', why)
+        line = fix.rsplit('then push again: ', 1)[1]
+        self.assertIn('/.rpi/scripts/rpi-prepush.py', line)
+        # Following the FIX verbatim yields a hook that runs the owner's step and then the gate.
+        self.hook().write_text(owner + line + '\n')
+        self.git('branch', 'feature/work')
+        self.assertEqual(self.push('feature/work').returncode, 0)
+        refused = self.push('develop')
+        self.assertNotEqual(refused.returncode, 0, refused.stdout + refused.stderr)
+        self.assertIn('owner hook ran', refused.stderr)
+        self.assertIn('verification evidence is missing', refused.stderr)
+
+    def test_fresh_install_and_rerun_are_idempotent(self):
+        self.assertFalse(self.hook().exists())
+        first = self.enable()
+        self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+        installed = self.hook().read_text()
+        self.assertIn('rpi-prepush.py', installed)
+        self.assertTrue(os.access(self.hook(), os.X_OK))
+        second = self.enable()
+        self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
+        self.assertEqual(self.hook().read_text(), installed)
+
+    def test_hook_that_already_invokes_the_gate_is_left_alone(self):
+        self.hook().parent.mkdir(parents=True, exist_ok=True)
+        custom = '#!/bin/sh\necho before\npython3 "$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py" "$@" || exit 1\n'
+        self.hook().write_text(custom)
+        result = self.enable()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.hook().read_text(), custom)
 
     def test_documented_command_is_the_tested_command(self):
         self.assertIn('```bash\n' + INSTALL + '```', DOCS.read_text())

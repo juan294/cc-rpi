@@ -109,8 +109,17 @@ macOS's stock `python3` 3.9 is never used:
 
 ```bash
 hooks=$(git config --type=path --get core.hooksPath || echo "$(git rev-parse --path-format=absolute --git-common-dir)/hooks")
-mkdir -p "$hooks" && cat > "$hooks/pre-push" <<'EOF'
+if [ -e "$hooks/pre-push" ] && ! grep -q 'cc-rpi receipt gate wrapper' "$hooks/pre-push"; then
+  if grep -q 'rpi-prepush\.py' "$hooks/pre-push"; then
+    echo "$hooks/pre-push already invokes rpi-prepush.py; left unchanged."
+  else
+    echo "BLOCKED / WHY: $hooks/pre-push already exists and does not invoke rpi-prepush.py, and this command never overwrites an existing hook. / FIX: add this line to that hook before any command that reads standard input (replace python3.13 with any Python 3.11 or newer on PATH), then push again: python3.13 \"\$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py\" \"\$@\" || exit 1" >&2
+    false
+  fi
+else
+  mkdir -p "$hooks" && cat > "$hooks/pre-push" <<'EOF'
 #!/bin/sh
+# cc-rpi receipt gate wrapper: written by the documented enable command; run it again to update.
 top=$(git rev-parse --show-toplevel 2>/dev/null)
 gate="$top/.rpi/scripts/rpi-prepush.py"
 case $0 in /*) hook=$0 ;; *) hook=$PWD/$0 ;; esac
@@ -128,7 +137,8 @@ if [ -z "$python" ] || ! "$python" -c 'import sys; sys.exit(sys.version_info < (
 fi
 exec "$python" "$gate" "$@"
 EOF
-chmod +x "$hooks/pre-push"
+  chmod +x "$hooks/pre-push"
+fi
 ```
 
 Where the wrapper lands depends on `core.hooksPath`:
@@ -154,8 +164,13 @@ The wrapper runs the pushing worktree's own gate. When that checkout has no
 printed fix names the three ways out: push from a checkout that has the gate,
 restore it with a reviewed update, or, when the project no longer opts in,
 remove the hook file at its printed absolute path.
-When a `pre-push` hook already exists (for example one managed by a hook
-tool), add the wrapper's command to it instead of replacing it. `git push --no-verify` skips every
+The enable command never overwrites a `pre-push` hook it did not write. When one
+already exists (for example one managed by a hook tool) and does not invoke
+`rpi-prepush.py`, the command leaves it untouched, prints `BLOCKED / WHY / FIX`
+with the exact line to add to that hook, and exits nonzero. A hook that already
+invokes `rpi-prepush.py`, or that this command wrote earlier (it carries a
+`cc-rpi receipt gate wrapper` comment), is left alone or rewritten in place, so
+running the command again is safe. `git push --no-verify` skips every
 pre-push hook, so the gate is a guard against mistakes, not a security boundary.
 
 A branch update is gated when the pushing checkout's `.rpi/policy.json`, the

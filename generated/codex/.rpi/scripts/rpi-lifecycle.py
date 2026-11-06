@@ -777,8 +777,17 @@ def make_plan(engine, request):
 GATE_DOC = 'https://github.com/juan294/cc-rpi/blob/main/docs/native-policy.md#optional-verification-receipt-gate'
 # Verbatim from docs/native-policy.md (a test keeps them identical); adopters do not have that file.
 PRE_PUSH_ENABLE = r'''hooks=$(git config --type=path --get core.hooksPath || echo "$(git rev-parse --path-format=absolute --git-common-dir)/hooks")
-mkdir -p "$hooks" && cat > "$hooks/pre-push" <<'EOF'
+if [ -e "$hooks/pre-push" ] && ! grep -q 'cc-rpi receipt gate wrapper' "$hooks/pre-push"; then
+  if grep -q 'rpi-prepush\.py' "$hooks/pre-push"; then
+    echo "$hooks/pre-push already invokes rpi-prepush.py; left unchanged."
+  else
+    echo "BLOCKED / WHY: $hooks/pre-push already exists and does not invoke rpi-prepush.py, and this command never overwrites an existing hook. / FIX: add this line to that hook before any command that reads standard input (replace python3.13 with any Python 3.11 or newer on PATH), then push again: python3.13 \"\$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py\" \"\$@\" || exit 1" >&2
+    false
+  fi
+else
+  mkdir -p "$hooks" && cat > "$hooks/pre-push" <<'EOF'
 #!/bin/sh
+# cc-rpi receipt gate wrapper: written by the documented enable command; run it again to update.
 top=$(git rev-parse --show-toplevel 2>/dev/null)
 gate="$top/.rpi/scripts/rpi-prepush.py"
 case $0 in /*) hook=$0 ;; *) hook=$PWD/$0 ;; esac
@@ -796,7 +805,8 @@ if [ -z "$python" ] || ! "$python" -c 'import sys; sys.exit(sys.version_info < (
 fi
 exec "$python" "$gate" "$@"
 EOF
-chmod +x "$hooks/pre-push"'''
+  chmod +x "$hooks/pre-push"
+fi'''
 ENABLE_HINT = ('run the one-time command in enable_command from the integration checkout\'s repository root '
                '(documented at ' + GATE_DOC + ')')
 

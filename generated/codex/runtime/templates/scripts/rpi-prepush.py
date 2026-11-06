@@ -225,9 +225,11 @@ def verified_candidate(root, policy):
     """The commit that exact local evidence attests for this clean candidate."""
     import importlib.util
     expected, runner = verification_contract(policy)
-    dirty = git(root, 'status', '--porcelain', '--untracked-files=normal', '--', '.', ':(exclude).rpi/local')
+    # NUL-separated and unstripped: the first status column is a significant space, and names stay unquoted.
+    dirty = git(root, 'status', '--porcelain', '-z', '--no-renames', '--untracked-files=normal', '--', '.', ':(exclude).rpi/local', text=False)
     if dirty is None or dirty:  # Local evidence is never part of the candidate (see rpi-candidate.py).
-        listed = ', '.join(line[3:] for line in (dirty or '').splitlines()[:5]) or 'git status failed'
+        names = [entry[3:].decode('utf-8', 'replace') for entry in (dirty or b'').split(b'\0') if entry]
+        listed = ', '.join(names[:5]) or 'git status failed'
         fail('Publication requires a clean completed integration candidate (' + listed + ').',
              'Commit or remove those changes, then run ' + runner)
     path = root / '.rpi/local/verification.json'
