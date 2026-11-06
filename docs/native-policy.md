@@ -41,12 +41,15 @@ user govern them. `git pull` is never blocked.
 Shell text is parsed and never executed. Chains, pipes, subshells, command and
 process substitutions, `bash`/`sh`/`zsh -c` (including forms such as `-ec`,
 `-e -c`, `-c -e` and `-o pipefail -c`; options before and after `-c` are skipped
-to the first non-option word, which is the script), `eval`, `env` (including `-S`)/`command`/`builtin`/
+to the first non-option word, which is the script; `-o`, `-O`, `--rcfile` and
+`--init-file` take a value and every other long option is a flag), `eval`, `env` (including `-S`)/`command`/`builtin`/
 `sudo`/`doas`/`timeout`/`nice`/`nohup`/`stdbuf`/`caffeinate`/`xargs` wrappers
 with literal arguments, redirections such as `2>&1`, `git -C`, literal `cd`/`pushd`
 and loop bodies are inspected for the blocked forms above. `git -c` is applied
 for exactly three kinds of setting on the same command line: `alias.<name>` (a
-plain alias expands to its command, a `!` alias is inspected as shell text),
+plain alias expands to its command, a `!` alias is inspected as shell text; an
+alias named like a Git builtin such as `push` or `status` is ignored, as Git
+ignores it, using `git --list-cmds=builtins` and a static list as fallback),
 `remote.<name>.push` (added to the configured push specs) and `push.default` /
 `branch.<name>.remote` / `branch.<name>.merge` (which replace the repository
 value). Any other `-c` setting is ignored. `gh api` DELETE is recognised as
@@ -188,7 +191,10 @@ already exists (for example one managed by a hook tool) and does not invoke
 with the exact line to add to that hook, and exits nonzero. A hook that already
 invokes `rpi-prepush.py`, or that this command wrote earlier (it carries a
 `cc-rpi receipt gate wrapper` comment), is left alone or rewritten in place, so
-running the command again is safe. `git push --no-verify` skips every
+running the command again is safe. A file with that comment counts as the
+generated wrapper and is rewritten in place, so edits to it are not kept; to add
+your own checks, use a hook file without the comment that calls `rpi-prepush.py`
+(the line the refusal prints). `git push --no-verify` skips every
 pre-push hook, so the gate is a guard against mistakes, not a security boundary.
 
 A branch update is gated when the pushing checkout's `.rpi/policy.json`, the

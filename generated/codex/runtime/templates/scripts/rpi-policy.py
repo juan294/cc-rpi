@@ -53,6 +53,14 @@ DYNAMIC = '__RPI_DYNAMIC__'
 POLICY_KEYS = {'schema_version', 'integration_branch', 'production_branches', 'remote',
                'require_verification_receipt', 'verification_checks', 'verification_command'}
 PUSH_VALUE_OPTIONS = {'-o', '--push-option', '--repo', '--receive-pack', '--exec'}
+# Shell options whose next word is a value. Every other long option (--norc, --posix, --login ...) is a flag.
+SHELL_VALUE_OPTIONS = {'-o', '+o', '-O', '+O', '--rcfile', '--init-file'}
+# Git ignores an alias that has the name of a builtin; these are the builtins when `git --list-cmds=builtins` is unavailable.
+GIT_BUILTINS = {'add', 'am', 'apply', 'archive', 'bisect', 'blame', 'branch', 'bundle', 'checkout', 'cherry', 'cherry-pick',
+                'clean', 'clone', 'commit', 'config', 'describe', 'diff', 'fetch', 'format-patch', 'gc', 'grep', 'init', 'log',
+                'ls-files', 'ls-remote', 'ls-tree', 'merge', 'mv', 'notes', 'pull', 'push', 'range-diff', 'rebase', 'reflog',
+                'remote', 'reset', 'restore', 'revert', 'rm', 'shortlog', 'show', 'stash', 'status', 'submodule', 'switch',
+                'tag', 'worktree'}
 GIT_VALUE_OPTIONS = {'-c', '--git-dir', '--work-tree', '--namespace', '--config-env'}
 
 
@@ -282,9 +290,17 @@ def git_command(args, cwd, depth=0):
             overrides.setdefault(config_key(name), []).append(value)
         elif option in GIT_VALUE_OPTIONS and args:
             args.pop(0)
+    builtins = None
     for _ in range(5):  # Aliases given with git -c; aliases in configuration files are not read.
         alias = overrides.get(config_key('alias.' + args[0]), [None])[-1] if args else None
         if alias is None:
+            break
+        if args[0] in GIT_BUILTINS:
+            break  # Git ignores an alias named like a builtin.
+        if builtins is None:
+            listed = git(cwd or '.', '--list-cmds=builtins')
+            builtins = set(listed.split()) if listed else set()
+        if args[0] in builtins:
             break
         if alias.startswith('!'):
             if depth < 5:
@@ -347,7 +363,7 @@ def shell_script(args):
         if word[:1] not in ('-', '+') or word in ('-', '+'):
             break
         command = command or bool(re.fullmatch(r'-[A-Za-z]*c[A-Za-z]*', word))
-        index += 2 if word in ('-o', '+o', '-O', '+O') else 1  # -o takes an option name.
+        index += 2 if word in SHELL_VALUE_OPTIONS else 1  # -o and -O take an option name, --rcfile and --init-file a file.
     return args[index] if command and index < len(args) else None
 
 

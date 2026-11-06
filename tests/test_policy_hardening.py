@@ -1,5 +1,6 @@
 """Branch-name spelling and shell/gh spelling coverage of the pre-action denylist."""
 import json
+import subprocess
 import unittest
 
 import test_policy
@@ -55,6 +56,15 @@ class ShellAndApiSpellingTests(test_policy.PolicyFixture):
             with self.subTest(prefix=prefix):
                 self.assert_blocked(prefix + ' ' + script, 'protected branch')
 
+    def test_value_taking_long_options_do_not_hide_the_script(self):
+        script = "'git push -f origin main'"
+        for prefix in ('bash --rcfile rc -c', 'bash --init-file rc -c', 'bash --rcfile=rc -c', 'bash --init-file=rc -c',
+                       'bash --norc --noprofile -c', 'bash -c --rcfile rc', 'bash --posix --rcfile rc -e -c',
+                       'zsh -o pipefail --login -c', 'bash --debugger --verbose -c'):
+            with self.subTest(prefix=prefix):
+                self.assert_blocked(prefix + ' ' + script, 'protected branch')
+        self.assert_allowed("bash --rcfile rc script.sh 'git push -f origin main'")  # script.sh is the script, not -c text
+
     def test_a_shell_without_c_does_not_inspect_its_first_word_as_a_script(self):
         self.assert_allowed("bash -e 'git push -f origin main'")  # A script file name, not a -c command.
         self.assert_allowed("bash -c 'git status'")
@@ -88,6 +98,22 @@ class GitCommandLineConfigTests(test_policy.PolicyFixture):
                         "git -c alias.p=status p -f", "git -c alias.p='!git push origin main' p", "git -c alias.p=push p origin main"):
             with self.subTest(command=command):
                 self.assert_allowed(command)
+
+    def test_an_alias_that_shadows_a_git_builtin_is_ignored_as_git_does(self):
+        for command in ("git -c alias.push=true push -f origin main", "git -c alias.push=status push -f origin develop",
+                        "git -c alias.push='!true' push --force origin main", "git -c alias.p=push p -f origin main"):
+            with self.subTest(command=command):
+                self.assert_blocked(command, 'protected branch')
+        for command in ("git -c alias.status=push status", "git -c alias.log='push -f origin main' log",
+                        "git -c alias.commit='!git push -f origin main' commit -m x"):
+            with self.subTest(command=command):
+                self.assert_allowed(command)
+
+    def test_builtins_outside_the_static_list_come_from_git_itself(self):
+        listed = subprocess.run(['git', '--list-cmds=builtins'], capture_output=True, text=True).stdout.split()
+        if 'maintenance' not in listed:
+            self.skipTest('this git does not list maintenance as a builtin')
+        self.assert_allowed("git -c alias.maintenance='push -f origin main' maintenance")
 
     def test_command_line_push_configuration_is_applied_to_unnamed_pushes(self):
         for command in ("git -c push.default=matching push -f", "git -c push.default=matching push --force origin",
