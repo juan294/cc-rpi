@@ -20,10 +20,12 @@
 # universal requirements. Never rewrite HOME or source an interactive rc file.
 # Reports use unique task-owned .rpi/local/update-runs directories. Preserve these
 # and lifecycle journals on failure; there is no blind retry of partial mutation.
-# One launcher run per project at a time: an atomic mkdir lock in
-# .rpi/local/update-runs/launcher.lock holds the owner's start time and pid. An
-# overlapping run exits without calling a provider. A lock whose holder is gone
-# (no such pid, or a pid with a different start time) is recovered.
+# One launcher run per project at a time: after validation the script re-executes itself through
+# Python, which takes a non-blocking flock on .rpi/local/update-runs/launcher.lock and passes the
+# open file to the script and every child it starts (the provider included). The kernel holds the
+# lock until the last of them exits, for any reason, so there is no pid, start time or stale-lock
+# logic. An overlapping run exits without calling a provider. A launcher killed while its provider
+# still runs keeps the lock until that provider exits.
 set -euo pipefail
 
 blocked() {
@@ -48,8 +50,10 @@ NATIVE_SKILL="$CC_RPI_PATH/generated/claude/skills/rpi-update"
 for required in "$ENGINE" "$CC_RPI_PATH/templates/distribution.json" "$NATIVE_SKILL/SKILL.md" "$NATIVE_SKILL/references/lifecycle-contract.md"; do
   [[ -f "$required" ]] || blocked "missing source resource: $required" 'restore the complete verified local package before scheduling'
 done
-python3 "$ENGINE" validate --source "$CC_RPI_PATH"
-python3 "$ENGINE" check-generated --source "$CC_RPI_PATH"
+if [[ ${RPI_UPDATE_LOCK_OWNER:-} != "$$" ]]; then  # The re-executed pass validated already; it verifies the lock instead.
+  python3 "$ENGINE" validate --source "$CC_RPI_PATH"
+  python3 "$ENGINE" check-generated --source "$CC_RPI_PATH"
+fi
 
 native_args=("$CLAUDE_BIN")
 if [[ "$RPI_ROUTE" == plugin ]]; then
@@ -73,83 +77,59 @@ if not Path(sys.argv[2]).resolve().is_relative_to(Path(sys.argv[1])):
 PY
 RUN_ID=$(python3 -c 'import secrets; print(secrets.token_hex(8))')
 RUN_DIR="$REPORT_ROOT/run.$RUN_ID"
-LOCK_DIR="$REPORT_ROOT/launcher.lock"
-for artifact in "$RUN_DIR/report.md" "$RUN_DIR/check.json" "$RUN_DIR/status.txt" "$LOCK_DIR/pid"; do
-  git -C "$PROJECT_ROOT" check-ignore --quiet -- "$artifact" || blocked 'scheduled output is not ignored' 'review .rpi/local exclusions before scheduling (reports and the launcher.lock directory must be ignored); existing ignore rules are preserved'
+LOCK_FILE="$REPORT_ROOT/launcher.lock"
+for artifact in "$RUN_DIR/report.md" "$RUN_DIR/check.json" "$RUN_DIR/status.txt" "$LOCK_FILE"; do
+  git -C "$PROJECT_ROOT" check-ignore --quiet -- "$artifact" || blocked 'scheduled output is not ignored' 'review .rpi/local exclusions before scheduling (reports and the launcher.lock file must be ignored); existing ignore rules are preserved'
 done
 mkdir -p -- "$REPORT_ROOT"
 
-# Single-flight: mkdir is atomic. The holder records its start time and then its pid; every
-# exit path releases the lock only while the pid file still names this process. A holder counts
-# as live while its pid exists (even one this user cannot signal) and, when a start time was
-# recorded, that start time still matches, so a reused pid is not mistaken for the holder.
-probe_output=
-release_lock() {
-  [[ -z "$probe_output" ]] || rm -f "$probe_output"
-  if [[ $(cat "$LOCK_DIR/pid" 2>/dev/null || true) == "$$" ]]; then
-    rm -rf -- "$LOCK_DIR"
-  fi
-}
-process_start() {
-  LC_ALL=C ps -o lstart= -p "$1" 2>/dev/null | sed -e 's/^ *//' -e 's/ *$//' || true
-}
-holder_live() {
-  local pid=$1 recorded=$2 current
-  kill -0 "$pid" 2>/dev/null || ps -p "$pid" >/dev/null 2>&1 || return 1
-  [[ -n $recorded ]] || return 0
-  current=$(process_start "$pid")
-  [[ -z $current || $current == "$recorded" ]]
-}
-# Remove the lock a run judged stale. A second mkdir mutex serializes recovery, and the lock is
-# removed only if it still holds exactly what that run judged, so a fresh lock is never touched
-# and nothing is ever moved back over a live one.
-recover_stale() {
-  local seen_pid=$1 seen_started=$2 mutex="$LOCK_DIR.recover" waited=0 err pid started
-  until err=$(mkdir -- "$mutex" 2>&1); do
-    [[ -d $mutex ]] || blocked "cannot create the launcher recovery lock $mutex: $err" "make $REPORT_ROOT writable by this user (check its owner and mode), then run again"
-    sleep 0.1
-    if (( ++waited > 50 )); then rm -rf -- "$mutex"; waited=0; fi  # Left behind by a recoverer that died.
-  done
-  pid=$(cat "$LOCK_DIR/pid" 2>/dev/null || true)
-  started=$(cat "$LOCK_DIR/started" 2>/dev/null || true)
-  if [[ -d $LOCK_DIR && ! -L $LOCK_DIR && $pid == "$seen_pid" && $started == "$seen_started" ]]; then
-    rm -rf -- "$LOCK_DIR"
-  fi
-  rmdir -- "$mutex" 2>/dev/null || true
-}
-acquire_lock() {
-  local err pid started pending=0 rounds=0
-  while :; do
-    if (( ++rounds > 200 )); then
-      blocked "could not take the launcher lock $LOCK_DIR after $rounds attempts" "inspect $LOCK_DIR and the run that holds it, then run again"
-    fi
-    if err=$(mkdir -- "$LOCK_DIR" 2>&1); then
-      break
-    fi
-    if [[ ! -e $LOCK_DIR && ! -L $LOCK_DIR ]]; then
-      blocked "cannot create the launcher lock $LOCK_DIR: $err" "make $REPORT_ROOT writable by this user (check its owner and mode), then run again"
-    fi
-    if [[ ! -d $LOCK_DIR || -L $LOCK_DIR ]]; then
-      blocked "the launcher lock path $LOCK_DIR exists and is not a directory" "after confirming no update run is active, move that path aside, then run again"
-    fi
-    pid=$(cat "$LOCK_DIR/pid" 2>/dev/null || true)
-    started=$(cat "$LOCK_DIR/started" 2>/dev/null || true)
-    if [[ -z $pid ]]; then
-      # Another run may be between mkdir and writing its pid; a lock that never gets one is stale.
-      if (( ++pending <= 10 )); then sleep 0.2; continue; fi
-    elif [[ $pid =~ ^[0-9]+$ ]] && holder_live "$pid" "$started"; then
-      blocked "another update run (pid $pid) holds the project lock $LOCK_DIR" "wait for pid $pid to finish and run again, or investigate it with: ps -p $pid"
-    fi
-    recover_stale "$pid" "$started"
-    pending=0
-  done
-  process_start "$$" > "$LOCK_DIR/started"
-  printf '%s\n' "$$" > "$LOCK_DIR/pid"
-}
-trap release_lock EXIT
-trap 'exit 143' TERM
-trap 'exit 130' INT HUP
-acquire_lock
+# Single-flight. LOCK_ACQUIRE opens the lock file, takes flock(LOCK_EX | LOCK_NB) and execs this script
+# again with the descriptor inherited. LOCK_VERIFY runs in that second pass and proves the descriptor
+# is the lock file and is still held; an inherited RPI_UPDATE_LOCK_OWNER is trusted only for the process
+# whose pid it names (exec keeps the pid), so a copied environment never skips the lock.
+read -r -d '' LOCK_ACQUIRE <<'PY' || true
+import errno, fcntl, os, shlex, stat, sys
+path, argv = sys.argv[1], sys.argv[2:]
+def blocked(why, fix):
+    sys.stderr.write('BLOCKED / WHY: %s / FIX: %s\n' % (why, fix))
+    sys.exit(1)
+try:
+    fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
+except OSError as error:
+    blocked('cannot open the launcher lock %s: %s' % (path, error.strerror),
+            'make its directory writable by this user, or remove whatever else is at that path (it must be a regular file), then run again')
+if not stat.S_ISREG(os.fstat(fd).st_mode):
+    blocked('the launcher lock %s is not a regular file' % path, 'remove whatever is at that path, then run again')
+try:
+    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except OSError as error:
+    if error.errno in (errno.EWOULDBLOCK, errno.EAGAIN, errno.EACCES):
+        blocked('another update run for this project is active (it holds the lock %s)' % path,
+                'wait for it to finish, then run again; to see which process holds the lock run: lsof %s' % shlex.quote(path))
+    blocked('cannot lock the launcher lock %s: %s' % (path, error.strerror), 'use a local filesystem that supports flock for .rpi/local')
+os.set_inheritable(fd, True)
+os.environ['RPI_UPDATE_LOCK_OWNER'] = str(os.getpid())
+os.environ['RPI_UPDATE_LOCK_FD'] = str(fd)
+os.execv(argv[0], argv)
+PY
+read -r -d '' LOCK_VERIFY <<'PY' || true
+import fcntl, os, sys
+try:
+    fd = int(sys.argv[2])
+    held, named = os.fstat(fd), os.stat(sys.argv[1])
+    if (held.st_dev, held.st_ino) != (named.st_dev, named.st_ino):
+        sys.exit(1)
+    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)  # Succeeds only when this descriptor holds, or nobody does.
+except (ValueError, OSError):
+    sys.exit(1)
+PY
+if [[ ${RPI_UPDATE_LOCK_OWNER:-} == "$$" ]]; then
+  python3 -c "$LOCK_VERIFY" "$LOCK_FILE" "${RPI_UPDATE_LOCK_FD:-}" || blocked 'this run does not hold the launcher lock' 'run the launcher again'
+else
+  unset RPI_UPDATE_LOCK_OWNER RPI_UPDATE_LOCK_FD
+  SCRIPT_PATH=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/$(basename -- "${BASH_SOURCE[0]}")
+  exec python3 -c "$LOCK_ACQUIRE" "$LOCK_FILE" "$BASH" "$SCRIPT_PATH" "$@"
+fi
 mkdir -- "$RUN_DIR"
 REPORT_FILE="$RUN_DIR/report.md"
 PROMPT="$invocation
@@ -168,6 +148,7 @@ Return concrete changes, conflicts and verification; never claim success from pr
 cd -- "$PROJECT_ROOT"
 native_status=0
 probe_output=$(mktemp)
+trap 'rm -f "$probe_output"' EXIT
 probe_status=0
 env -u ANTHROPIC_API_KEY "$CLAUDE_BIN" -p 'Reply READY only. Do not use tools or change files.' \
   --tools '' --strict-mcp-config --permission-mode dontAsk \
@@ -204,7 +185,7 @@ else
     --permission-prompts none --output-format text > "$REPORT_FILE" 2>&1 || native_status=$?
 fi
 rm -f "$probe_output"
-probe_output=
+trap - EXIT
 check_status=0
 python3 "$ENGINE" check --source "$CC_RPI_PATH" --target "$PROJECT_ROOT" \
   --harness "$RPI_HARNESS" --route "$RPI_ROUTE" > "$RUN_DIR/check.json" 2>&1 || check_status=$?

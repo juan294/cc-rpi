@@ -250,10 +250,12 @@ Required unavailable permissions are denied rather than bypassed.
 
 The launcher checks installation state after the native attempt and preserves
 both exit statuses in unique ignored `.rpi/local/update-runs/` reports. It refuses
-unignored output paths, allows one run per project at a time (an overlapping run
-exits with a `BLOCKED` message naming the holder pid before it calls a provider,
-and a lock left by a dead process is recovered), and runs a read-only Claude probe
-(no tools, no file changes) before any update starts. A quota or authentication signal from the
+unignored output paths, allows one run per project at a time (a kernel `flock`
+on the ignored `.rpi/local/update-runs/launcher.lock`, which the launcher and every
+child it starts, the provider included, hold until they exit; an overlapping run
+exits with `BLOCKED` before it calls a provider, and a killed launcher whose
+provider is still running keeps the lock until that provider exits), and runs a
+read-only Claude probe (no tools, no file changes) before any update starts. A quota or authentication signal from the
 probe selects the installed Codex subscription when the `SKILL.md` and lifecycle
 contract of its user-scope `rpi-update` skill match the selected source byte for
 byte; any other probe failure is reported and blocks the update. An update that
