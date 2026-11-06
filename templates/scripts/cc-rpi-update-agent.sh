@@ -21,8 +21,9 @@
 # Reports use unique task-owned .rpi/local/update-runs directories. Preserve these
 # and lifecycle journals on failure; there is no blind retry of partial mutation.
 # One launcher run per project at a time: an atomic mkdir lock in
-# .rpi/local/update-runs/launcher.lock holds the owner's pid. An overlapping run
-# exits without calling a provider. A lock whose pid is gone is recovered.
+# .rpi/local/update-runs/launcher.lock holds the owner's start time and pid. An
+# overlapping run exits without calling a provider. A lock whose holder is gone
+# (no such pid, or a pid with a different start time) is recovered.
 set -euo pipefail
 
 blocked() {
@@ -78,47 +79,77 @@ for artifact in "$RUN_DIR/report.md" "$RUN_DIR/check.json" "$RUN_DIR/status.txt"
 done
 mkdir -p -- "$REPORT_ROOT"
 
-# Single-flight: mkdir is atomic. The holder writes its pid; every exit path releases
-# the lock only while the pid file still names this process.
+# Single-flight: mkdir is atomic. The holder records its start time and then its pid; every
+# exit path releases the lock only while the pid file still names this process. A holder counts
+# as live while its pid exists (even one this user cannot signal) and, when a start time was
+# recorded, that start time still matches, so a reused pid is not mistaken for the holder.
 probe_output=
 release_lock() {
-  [[ -n "$probe_output" ]] && rm -f "$probe_output"
+  [[ -z "$probe_output" ]] || rm -f "$probe_output"
   if [[ $(cat "$LOCK_DIR/pid" 2>/dev/null || true) == "$$" ]]; then
     rm -rf -- "$LOCK_DIR"
   fi
 }
-acquire_lock() {
-  local holder aside attempt=0
-  while ! mkdir -- "$LOCK_DIR" 2>/dev/null; do
-    holder=$(cat "$LOCK_DIR/pid" 2>/dev/null || true)
-    if [[ $holder =~ ^[0-9]+$ ]]; then
-      if kill -0 "$holder" 2>/dev/null; then
-        blocked "another update run (pid $holder) holds the project lock $LOCK_DIR" "wait for pid $holder to finish and run again, or investigate it with: ps -p $holder"
-      fi
-    elif [[ -z $holder && -d "$LOCK_DIR" ]] && (( ++attempt <= 10 )); then
-      # Another run may be between mkdir and writing its pid; a lock that never gets one is stale.
-      sleep 0.2
-      continue
-    fi
-    # Stale (dead pid, unreadable pid or no pid): move it aside atomically so only one competing
-    # run recovers it, then retry the mkdir. The rare case where a live run took the lock between
-    # the check and the move is handed back.
-    aside="$LOCK_DIR.stale.$$"
-    if mv -- "$LOCK_DIR" "$aside" 2>/dev/null; then
-      if [[ $(cat "$aside/pid" 2>/dev/null || true) == "$holder" ]]; then
-        rm -rf -- "$aside"
-      else
-        mv -- "$aside" "$LOCK_DIR" 2>/dev/null || rm -rf -- "$aside"
-      fi
-    fi
-    attempt=0
+process_start() {
+  LC_ALL=C ps -o lstart= -p "$1" 2>/dev/null | sed -e 's/^ *//' -e 's/ *$//' || true
+}
+holder_live() {
+  local pid=$1 recorded=$2 current
+  kill -0 "$pid" 2>/dev/null || ps -p "$pid" >/dev/null 2>&1 || return 1
+  [[ -n $recorded ]] || return 0
+  current=$(process_start "$pid")
+  [[ -z $current || $current == "$recorded" ]]
+}
+# Remove the lock a run judged stale. A second mkdir mutex serializes recovery, and the lock is
+# removed only if it still holds exactly what that run judged, so a fresh lock is never touched
+# and nothing is ever moved back over a live one.
+recover_stale() {
+  local seen_pid=$1 seen_started=$2 mutex="$LOCK_DIR.recover" waited=0 err pid started
+  until err=$(mkdir -- "$mutex" 2>&1); do
+    [[ -d $mutex ]] || blocked "cannot create the launcher recovery lock $mutex: $err" "make $REPORT_ROOT writable by this user (check its owner and mode), then run again"
+    sleep 0.1
+    if (( ++waited > 50 )); then rm -rf -- "$mutex"; waited=0; fi  # Left behind by a recoverer that died.
   done
+  pid=$(cat "$LOCK_DIR/pid" 2>/dev/null || true)
+  started=$(cat "$LOCK_DIR/started" 2>/dev/null || true)
+  if [[ -d $LOCK_DIR && ! -L $LOCK_DIR && $pid == "$seen_pid" && $started == "$seen_started" ]]; then
+    rm -rf -- "$LOCK_DIR"
+  fi
+  rmdir -- "$mutex" 2>/dev/null || true
+}
+acquire_lock() {
+  local err pid started pending=0 rounds=0
+  while :; do
+    if (( ++rounds > 200 )); then
+      blocked "could not take the launcher lock $LOCK_DIR after $rounds attempts" "inspect $LOCK_DIR and the run that holds it, then run again"
+    fi
+    if err=$(mkdir -- "$LOCK_DIR" 2>&1); then
+      break
+    fi
+    if [[ ! -e $LOCK_DIR && ! -L $LOCK_DIR ]]; then
+      blocked "cannot create the launcher lock $LOCK_DIR: $err" "make $REPORT_ROOT writable by this user (check its owner and mode), then run again"
+    fi
+    if [[ ! -d $LOCK_DIR || -L $LOCK_DIR ]]; then
+      blocked "the launcher lock path $LOCK_DIR exists and is not a directory" "after confirming no update run is active, move that path aside, then run again"
+    fi
+    pid=$(cat "$LOCK_DIR/pid" 2>/dev/null || true)
+    started=$(cat "$LOCK_DIR/started" 2>/dev/null || true)
+    if [[ -z $pid ]]; then
+      # Another run may be between mkdir and writing its pid; a lock that never gets one is stale.
+      if (( ++pending <= 10 )); then sleep 0.2; continue; fi
+    elif [[ $pid =~ ^[0-9]+$ ]] && holder_live "$pid" "$started"; then
+      blocked "another update run (pid $pid) holds the project lock $LOCK_DIR" "wait for pid $pid to finish and run again, or investigate it with: ps -p $pid"
+    fi
+    recover_stale "$pid" "$started"
+    pending=0
+  done
+  process_start "$$" > "$LOCK_DIR/started"
   printf '%s\n' "$$" > "$LOCK_DIR/pid"
 }
-acquire_lock
 trap release_lock EXIT
 trap 'exit 143' TERM
 trap 'exit 130' INT HUP
+acquire_lock
 mkdir -- "$RUN_DIR"
 REPORT_FILE="$RUN_DIR/report.md"
 PROMPT="$invocation

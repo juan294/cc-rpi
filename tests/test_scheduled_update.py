@@ -304,6 +304,111 @@ class ScheduledUpdateTests(unittest.TestCase):
         self.assertEqual(len(survivors), 1)
         self.assertEqual(survivors[0].wait(timeout=20), 0)
 
+    def race_three_starts(self, name):
+        hold = self.root / ('hold-' + name)
+        env = {**self.env, 'FAKE_CLI_HOLD': str(hold)}
+        processes = [subprocess.Popen(['bash', str(ROOT / 'templates/scripts/cc-rpi-update-agent.sh')], env=env,
+                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) for _ in range(3)]
+        self.addCleanup(lambda: [(process.kill() if process.poll() is None else None, process.communicate()) for process in processes])
+        deadline = time.time() + 20
+        while sum(process.poll() is not None for process in processes) < 2 or not Path(str(hold) + '.ready').exists():
+            self.assertLess(time.time(), deadline, [process.poll() for process in processes])
+            time.sleep(0.05)
+        self.assertEqual(sorted(process.poll() for process in processes if process.poll() is not None), [1, 1])
+        survivors = [process for process in processes if process.poll() is None]
+        self.assertEqual(len(survivors), 1)
+        Path(str(hold) + '.release').touch()
+        self.assertEqual(survivors[0].wait(timeout=20), 0)
+        self.assertFalse(self.lock_dir.exists())
+        leftovers = [path.name for path in (self.project / '.rpi/local/update-runs').iterdir() if not path.name.startswith('run.')]
+        self.assertEqual(leftovers, [], 'no stale, recovery or nested lock directory remains')
+
+    def test_repeated_simultaneous_starts_always_admit_exactly_one(self):
+        self.calls_before = 0
+        for attempt in range(5):
+            with self.subTest(attempt=attempt):
+                (self.root / 'cli.jsonl').unlink(missing_ok=True)
+                self.race_three_starts('repeat-%d' % attempt)
+                self.assertEqual(self.probe_calls(), 1)
+
+    def test_simultaneous_starts_over_a_stale_lock_admit_exactly_one_and_never_nest(self):
+        for attempt in range(3):
+            with self.subTest(attempt=attempt):
+                dead = subprocess.Popen(['true'])
+                dead.wait()
+                self.lock_dir.mkdir(parents=True)
+                (self.lock_dir / 'pid').write_text(str(dead.pid) + '\n')
+                (self.root / 'cli.jsonl').unlink(missing_ok=True)
+                self.race_three_starts('stale-%d' % attempt)
+                self.assertEqual(self.probe_calls(), 1)
+
+    def probe_calls(self):
+        return sum('Reply READY only' in ' '.join(call['argv']) for call in self.calls('cli'))
+
+    def start_of(self, pid):
+        return subprocess.run(['ps', '-o', 'lstart=', '-p', str(pid)], capture_output=True, text=True).stdout.strip()
+
+    def test_pid_reused_by_another_process_is_recovered_by_start_time(self):
+        other = subprocess.Popen(['sleep', '60'])
+        self.addCleanup(lambda: (other.kill(), other.wait()))
+        self.lock_dir.mkdir(parents=True)
+        (self.lock_dir / 'pid').write_text(str(other.pid) + '\n')
+        (self.lock_dir / 'started').write_text('Mon Jan  1 00:00:00 2001\n')
+        result = self.run_launcher()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(len(self.calls('cli')), 2)
+        self.assertIsNone(other.poll(), 'the unrelated process is never signalled')
+
+    def test_a_live_holder_with_the_recorded_start_time_blocks(self):
+        other = subprocess.Popen(['sleep', '60'])
+        self.addCleanup(lambda: (other.kill(), other.wait()))
+        self.lock_dir.mkdir(parents=True)
+        (self.lock_dir / 'started').write_text(self.start_of(other.pid) + '\n')
+        (self.lock_dir / 'pid').write_text(str(other.pid) + '\n')
+        result = self.run_launcher()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn('pid %d' % other.pid, result.stderr)
+        self.assertEqual(self.calls('cli'), [])
+        self.assertTrue(self.lock_dir.exists())
+
+    def test_a_pid_that_exists_but_cannot_be_signalled_is_live(self):
+        if os.geteuid() == 0:
+            self.skipTest('root can signal pid 1')
+        for started in (None, self.start_of(1)):
+            with self.subTest(started=started):
+                self.lock_dir.mkdir(parents=True)
+                (self.lock_dir / 'pid').write_text('1\n')
+                if started:
+                    (self.lock_dir / 'started').write_text(started + '\n')
+                result = self.run_launcher()
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertIn('pid 1 ', result.stderr)
+                self.assertEqual(self.calls('cli'), [])
+                shutil.rmtree(self.lock_dir)
+
+    def test_lock_that_cannot_be_created_fails_fast_with_the_mkdir_error(self):
+        if os.geteuid() == 0:
+            self.skipTest('root ignores directory permissions')
+        runs = self.project / '.rpi/local/update-runs'
+        runs.mkdir(parents=True)
+        runs.chmod(0o555)
+        self.addCleanup(runs.chmod, 0o755)
+        result = self.run_launcher()  # The harness timeout turns the former endless loop into an error.
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertTrue(result.stderr.startswith('BLOCKED / WHY: '), result.stderr)
+        self.assertIn('cannot create the launcher lock', result.stderr)
+        self.assertIn('Permission denied', result.stderr)
+        self.assertEqual(self.calls('cli'), [])
+
+    def test_lock_path_that_is_not_a_directory_is_reported_not_spun_on(self):
+        runs = self.project / '.rpi/local/update-runs'
+        runs.mkdir(parents=True)
+        (runs / 'launcher.lock').write_text('not a directory\n')
+        result = self.run_launcher()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn('not a directory', result.stderr)
+        self.assertEqual(self.calls('cli'), [])
+
     def test_lock_is_released_on_every_exit_path(self):
         self.env['FAKE_CLI_CODE'] = '7'
         self.assertEqual(self.run_launcher().returncode, 7)
