@@ -254,7 +254,12 @@ unignored output paths, allows one run per project at a time (a kernel `flock`
 on the ignored `.rpi/local/update-runs/launcher.lock`, which the launcher and every
 child it starts, the provider included, hold until they exit; an overlapping run
 exits with `BLOCKED` before it calls a provider, and a killed launcher whose
-provider is still running keeps the lock until that provider exits), and runs a
+provider is still running keeps the lock until that provider exits, as does a
+detached descendant of the provider, so a run can be refused while no run is
+active; `lsof` on the lock file names the holder. Before every provider call the
+run checks that the lock path still names the file it holds and stops otherwise,
+because deleting or renaming it lets a new run lock a new file; only the call
+already in flight can overlap), and runs a
 read-only Claude probe (no tools, no file changes) before any update starts. A quota or authentication signal from the
 probe selects the installed Codex subscription when the `SKILL.md` and lifecycle
 contract of its user-scope `rpi-update` skill match the selected source byte for

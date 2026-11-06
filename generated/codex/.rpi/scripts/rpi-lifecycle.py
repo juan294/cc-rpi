@@ -777,11 +777,18 @@ def make_plan(engine, request):
 GATE_DOC = 'https://github.com/juan294/cc-rpi/blob/main/docs/native-policy.md#optional-verification-receipt-gate'
 # Verbatim from docs/native-policy.md (a test keeps them identical); adopters do not have that file.
 PRE_PUSH_ENABLE = r'''hooks=$(git config --type=path --get core.hooksPath || echo "$(git rev-parse --path-format=absolute --git-common-dir)/hooks")
-if [ -e "$hooks/pre-push" ] && ! grep -q 'cc-rpi receipt gate wrapper' "$hooks/pre-push"; then
-  if grep -q 'rpi-prepush\.py' "$hooks/pre-push"; then
+if [ -L "$hooks/pre-push" ]; then
+  if [ -f "$hooks/pre-push" ] && grep -v '^[[:space:]]*#' "$hooks/pre-push" | grep -q 'rpi-prepush\.py'; then
+    echo "$hooks/pre-push is a symbolic link to a hook that already invokes rpi-prepush.py; left unchanged."
+  else
+    echo "BLOCKED / WHY: $hooks/pre-push is a symbolic link, and this command never writes through a link. / FIX: add this line to the hook the link points to, or replace the link with a regular file that contains it, before any command that reads standard input (replace python3.13 with any Python 3.11 or newer on PATH), then push again: python3.13 \"\$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py\" \"\$@\" || exit 1" >&2
+    false
+  fi
+elif [ -e "$hooks/pre-push" ] && ! grep -q 'cc-rpi receipt gate wrapper' "$hooks/pre-push"; then
+  if grep -v '^[[:space:]]*#' "$hooks/pre-push" | grep -q 'rpi-prepush\.py'; then
     echo "$hooks/pre-push already invokes rpi-prepush.py; left unchanged."
   else
-    echo "BLOCKED / WHY: $hooks/pre-push already exists and does not invoke rpi-prepush.py, and this command never overwrites an existing hook. / FIX: add this line to that hook before any command that reads standard input (replace python3.13 with any Python 3.11 or newer on PATH), then push again: python3.13 \"\$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py\" \"\$@\" || exit 1" >&2
+    echo "BLOCKED / WHY: $hooks/pre-push already exists and does not invoke rpi-prepush.py outside a comment, and this command never overwrites an existing hook. / FIX: add this line to that hook before any command that reads standard input (replace python3.13 with any Python 3.11 or newer on PATH), then push again: python3.13 \"\$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py\" \"\$@\" || exit 1" >&2
     false
   fi
 else
@@ -1255,13 +1262,9 @@ def live_node(path):
 # in the same directory and renames it over the path; the temporary entry never survives a failure.
 RESTORE_PREIMAGE = r"""
 import base64, json, os, secrets, shutil, stat, sys, tempfile
-journal, index, live, saved = sys.argv[1:5]
-node = json.load(open(journal))['operations'][int(index)]['before']
-parent = os.path.dirname(live)
-if os.path.realpath(parent) != parent:
-    sys.exit('refusing to restore through a symlinked parent directory: ' + parent)
+operations = json.load(open(sys.argv[1]))['operations']
 
-def present():
+def present(live):
     if not os.path.lexists(live):
         return {'kind': 'missing'}
     if os.path.islink(live):
@@ -1271,39 +1274,49 @@ def present():
             return {'kind': 'file', 'data': base64.b64encode(handle.read()).decode(), 'mode': stat.S_IMODE(os.stat(live).st_mode)}
     return {'kind': 'other'}
 
-if present() == {key: node[key] for key in node if key in ('kind', 'data', 'mode', 'target')}:
-    sys.exit(0)
-if os.path.lexists(live):
-    target, number = saved, 0
-    while os.path.lexists(target):
-        number += 1
-        target = saved + '.' + str(number)
-    os.makedirs(os.path.dirname(target), exist_ok=True)
-    shutil.move(live, target)
-    print('kept your edit of ' + live + ' as ' + target)
-temporary = None
-try:
-    if node['kind'] == 'file':
-        os.makedirs(parent, exist_ok=True)
-        descriptor, temporary = tempfile.mkstemp(dir=parent, prefix='.rpi-restore-')
-        with os.fdopen(descriptor, 'wb') as handle:
-            handle.write(base64.b64decode(node['data']))
-        os.chmod(temporary, node['mode'])
-    elif node['kind'] == 'symlink':
-        os.makedirs(parent, exist_ok=True)
-        while True:
-            temporary = os.path.join(parent, '.rpi-restore-' + secrets.token_hex(8))
-            try:
-                os.symlink(node['target'], temporary)
-                break
-            except FileExistsError:
-                continue
-    if temporary:
-        os.replace(temporary, live)
-        temporary = None
-finally:
-    if temporary and os.path.lexists(temporary):
-        os.unlink(temporary)
+def restore(index, live, saved):
+    node = operations[int(index)]['before']
+    parent = os.path.dirname(live)
+    if os.path.realpath(parent) != parent:
+        sys.exit('refusing to restore through a symlinked parent directory: ' + parent)
+    if present(live) == {key: node[key] for key in node if key in ('kind', 'data', 'mode', 'target')}:
+        return
+    if os.path.lexists(live):
+        target, number = saved, 0
+        while os.path.lexists(target):
+            number += 1
+            target = saved + '.' + str(number)
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        shutil.move(live, target)
+        print('kept your edit of ' + live + ' as ' + target)
+    temporary = None
+    try:
+        if node['kind'] == 'file':
+            os.makedirs(parent, exist_ok=True)
+            descriptor, temporary = tempfile.mkstemp(dir=parent, prefix='.rpi-restore-')
+            with os.fdopen(descriptor, 'wb') as handle:
+                handle.write(base64.b64decode(node['data']))
+            os.chmod(temporary, node['mode'])
+        elif node['kind'] == 'symlink':
+            os.makedirs(parent, exist_ok=True)
+            while True:
+                temporary = os.path.join(parent, '.rpi-restore-' + secrets.token_hex(8))
+                try:
+                    os.symlink(node['target'], temporary)
+                    break
+                except FileExistsError:
+                    continue
+        if temporary:
+            os.replace(temporary, live)
+            temporary = None
+    finally:
+        if temporary and os.path.lexists(temporary):
+            os.unlink(temporary)
+
+# Arguments after the journal are (operation index, live path, saved path) triples; the first failure stops everything.
+rest = sys.argv[2:]
+for position in range(0, len(rest), 3):
+    restore(*rest[position:position + 3])
 """
 
 
@@ -1315,9 +1328,10 @@ def newer_work_conflict(journal, journal_path, blocked, reason):
     local state, puts the recorded preimage back without writing through anything, and
     re-runs the rollback. Nothing is written by the refusal itself."""
     saved = Path(journal['state_root']) / 'local/saved-edits' / journal['transaction'] / time.strftime('%Y%m%d-%H%M%S')
-    steps = [shlex.join([sys.executable, '-c', RESTORE_PREIMAGE, str(journal_path), str(index),
-                         str(operation_path(journal, operation)), str(saved / operation['root_id'] / operation['destination'])])
-             for index, operation in blocked]
+    arguments = [argument for index, operation in blocked
+                 for argument in (str(index), str(operation_path(journal, operation)),
+                                  str(saved / operation['root_id'] / operation['destination']))]
+    steps = [shlex.join([sys.executable, '-c', RESTORE_PREIMAGE, str(journal_path), *arguments])]
     names = ', '.join(operation['destination'] for _, operation in blocked)
     error = Conflict(reason)
     error.fix = ('your newer version of ' + names + ' would be overwritten and nothing was changed; the command line after "run: " moves it to ' +

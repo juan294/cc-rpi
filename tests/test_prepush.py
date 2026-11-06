@@ -16,11 +16,18 @@ DOCS = test_policy.ROOT / 'docs/native-policy.md'
 # The documented enable command, verbatim: a shared (or committed) wrapper that runs the
 # pushing worktree's own gate and refuses with BLOCKED / WHY / FIX when that checkout has none.
 INSTALL = r'''hooks=$(git config --type=path --get core.hooksPath || echo "$(git rev-parse --path-format=absolute --git-common-dir)/hooks")
-if [ -e "$hooks/pre-push" ] && ! grep -q 'cc-rpi receipt gate wrapper' "$hooks/pre-push"; then
-  if grep -q 'rpi-prepush\.py' "$hooks/pre-push"; then
+if [ -L "$hooks/pre-push" ]; then
+  if [ -f "$hooks/pre-push" ] && grep -v '^[[:space:]]*#' "$hooks/pre-push" | grep -q 'rpi-prepush\.py'; then
+    echo "$hooks/pre-push is a symbolic link to a hook that already invokes rpi-prepush.py; left unchanged."
+  else
+    echo "BLOCKED / WHY: $hooks/pre-push is a symbolic link, and this command never writes through a link. / FIX: add this line to the hook the link points to, or replace the link with a regular file that contains it, before any command that reads standard input (replace python3.13 with any Python 3.11 or newer on PATH), then push again: python3.13 \"\$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py\" \"\$@\" || exit 1" >&2
+    false
+  fi
+elif [ -e "$hooks/pre-push" ] && ! grep -q 'cc-rpi receipt gate wrapper' "$hooks/pre-push"; then
+  if grep -v '^[[:space:]]*#' "$hooks/pre-push" | grep -q 'rpi-prepush\.py'; then
     echo "$hooks/pre-push already invokes rpi-prepush.py; left unchanged."
   else
-    echo "BLOCKED / WHY: $hooks/pre-push already exists and does not invoke rpi-prepush.py, and this command never overwrites an existing hook. / FIX: add this line to that hook before any command that reads standard input (replace python3.13 with any Python 3.11 or newer on PATH), then push again: python3.13 \"\$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py\" \"\$@\" || exit 1" >&2
+    echo "BLOCKED / WHY: $hooks/pre-push already exists and does not invoke rpi-prepush.py outside a comment, and this command never overwrites an existing hook. / FIX: add this line to that hook before any command that reads standard input (replace python3.13 with any Python 3.11 or newer on PATH), then push again: python3.13 \"\$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py\" \"\$@\" || exit 1" >&2
     false
   fi
 else
@@ -415,6 +422,43 @@ class InstalledHookTests(PrePushFixture):
         second = self.enable()
         self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
         self.assertEqual(self.hook().read_text(), installed)
+
+    def test_a_comment_that_mentions_the_gate_does_not_count_as_installing_it(self):
+        self.hook().parent.mkdir(parents=True, exist_ok=True)
+        owner = '#!/bin/sh\n# TODO rpi-prepush.py\nexit 0\n'
+        self.hook().write_text(owner)
+        result = self.enable()
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(result.stderr.startswith('BLOCKED / WHY: '), result.stderr)
+        self.assertEqual(self.hook().read_text(), owner)
+        # An indented comment and a here-string comment do not count either; a real command does.
+        self.hook().write_text('#!/bin/sh\n   # run rpi-prepush.py later\n')
+        self.assertNotEqual(self.enable().returncode, 0)
+        self.hook().write_text('#!/bin/sh\npython3 .rpi/scripts/rpi-prepush.py "$@" # gate\n')
+        self.assertEqual(self.enable().returncode, 0)
+
+    def test_a_symlinked_hook_is_never_written_through(self):
+        self.hook().parent.mkdir(parents=True, exist_ok=True)
+        dangling = self.workspace / 'dangling-target'
+        self.hook().symlink_to(dangling)
+        result = self.enable()
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(result.stderr.startswith('BLOCKED / WHY: '), result.stderr)
+        self.assertIn('symbolic link', result.stderr)
+        self.assertFalse(dangling.exists(), 'the link target is not created')
+        self.assertTrue(self.hook().is_symlink())
+        self.hook().unlink()
+        owner = self.workspace / 'owner-hook.sh'
+        owner.write_text('#!/bin/sh\necho owner\n')
+        self.hook().symlink_to(owner)
+        result = self.enable()
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(owner.read_text(), '#!/bin/sh\necho owner\n')
+        self.assertTrue(self.hook().is_symlink())
+        owner.write_text('#!/bin/sh\npython3 "$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py" "$@"\n')
+        result = self.enable()  # A link to a hook that already runs the gate is a working setup.
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(self.hook().is_symlink())
 
     def test_hook_that_already_invokes_the_gate_is_left_alone(self):
         self.hook().parent.mkdir(parents=True, exist_ok=True)

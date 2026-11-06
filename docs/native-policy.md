@@ -47,7 +47,8 @@ to the first non-option word, which is the script; `-o`, `-O`, `--rcfile` and
 with literal arguments, redirections such as `2>&1`, `git -C`, literal `cd`/`pushd`
 and loop bodies are inspected for the blocked forms above. `git -c` is applied
 for exactly three kinds of setting on the same command line: `alias.<name>` (a
-plain alias expands to its command, a `!` alias is inspected as shell text; an
+plain alias expands to its command and the expansion is read again, so an alias
+that begins with global options such as `-c`, `-C` or `-p` is handled; a `!` alias is inspected as shell text; an
 alias named like a Git builtin such as `push` or `status` is ignored, as Git
 ignores it, using `git --list-cmds=builtins` and a static list as fallback),
 `remote.<name>.push` (added to the configured push specs) and `push.default` /
@@ -56,7 +57,11 @@ value). Any other `-c` setting is ignored. The same settings are read, with the 
 environment variables assigned inline in the same command (`GIT_CONFIG_COUNT` with `GIT_CONFIG_KEY_<n>` and
 `GIT_CONFIG_VALUE_<n>`, `GIT_CONFIG_PARAMETERS`, also through `env`) and from `--config-env=NAME=VAR` when `VAR`
 is assigned inline in that command. `gh api` DELETE is recognised as
-`-X DELETE`, `-XDELETE`, `--method DELETE` and the `=` forms, in any case. After `cd "$DIR"` or `popd` the
+`-X DELETE`, `-XDELETE`, `-X=DELETE`, `--method DELETE` and `--method=DELETE` in any case, and with `-X`
+inside a cluster of `gh api`'s boolean `-i` flag (`-iX DELETE`, `-iXDELETE`). The endpoint may be a
+relative or absolute path or an `https://HOST/` or `https://HOST/api/v3/` URL; a query string or
+fragment is ignored and percent-encoding (`heads%2Fmain`) and a trailing slash are normalised before the
+repository and branch-ref patterns are matched. After `cd "$DIR"` or `popd` the
 repository is unknown, so only the default protected branches apply. Each command
 segment is evaluated on its own: a segment the policy cannot evaluate prints
 `POLICY UNAVAILABLE` and never hides a later destructive segment.
@@ -135,11 +140,18 @@ macOS's stock `python3` 3.9 is never used:
 
 ```bash
 hooks=$(git config --type=path --get core.hooksPath || echo "$(git rev-parse --path-format=absolute --git-common-dir)/hooks")
-if [ -e "$hooks/pre-push" ] && ! grep -q 'cc-rpi receipt gate wrapper' "$hooks/pre-push"; then
-  if grep -q 'rpi-prepush\.py' "$hooks/pre-push"; then
+if [ -L "$hooks/pre-push" ]; then
+  if [ -f "$hooks/pre-push" ] && grep -v '^[[:space:]]*#' "$hooks/pre-push" | grep -q 'rpi-prepush\.py'; then
+    echo "$hooks/pre-push is a symbolic link to a hook that already invokes rpi-prepush.py; left unchanged."
+  else
+    echo "BLOCKED / WHY: $hooks/pre-push is a symbolic link, and this command never writes through a link. / FIX: add this line to the hook the link points to, or replace the link with a regular file that contains it, before any command that reads standard input (replace python3.13 with any Python 3.11 or newer on PATH), then push again: python3.13 \"\$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py\" \"\$@\" || exit 1" >&2
+    false
+  fi
+elif [ -e "$hooks/pre-push" ] && ! grep -q 'cc-rpi receipt gate wrapper' "$hooks/pre-push"; then
+  if grep -v '^[[:space:]]*#' "$hooks/pre-push" | grep -q 'rpi-prepush\.py'; then
     echo "$hooks/pre-push already invokes rpi-prepush.py; left unchanged."
   else
-    echo "BLOCKED / WHY: $hooks/pre-push already exists and does not invoke rpi-prepush.py, and this command never overwrites an existing hook. / FIX: add this line to that hook before any command that reads standard input (replace python3.13 with any Python 3.11 or newer on PATH), then push again: python3.13 \"\$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py\" \"\$@\" || exit 1" >&2
+    echo "BLOCKED / WHY: $hooks/pre-push already exists and does not invoke rpi-prepush.py outside a comment, and this command never overwrites an existing hook. / FIX: add this line to that hook before any command that reads standard input (replace python3.13 with any Python 3.11 or newer on PATH), then push again: python3.13 \"\$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py\" \"\$@\" || exit 1" >&2
     false
   fi
 else
@@ -194,9 +206,12 @@ The enable command never overwrites a `pre-push` hook it did not write. When one
 already exists (for example one managed by a hook tool) and does not invoke
 `rpi-prepush.py`, the command leaves it untouched, prints `BLOCKED / WHY / FIX`
 with the exact line to add to that hook, and exits nonzero. A hook that already
-invokes `rpi-prepush.py`, or that this command wrote earlier (it carries a
-`cc-rpi receipt gate wrapper` comment), is left alone or rewritten in place, so
-running the command again is safe. A file with that comment counts as the
+invokes `rpi-prepush.py` on a line that is not a comment (a comment that only
+mentions the name does not count), or a symbolic link to such a hook, is left
+alone. A file that this command wrote earlier (it carries a
+`cc-rpi receipt gate wrapper` comment) is rewritten in place, so running the
+command again is safe. Any other symbolic link is refused, so the command never
+writes through a link. A file with that comment counts as the
 generated wrapper and is rewritten in place, so edits to it are not kept; to add
 your own checks, use a hook file without the comment that calls `rpi-prepush.py`
 (the line the refusal prints). `git push --no-verify` skips every

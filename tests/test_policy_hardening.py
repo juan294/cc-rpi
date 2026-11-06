@@ -65,6 +65,32 @@ class ShellAndApiSpellingTests(test_policy.PolicyFixture):
                 self.assert_blocked(prefix + ' ' + script, 'protected branch')
         self.assert_allowed("bash --rcfile rc script.sh 'git push -f origin main'")  # script.sh is the script, not -c text
 
+    def test_api_delete_in_clusters_urls_and_encoded_paths(self):
+        blocked = {
+            'gh api -iX DELETE repos/o/r/git/refs/heads/main': 'protected branch',
+            'gh api -iXDELETE repos/o/r/git/refs/heads/main': 'protected branch',
+            'gh api -iiX DELETE repos/o/r/git/refs/heads/main': 'protected branch',
+            'gh api -X DELETE https://api.github.com/repos/o/r/git/refs/heads/main': 'protected branch',
+            'gh api -X DELETE https://ghe.example.com/api/v3/repos/o/r/git/refs/heads/main': 'protected branch',
+            'gh api -X DELETE repos/o/r/git/refs/heads%2Fmain': 'protected branch',
+            'gh api -X DELETE repos/o/r/git/refs/heads/%6Dain': 'protected branch',
+            'gh api -X DELETE "repos/o/r/git/refs/heads/main?x=1"': 'protected branch',
+            'gh api -X DELETE "repos/o/r/git/refs/heads/main#frag"': 'protected branch',
+            'gh api -X DELETE /repos/o/r/git/refs/heads/main/': 'protected branch',
+            'gh api -iX DELETE https://api.github.com/repos/o/r': 'irreversible',
+            'gh api -X DELETE "repos/o/r?x=1"': 'irreversible',
+            'gh api -X DELETE repos/o/r%2F': 'irreversible',
+        }
+        for command, reason in blocked.items():
+            with self.subTest(command=command):
+                self.assert_blocked(command, reason)
+        for command in ('gh api -X GET repos/o/r/git/refs/heads/main', 'gh api -iX GET repos/o/r', 'gh api -iXGET repos/o/r',
+                        'gh api repos/o/r/pulls', 'gh api -iX DELETE repos/o/r/git/refs/heads/feature%2Fold',
+                        'gh api -X DELETE https://api.github.com/repos/o/r/issues/comments/1', 'gh api -i repos/o/r',
+                        'gh api -X DELETE "repos/o/r/git/refs/heads/feature?x=main"'):
+            with self.subTest(command=command):
+                self.assert_allowed(command)
+
     def test_a_shell_without_c_does_not_inspect_its_first_word_as_a_script(self):
         self.assert_allowed("bash -e 'git push -f origin main'")  # A script file name, not a -c command.
         self.assert_allowed("bash -c 'git status'")
@@ -96,6 +122,18 @@ class GitCommandLineConfigTests(test_policy.PolicyFixture):
                 self.assert_blocked(command, 'protected branch')
         for command in ("git -c alias.p=push p origin feature/work", "git -c alias.p=push p -f origin feature/work",
                         "git -c alias.p=status p -f", "git -c alias.p='!git push origin main' p", "git -c alias.p=push p origin main"):
+            with self.subTest(command=command):
+                self.assert_allowed(command)
+
+    def test_an_alias_value_that_starts_with_global_options_is_re_stripped(self):
+        for command in ("git -c 'alias.p=-c a.b=c push' p -f origin main", "git -c 'alias.p=-p push' p -f origin main",
+                        "git -c 'alias.p=-C . push' p -f origin main", "git -c 'alias.p=--no-pager -c a.b=c push -f' p origin main",
+                        "git -c 'alias.q=-c a.b=c p' -c alias.p=push q -f origin develop",
+                        "git -c 'alias.p=-c alias.r=push r' p -f origin main"):
+            with self.subTest(command=command):
+                self.assert_blocked(command, 'protected branch')
+        for command in ("git -c 'alias.p=-c a.b=c push' p -f origin feature/work", "git -c 'alias.p=-p push' p origin main",
+                        "git -c 'alias.p=-c a.b=c status' p -f origin main"):
             with self.subTest(command=command):
                 self.assert_allowed(command)
 

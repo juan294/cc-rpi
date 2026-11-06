@@ -301,19 +301,24 @@ def git_command(args, cwd, depth=0, assigned=None):
             overrides.setdefault(config_key(name), []).append(value)
     except ValueError:
         pass  # Unreadable GIT_CONFIG_PARAMETERS pass to native permissions.
-    while args and args[0].startswith('-'):
-        option = args.pop(0)
-        if option == '-C' and args or option.startswith('-C') and len(option) > 2:
-            cwd = directory(cwd, args.pop(0) if option == '-C' else option[2:])
-        elif option == '-c' and args:
-            name, _, value = args.pop(0).partition('=')
-            overrides.setdefault(config_key(name), []).append(value)
-        elif (option == '--config-env' and args) or option.startswith('--config-env='):
-            name, _, variable = (args.pop(0) if option == '--config-env' else option.split('=', 1)[1]).partition('=')
-            if variable in assigned:  # Only a variable assigned in this very command is known.
-                overrides.setdefault(config_key(name), []).append(assigned[variable])
-        elif option in GIT_VALUE_OPTIONS and args:
-            args.pop(0)
+    def global_options(args, cwd):
+        """Consume leading global options (-C, -c, --config-env, -p, --no-pager ...) of `args` in place."""
+        while args and args[0].startswith('-'):
+            option = args.pop(0)
+            if option == '-C' and args or option.startswith('-C') and len(option) > 2:
+                cwd = directory(cwd, args.pop(0) if option == '-C' else option[2:])
+            elif option == '-c' and args:
+                name, _, value = args.pop(0).partition('=')
+                overrides.setdefault(config_key(name), []).append(value)
+            elif (option == '--config-env' and args) or option.startswith('--config-env='):
+                name, _, variable = (args.pop(0) if option == '--config-env' else option.split('=', 1)[1]).partition('=')
+                if variable in assigned:  # Only a variable assigned in this very command is known.
+                    overrides.setdefault(config_key(name), []).append(assigned[variable])
+            elif option in GIT_VALUE_OPTIONS and args:
+                args.pop(0)
+        return cwd
+
+    cwd = global_options(args, cwd)
     builtins = None
     for _ in range(5):  # Aliases given with git -c; aliases in configuration files are not read.
         alias = overrides.get(config_key('alias.' + args[0]), [None])[-1] if args else None
@@ -334,6 +339,7 @@ def git_command(args, cwd, depth=0, assigned=None):
             args = shlex.split(alias) + args[1:]
         except ValueError:
             return
+        cwd = global_options(args, cwd)  # An alias may begin with global options such as -c or -p.
     if args[:1] == ['push']:
         push(args[1:], cwd, overrides)
 
@@ -391,18 +397,37 @@ def shell_script(args):
     return args[index] if command and index < len(args) else None
 
 
+def api_methods(args):
+    """HTTP methods gh api is given: -X VALUE, -XVALUE, -iX VALUE (X inside a flag cluster), -X=VALUE, --method[=]VALUE."""
+    methods = []
+    for index, arg in enumerate(args):
+        cluster = re.fullmatch(r'-i*X=?(.*)', arg)  # -i is gh api's only boolean short flag.
+        if cluster:
+            methods.append(cluster[1] or (args[index + 1] if index + 1 < len(args) else ''))
+        elif arg == '--method':
+            methods.append(args[index + 1] if index + 1 < len(args) else '')
+        elif arg.startswith('--method='):
+            methods.append(arg.split('=', 1)[1])
+    return methods
+
+
+def api_path(arg):
+    """The endpoint path of a gh api operand: query, fragment and percent-encoding removed."""
+    from urllib.parse import unquote
+    return unquote(re.split(r'[?#]', arg, 1)[0])
+
+
 def api_delete(args, cwd):
     """Block API deletion of a repository or a protected branch ref."""
-    methods = [args[index + 1] for index, arg in enumerate(args[:-1]) if arg in ('-X', '--method')]
-    methods += [arg.split('=', 1)[1] for arg in args if arg.startswith(('--method=', '-X='))]
-    methods += [arg[2:] for arg in args if re.fullmatch(r'-X[A-Za-z]+', arg)]  # gh accepts the attached -XDELETE.
-    if not any(method.upper() == 'DELETE' for method in methods):
+    if not any(method.upper() == 'DELETE' for method in api_methods(args)):
         return
+    prefix = r'(?:https?://[^/]+)?/?(?:api/v3/)?repos/[^/]+/[^/]+'
     for arg in args:
-        if re.fullmatch(r'/?repos/[^/]+/[^/]+/?', arg):
+        path = api_path(arg)
+        if re.fullmatch(prefix + r'/?', path):
             fail('Deleting a repository is irreversible.',
                  'The owner runs the exact deletion after confirming the target.', 'destructive-remote')
-        match = re.fullmatch(r'/?repos/[^/]+/[^/]+/git/refs/heads/(.+)', arg)
+        match = re.fullmatch(prefix + r'/git/refs/heads/(.+?)/*', path)
         if match:
             root = repository(cwd)
             policy = project_policy(root) if root else {}
