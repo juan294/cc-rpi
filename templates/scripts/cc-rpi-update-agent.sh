@@ -106,7 +106,7 @@ try:
     fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
 except OSError as error:
     if error.errno in (errno.EWOULDBLOCK, errno.EAGAIN, errno.EACCES):
-        blocked('another update run for this project is active (it holds the lock %s)' % path,
+        blocked('another update run for this project is active, or a process it started still holds the lock %s' % path,
                 'wait for it to finish, then run again; to see which process holds the lock run: lsof %s' % shlex.quote(path))
     blocked('cannot lock the launcher lock %s: %s' % (path, error.strerror), 'use a local filesystem that supports flock for .rpi/local')
 os.set_inheritable(fd, True)
@@ -119,12 +119,18 @@ import fcntl, os, sys
 try:
     fd = int(sys.argv[2])
     held, named = os.fstat(fd), os.stat(sys.argv[1])
-    if (held.st_dev, held.st_ino) != (named.st_dev, named.st_ino):
+    if held.st_nlink == 0 or (held.st_dev, held.st_ino) != (named.st_dev, named.st_ino):
         sys.exit(1)
     fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)  # Succeeds only when this descriptor holds, or nobody does.
 except (ValueError, OSError):
     sys.exit(1)
 PY
+# Deleting or renaming the ignored lock file (git clean, rm -rf update-runs) would let a new run lock a new
+# inode. Before every provider call the run proves its descriptor still is the file at the lock path and
+# stops otherwise; only the call already in flight when the file disappeared can overlap.
+require_lock() {
+  python3 -c "$LOCK_VERIFY" "$LOCK_FILE" "${RPI_UPDATE_LOCK_FD:-}" || blocked 'the launcher lock file was removed or replaced while this run was active' 'no further provider call was made; do not delete .rpi/local/update-runs while a run is active (git clean -X and rm -rf remove the ignored lock file), then run the launcher again'
+}
 if [[ $lock_reexecuted == 1 ]]; then
   python3 -c "$LOCK_VERIFY" "$LOCK_FILE" "${RPI_UPDATE_LOCK_FD:-}" || blocked 'this run does not hold the launcher lock' 'run the launcher again'
 else
@@ -152,6 +158,7 @@ native_status=0
 probe_output=$(mktemp)
 trap 'rm -f "$probe_output"' EXIT
 probe_status=0
+require_lock
 env -u ANTHROPIC_API_KEY "$CLAUDE_BIN" -p 'Reply READY only. Do not use tools or change files.' \
   --tools '' --strict-mcp-config --permission-mode dontAsk \
   --permission-prompts none --output-format text \
@@ -165,6 +172,7 @@ if [[ $probe_status -ne 0 ]] || grep -qiE 'rate.?limit|usage limit|hit your (wee
       cmp -s "$CODEX_SKILL/$resource" "$CC_RPI_PATH/generated/codex/skills/rpi-update/$resource" || blocked 'Codex lifecycle skill/resources differ from selected source' 'review the separate user-scope update before scheduling; never overwrite it implicitly'
     done
     printf 'Claude preflight reported a quota or authentication limit; using Codex subscription fallback. Raw output withheld.\n' > "$REPORT_FILE"
+    require_lock
     env -u OPENAI_API_KEY -u CODEX_API_KEY "$CODEX_BIN" exec --ephemeral \
       --sandbox workspace-write -c sandbox_workspace_write.network_access=true \
       -m "${CODEX_MODEL:-gpt-5.5}" -C "$PROJECT_ROOT" \
@@ -183,6 +191,7 @@ PROMPT
     native_status=${probe_status:-1}
   fi
 else
+  require_lock
   env -u ANTHROPIC_API_KEY "${native_args[@]}" -p "$PROMPT" --permission-mode dontAsk \
     --permission-prompts none --output-format text > "$REPORT_FILE" 2>&1 || native_status=$?
 fi

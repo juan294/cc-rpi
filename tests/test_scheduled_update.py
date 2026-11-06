@@ -46,6 +46,18 @@ class ScheduledUpdateTests(unittest.TestCase):
             '    with open(events, "a") as log: log.write("enter " + os.environ.get("FAKE_RUN_ID", "?") + "\\n")\n'
             '    time.sleep(float(os.environ.get("FAKE_CLI_PAUSE", "0.05")))\n'
             '    with open(events, "a") as log: log.write("exit " + os.environ.get("FAKE_RUN_ID", "?") + "\\n")\n'
+            'lock = os.environ.get("FAKE_CLI_LOCK_ACTION")\n'
+            'if lock and probe:\n'
+            '    action, path = lock.split(":", 1)\n'
+            '    if action == "unlink": os.unlink(path)\n'
+            '    elif action == "rename": os.rename(path, path + ".moved")\n'
+            '    elif action == "replace": os.unlink(path); open(path, "w").close()\n'
+            'detach = os.environ.get("FAKE_CLI_DETACH")\n'
+            'if detach and not probe:\n'
+            '    import subprocess\n'
+            '    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"], start_new_session=True, close_fds=False,\n'
+            '                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n'
+            '    open(detach, "w").write(str(child.pid))\n'
             'if hold and probe:\n'
             '    open(hold + ".pid", "w").write(str(os.getpid()))\n'
             '    open(hold + ".ready", "w").close()\n'
@@ -435,6 +447,55 @@ class ScheduledUpdateTests(unittest.TestCase):
         self.assertIn('cannot open the launcher lock', result.stderr)
         self.assertFalse((self.root / 'elsewhere').exists(), 'a link is never followed')
         self.assertEqual(self.calls('cli'), [])
+
+    def test_a_lock_file_removed_during_the_run_stops_it_before_its_next_provider_call(self):
+        # Design: the run re-verifies, from its held descriptor, that the lock path still names the same inode before
+        # every provider call. Exclusion is restored at that boundary; the one call already in flight is not interrupted.
+        for action in ('unlink', 'rename', 'replace'):
+            with self.subTest(action=action):
+                (self.root / 'cli.jsonl').unlink(missing_ok=True)
+                self.lock_file.unlink(missing_ok=True)
+                self.env['FAKE_CLI_LOCK_ACTION'] = action + ':' + str(self.lock_file)
+                result = self.run_launcher()
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertTrue(result.stderr.startswith('BLOCKED / WHY: the launcher lock file was removed or replaced while this run was active'),
+                                result.stderr)
+                self.assertEqual(self.probe_calls(), 1)
+                self.assertEqual(len(self.calls('cli')), 1, 'no provider call follows the removal')
+                self.assertEqual(self.calls('codex'), [])
+                for leftover in self.lock_file.parent.glob('launcher.lock*'):
+                    leftover.unlink()
+        del self.env['FAKE_CLI_LOCK_ACTION']
+
+    def test_a_lock_file_removed_during_the_probe_blocks_the_codex_fallback_too(self):
+        self.env.update({'FAKE_CLI_LOCK_ACTION': 'unlink:' + str(self.lock_file), 'FAKE_CLI_PROBE_BODY': 'rate_limit_error',
+                         'FAKE_CLI_PROBE_CODE': '1'})
+        self.enable_codex_skill()
+        result = self.run_launcher()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn('removed or replaced while this run was active', result.stderr)
+        self.assertEqual(self.calls('codex'), [])
+
+    def test_a_blocked_run_names_a_process_the_holder_started(self):
+        detached = self.root / 'detached.pid'
+        self.env['FAKE_CLI_DETACH'] = str(detached)
+        first = self.run_launcher()
+        self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+        child = int(detached.read_text())
+        self.addCleanup(lambda: os.kill(child, signal.SIGKILL) if self.alive(child) else None)
+        del self.env['FAKE_CLI_DETACH']
+        second = self.run_launcher()  # No run is active, but a descendant of the first still holds the inherited lock.
+        self.assertEqual(second.returncode, 1, second.stdout + second.stderr)
+        why, fix = second.stderr.strip().split(' / FIX: ', 1)
+        self.assertIn('another update run for this project is active, or a process it started still holds the lock', why)
+        self.assertIn(str(self.lock_file), why)
+        self.assertIn('lsof', fix)
+        os.kill(child, signal.SIGKILL)
+        deadline = time.time() + 10
+        while self.alive(child):
+            self.assertLess(time.time(), deadline)
+            time.sleep(0.05)
+        self.assertEqual(self.run_launcher().returncode, 0)
 
     def test_lock_area_must_be_ignored_before_any_provider_call(self):
         (self.project / '.git/info/exclude').write_text('')
