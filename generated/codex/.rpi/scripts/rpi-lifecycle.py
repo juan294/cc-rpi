@@ -870,14 +870,14 @@ elif [ -e "$hooks" ] && [ ! -d "$hooks" ]; then
   echo "BLOCKED / WHY: the hooks path $hooks (core.hooksPath, or the clone's hooks directory) exists and is not a directory. / FIX: point core.hooksPath at a directory (git config core.hooksPath PATH) or move that file away, then run this command again." >&2
   false
 elif [ -L "$hooks/pre-push" ]; then
-  if [ -f "$hooks/pre-push" ] && grep -v '^[[:space:]]*#' "$hooks/pre-push" | grep -q 'rpi-prepush\.py'; then
+  if [ -f "$hooks/pre-push" ] && grep -Eq '^[[:space:]]*[^[:space:]#].*rpi-prepush\.py' "$hooks/pre-push"; then
     echo "$hooks/pre-push is a symbolic link to a hook that already invokes rpi-prepush.py; left unchanged."
   else
     echo "BLOCKED / WHY: $hooks/pre-push is a symbolic link, and this command never writes through a link. / FIX: add this line to the hook the link points to, or replace the link with a regular file that contains it, before any command that reads standard input (replace python3.13 with any Python 3.11 or newer on PATH), then push again: python3.13 \"\$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py\" \"\$@\" || exit 1" >&2
     false
   fi
 elif [ -e "$hooks/pre-push" ] && ! grep -q 'cc-rpi receipt gate wrapper' "$hooks/pre-push"; then
-  if grep -v '^[[:space:]]*#' "$hooks/pre-push" | grep -q 'rpi-prepush\.py'; then
+  if grep -Eq '^[[:space:]]*[^[:space:]#].*rpi-prepush\.py' "$hooks/pre-push"; then
     echo "$hooks/pre-push already invokes rpi-prepush.py; left unchanged."
   else
     echo "BLOCKED / WHY: $hooks/pre-push already exists and does not invoke rpi-prepush.py outside a comment, and this command never overwrites an existing hook. / FIX: add this line to that hook before any command that reads standard input (replace python3.13 with any Python 3.11 or newer on PATH), then push again: python3.13 \"\$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py\" \"\$@\" || exit 1" >&2

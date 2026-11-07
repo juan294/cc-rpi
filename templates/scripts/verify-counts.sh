@@ -70,7 +70,7 @@ check_count() {
   fi
 
   local found
-  found=$(grep -oE "$pattern" "$file" | grep -oE '[0-9]+' | head -1 || true)
+  found=$(grep -oE "$pattern" "$file" | grep -oE '[0-9]+' | sed -n '1p' || true)
 
   if [[ -z "$found" ]]; then
     emit_block "$label not found in $file" \

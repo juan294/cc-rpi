@@ -47,13 +47,18 @@ emit_block() {
 
 FAILED=0
 
+# list_has <entry> <newline-separated list> -- whole-line literal membership. A here-string, never `printf | grep -q`:
+# under pipefail grep -q leaves on its first match, printf then dies of SIGPIPE on a list larger than the pipe buffer, and a
+# present entry is reported absent.
+list_has() { grep -qxF -- "$1" <<< "$2"; }
+
 # released_versions -- newest first, excluding [Unreleased].
 released_versions() {
   grep -oE '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' "$1" | tr -d '#[] '
 }
 
 # --- Source of truth ---------------------------------------------------------
-VERSION="$(released_versions "$CHANGELOG" | head -1)"
+VERSION="$(released_versions "$CHANGELOG" | sed -n '1p')"
 PREV_VERSION="$(released_versions "$CHANGELOG" | sed -n '2p')"
 
 if [[ -z "$VERSION" ]]; then
@@ -103,8 +108,8 @@ check_version() {
   if [[ -n "$bad" ]]; then
     emit_block "$label in $file says $(printf '%s' "$bad" | tr '\n' ' '), $CHANGELOG says $VERSION" \
       "A stale version string tells users and the plugin marketplace that they are on a release they are not on." \
-      "  sed -i '' 's/$(printf '%s' "$bad" | head -1)/$VERSION/g' $file   # macOS
-  sed -i 's/$(printf '%s' "$bad" | head -1)/$VERSION/g' $file      # Linux
+      "  sed -i '' 's/$(printf '%s' "$bad" | sed -n '1p')/$VERSION/g' $file   # macOS
+  sed -i 's/$(printf '%s' "$bad" | sed -n '1p')/$VERSION/g' $file      # Linux
   # then re-run this script -- the badge repeats the version more than once"
     FAILED=1
   fi
@@ -161,7 +166,7 @@ if [[ -f "$LEDGER" ]]; then
   PENDING=""
   while IFS= read -r lv; do
     [[ -n "$lv" ]] || continue
-    printf '%s\n' "$RELEASED_LIST" | grep -qxF "$lv" || PENDING="$PENDING $lv"
+    list_has "$lv" "$RELEASED_LIST" || PENDING="$PENDING $lv"
   done <<< "$LEDGER_VERSIONS"
   PENDING="${PENDING# }"
 

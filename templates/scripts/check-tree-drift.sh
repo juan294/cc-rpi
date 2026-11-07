@@ -22,6 +22,11 @@ cd "$REPO_ROOT"
 
 MANIFEST=".claude/DIVERGENCE.md"
 
+# list_has <entry> <newline-separated list> -- whole-line literal membership. A here-string, never `printf | grep -q`:
+# under pipefail grep -q leaves on its first match, printf then dies of SIGPIPE on a list larger than the pipe buffer, and a
+# present entry is reported absent.
+list_has() { grep -qxF -- "$1" <<< "$2"; }
+
 # emit_block <what> <why> <fix> -- corrective-hint convention.
 # See methodology/ci-and-guardrails.md "Block messages are corrective hints".
 emit_block() {
@@ -160,12 +165,12 @@ fi
 
 while IFS= read -r src; do
   # Generated self-application is checked against a fresh render above.
-  if printf '%s\n' "$MANAGED_PATHS" | grep -qxF "$src"; then
+  if list_has "$src" "$MANAGED_PATHS"; then
     continue
   fi
   path="${src#.claude/}"
   [[ -e "templates/$path" ]] || continue
-  if ! printf '%s\n' "$LISTED" | grep -qxF "$path"; then
+  if ! list_has "$path" "$LISTED"; then
     emit_block "$path exists in both templates/ and .claude/ but is in neither table of $MANIFEST" \
       "An unrecorded shared file is drift waiting to happen: nothing says whether it is meant to track the template or deliberately differ." \
       "  Add \`$path\` to the Linked table (and symlink it) or to the Divergent table (with the reason) in $MANIFEST."
