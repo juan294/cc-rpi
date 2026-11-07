@@ -170,8 +170,15 @@ refuses with `BLOCKED / WHY / FIX` when that interpreter is older than 3.11, so
 macOS's stock `python3` 3.9 is never used:
 
 ```bash
-hooks=$(git config --type=path --get core.hooksPath || echo "$(git rev-parse --path-format=absolute --git-common-dir)/hooks")
-if [ -L "$hooks/pre-push" ]; then
+hooks_common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+hooks=$(git config --type=path --get core.hooksPath || echo "$hooks_common/hooks")
+if [ -z "$hooks_common" ]; then
+  echo "BLOCKED / WHY: the current directory is not inside a Git repository, so there is no hooks directory to write. / FIX: cd to the repository root of the integration checkout, then run this command again." >&2
+  false
+elif [ -e "$hooks" ] && [ ! -d "$hooks" ]; then
+  echo "BLOCKED / WHY: the hooks path $hooks (core.hooksPath, or the clone's hooks directory) exists and is not a directory. / FIX: point core.hooksPath at a directory (git config core.hooksPath PATH) or move that file away, then run this command again." >&2
+  false
+elif [ -L "$hooks/pre-push" ]; then
   if [ -f "$hooks/pre-push" ] && grep -v '^[[:space:]]*#' "$hooks/pre-push" | grep -q 'rpi-prepush\.py'; then
     echo "$hooks/pre-push is a symbolic link to a hook that already invokes rpi-prepush.py; left unchanged."
   else
@@ -186,7 +193,8 @@ elif [ -e "$hooks/pre-push" ] && ! grep -q 'cc-rpi receipt gate wrapper' "$hooks
     false
   fi
 else
-  mkdir -p "$hooks" && cat > "$hooks/pre-push" <<'EOF'
+  tmp="$hooks/.pre-push.$$"
+  if mkdir -p "$hooks" 2>/dev/null && cat 2>/dev/null > "$tmp" <<'EOF'
 #!/bin/sh
 # cc-rpi receipt gate wrapper: written by the documented enable command; run it again to update.
 top=$(git rev-parse --show-toplevel 2>/dev/null)
@@ -206,7 +214,13 @@ if [ -z "$python" ] || ! "$python" -c 'import sys; sys.exit(sys.version_info < (
 fi
 exec "$python" "$gate" "$@"
 EOF
-  chmod +x "$hooks/pre-push"
+  then
+    chmod +x "$tmp" 2>/dev/null && mv -f "$tmp" "$hooks/pre-push" 2>/dev/null || { rm -f "$tmp"; echo "BLOCKED / WHY: cannot write the receipt gate wrapper into $hooks. / FIX: make that directory writable by this user (ls -ld \"$hooks\"), then run this command again; an existing hook there was not changed." >&2; false; }
+  else
+    rm -f "$tmp" 2>/dev/null
+    echo "BLOCKED / WHY: cannot write the receipt gate wrapper into $hooks. / FIX: make that directory writable by this user (ls -ld \"$hooks\"), then run this command again; an existing hook there was not changed." >&2
+    false
+  fi
 fi
 ```
 
@@ -245,7 +259,11 @@ command again is safe. Any other symbolic link is refused, so the command never
 writes through a link. A file with that comment counts as the
 generated wrapper and is rewritten in place, so edits to it are not kept; to add
 your own checks, use a hook file without the comment that calls `rpi-prepush.py`
-(the line the refusal prints). `git push --no-verify` skips every
+(the line the refusal prints). The wrapper is written to a temporary file in the hooks directory and renamed over
+`pre-push`, so a stale read-only wrapper is replaced too. Every failure to write ends the command with a nonzero
+status and a `BLOCKED / WHY / FIX` line: outside a Git repository, when the hooks path exists and is not a directory,
+and when the hooks directory cannot be written (an existing hook is then left unchanged).
+`git push --no-verify` skips every
 pre-push hook, so the gate is a guard against mistakes, not a security boundary.
 
 A branch update is gated when the pushing checkout's `.rpi/policy.json`, the
@@ -261,9 +279,14 @@ owner's own `git push --no-verify`. A version tag is gated only by the policy
 committed in the tagged commit and in the tag's replaced remote target, never by
 the checkout's, so tags on commits from before opt-in (for example
 `git push <new-mirror> --tags`) publish unchanged.
+A version tag is a tag whose whole name matches
+`(?:[A-Za-z][A-Za-z0-9]*[-_])?[vV]?\d+(?:\.\d+)*(?:[-+._]?[A-Za-z0-9][A-Za-z0-9.+_-]*)?`: an optional word prefix
+(`release-`), an optional `v` or `V`, dotted numbers of any length (`v1`, `v1.0`, `1.2.3.4`) and an optional suffix
+(`-rc.1`, `rc1`, `_x`, `+build.5`). Tags that start with a word and carry no number, such as `nightly`, `latest` or
+`release-candidate`, are not version tags and pass ungated. The pattern is deliberately wide because a rolling tag such
+as `v1` publishes a commit as surely as `v1.2.3` does.
 `integration_branch` may be written `main` or `refs/heads/main`. Each gated
-update of `refs/heads/<integration_branch>` or of a version tag (`vX.Y.Z` or
-`X.Y.Z`, optionally with a suffix) requires a clean tree and a passing
+update of `refs/heads/<integration_branch>` or of a version tag requires a clean tree and a passing
 `.rpi/local/verification.json` whose commit is the pushed commit; an annotated
 tag is peeled to its commit. The clean-tree check ignores `.rpi/local/`, and the
 runner creates `.rpi/local/.gitignore` (`*`) when it is absent, so receipts never
@@ -311,6 +334,12 @@ commit is already the fetched remote tip, only the owner's `git push --no-verify
 can replace it); an installation fault prints the
 `bash "$RPI_SOURCE/scripts/install.sh" --check` command, where `RPI_SOURCE` is
 your verified cc-rpi checkout. See [migration setup](migrations/v2.md).
+
+The gate's cost follows the number of distinct commits in a push, not the number of refs: Git lookups are
+cached for the run, so a push of thousands of refs that name a few commits costs a few lookups.
+When it refuses a dirty tree the message gives the number of changed paths, lists the first 20 and says `and N more`;
+a name with a control character, a comma, a double quote or a backslash is shown JSON-quoted (`"a\tb"`), so a name
+never adds a line or a separator, and `git status --short` lists every path.
 
 The runner executes the declared inventory sequentially. Starting a new
 verification attempt supersedes the prior success before checks execute.

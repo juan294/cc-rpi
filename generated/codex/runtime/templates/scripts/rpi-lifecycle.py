@@ -776,8 +776,15 @@ def make_plan(engine, request):
 
 GATE_DOC = 'https://github.com/juan294/cc-rpi/blob/main/docs/native-policy.md#optional-verification-receipt-gate'
 # Verbatim from docs/native-policy.md (a test keeps them identical); adopters do not have that file.
-PRE_PUSH_ENABLE = r'''hooks=$(git config --type=path --get core.hooksPath || echo "$(git rev-parse --path-format=absolute --git-common-dir)/hooks")
-if [ -L "$hooks/pre-push" ]; then
+PRE_PUSH_ENABLE = r'''hooks_common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+hooks=$(git config --type=path --get core.hooksPath || echo "$hooks_common/hooks")
+if [ -z "$hooks_common" ]; then
+  echo "BLOCKED / WHY: the current directory is not inside a Git repository, so there is no hooks directory to write. / FIX: cd to the repository root of the integration checkout, then run this command again." >&2
+  false
+elif [ -e "$hooks" ] && [ ! -d "$hooks" ]; then
+  echo "BLOCKED / WHY: the hooks path $hooks (core.hooksPath, or the clone's hooks directory) exists and is not a directory. / FIX: point core.hooksPath at a directory (git config core.hooksPath PATH) or move that file away, then run this command again." >&2
+  false
+elif [ -L "$hooks/pre-push" ]; then
   if [ -f "$hooks/pre-push" ] && grep -v '^[[:space:]]*#' "$hooks/pre-push" | grep -q 'rpi-prepush\.py'; then
     echo "$hooks/pre-push is a symbolic link to a hook that already invokes rpi-prepush.py; left unchanged."
   else
@@ -792,7 +799,8 @@ elif [ -e "$hooks/pre-push" ] && ! grep -q 'cc-rpi receipt gate wrapper' "$hooks
     false
   fi
 else
-  mkdir -p "$hooks" && cat > "$hooks/pre-push" <<'EOF'
+  tmp="$hooks/.pre-push.$$"
+  if mkdir -p "$hooks" 2>/dev/null && cat 2>/dev/null > "$tmp" <<'EOF'
 #!/bin/sh
 # cc-rpi receipt gate wrapper: written by the documented enable command; run it again to update.
 top=$(git rev-parse --show-toplevel 2>/dev/null)
@@ -812,7 +820,13 @@ if [ -z "$python" ] || ! "$python" -c 'import sys; sys.exit(sys.version_info < (
 fi
 exec "$python" "$gate" "$@"
 EOF
-  chmod +x "$hooks/pre-push"
+  then
+    chmod +x "$tmp" 2>/dev/null && mv -f "$tmp" "$hooks/pre-push" 2>/dev/null || { rm -f "$tmp"; echo "BLOCKED / WHY: cannot write the receipt gate wrapper into $hooks. / FIX: make that directory writable by this user (ls -ld \"$hooks\"), then run this command again; an existing hook there was not changed." >&2; false; }
+  else
+    rm -f "$tmp" 2>/dev/null
+    echo "BLOCKED / WHY: cannot write the receipt gate wrapper into $hooks. / FIX: make that directory writable by this user (ls -ld \"$hooks\"), then run this command again; an existing hook there was not changed." >&2
+    false
+  fi
 fi'''
 ENABLE_HINT = ('run the one-time command in enable_command from the integration checkout\'s repository root '
                '(documented at ' + GATE_DOC + ')')

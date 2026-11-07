@@ -15,8 +15,15 @@ ZERO = '0' * 40
 DOCS = test_policy.ROOT / 'docs/native-policy.md'
 # The documented enable command, verbatim: a shared (or committed) wrapper that runs the
 # pushing worktree's own gate and refuses with BLOCKED / WHY / FIX when that checkout has none.
-INSTALL = r'''hooks=$(git config --type=path --get core.hooksPath || echo "$(git rev-parse --path-format=absolute --git-common-dir)/hooks")
-if [ -L "$hooks/pre-push" ]; then
+INSTALL = r'''hooks_common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+hooks=$(git config --type=path --get core.hooksPath || echo "$hooks_common/hooks")
+if [ -z "$hooks_common" ]; then
+  echo "BLOCKED / WHY: the current directory is not inside a Git repository, so there is no hooks directory to write. / FIX: cd to the repository root of the integration checkout, then run this command again." >&2
+  false
+elif [ -e "$hooks" ] && [ ! -d "$hooks" ]; then
+  echo "BLOCKED / WHY: the hooks path $hooks (core.hooksPath, or the clone's hooks directory) exists and is not a directory. / FIX: point core.hooksPath at a directory (git config core.hooksPath PATH) or move that file away, then run this command again." >&2
+  false
+elif [ -L "$hooks/pre-push" ]; then
   if [ -f "$hooks/pre-push" ] && grep -v '^[[:space:]]*#' "$hooks/pre-push" | grep -q 'rpi-prepush\.py'; then
     echo "$hooks/pre-push is a symbolic link to a hook that already invokes rpi-prepush.py; left unchanged."
   else
@@ -31,7 +38,8 @@ elif [ -e "$hooks/pre-push" ] && ! grep -q 'cc-rpi receipt gate wrapper' "$hooks
     false
   fi
 else
-  mkdir -p "$hooks" && cat > "$hooks/pre-push" <<'EOF'
+  tmp="$hooks/.pre-push.$$"
+  if mkdir -p "$hooks" 2>/dev/null && cat 2>/dev/null > "$tmp" <<'EOF'
 #!/bin/sh
 # cc-rpi receipt gate wrapper: written by the documented enable command; run it again to update.
 top=$(git rev-parse --show-toplevel 2>/dev/null)
@@ -51,7 +59,13 @@ if [ -z "$python" ] || ! "$python" -c 'import sys; sys.exit(sys.version_info < (
 fi
 exec "$python" "$gate" "$@"
 EOF
-  chmod +x "$hooks/pre-push"
+  then
+    chmod +x "$tmp" 2>/dev/null && mv -f "$tmp" "$hooks/pre-push" 2>/dev/null || { rm -f "$tmp"; echo "BLOCKED / WHY: cannot write the receipt gate wrapper into $hooks. / FIX: make that directory writable by this user (ls -ld \"$hooks\"), then run this command again; an existing hook there was not changed." >&2; false; }
+  else
+    rm -f "$tmp" 2>/dev/null
+    echo "BLOCKED / WHY: cannot write the receipt gate wrapper into $hooks. / FIX: make that directory writable by this user (ls -ld \"$hooks\"), then run this command again; an existing hook there was not changed." >&2
+    false
+  fi
 fi
 '''
 
@@ -459,6 +473,63 @@ class InstalledHookTests(PrePushFixture):
         result = self.enable()  # A link to a hook that already runs the gate is a working setup.
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertTrue(self.hook().is_symlink())
+
+    def test_a_stale_read_only_wrapper_is_replaced_not_left_behind(self):
+        self.hook().parent.mkdir(parents=True, exist_ok=True)
+        self.hook().write_text('#!/bin/sh\n# cc-rpi receipt gate wrapper: OLD VERSION\nexit 0\n')
+        self.hook().chmod(0o555)
+        result = self.enable()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stderr, '')
+        installed = self.hook().read_text()
+        self.assertNotIn('OLD VERSION', installed)
+        self.assertIn('rpi-prepush.py', installed)
+        self.assertTrue(os.access(self.hook(), os.X_OK))
+        again = self.enable()
+        self.assertEqual(again.returncode, 0)
+        self.assertEqual(self.hook().read_text(), installed)
+        self.assertEqual(sorted(path.name for path in self.hook().parent.iterdir() if path.name.startswith('.pre-push')), [])
+
+    def test_every_write_failure_ends_with_blocked_why_fix_and_nonzero(self):
+        if os.geteuid() == 0:
+            self.skipTest('root ignores directory permissions')
+        hooks = self.hook().parent
+        hooks.mkdir(parents=True, exist_ok=True)
+        self.addCleanup(hooks.chmod, 0o755)
+        for existing in (None, '#!/bin/sh\n# cc-rpi receipt gate wrapper: OLD VERSION\nexit 0\n'):
+            with self.subTest(existing=bool(existing)):
+                hooks.chmod(0o755)
+                self.hook().unlink(missing_ok=True)
+                if existing:
+                    self.hook().write_text(existing)
+                hooks.chmod(0o555)
+                result = self.enable()
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertTrue(result.stderr.startswith('BLOCKED / WHY: cannot write'), result.stderr)
+                self.assertIn('/ FIX: ', result.stderr)
+                self.assertNotIn('Permission denied', result.stderr)
+                self.assertNotIn('chmod:', result.stderr)
+                if existing:
+                    self.assertEqual(self.hook().read_text(), existing, 'the existing hook is untouched')
+                self.assertEqual(sorted(path.name for path in hooks.iterdir() if path.name.startswith('.pre-push')), [])
+
+    def test_outside_a_repository_and_with_a_file_for_hooks_nothing_is_written(self):
+        outside = self.workspace / 'not-a-repo'
+        outside.mkdir()
+        environment = {**self.environment, 'HOME': str(outside), 'GIT_CEILING_DIRECTORIES': str(self.workspace)}
+        result = subprocess.run(['bash', '-c', INSTALL], cwd=outside, env=environment, capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(result.stderr.startswith('BLOCKED / WHY: the current directory is not inside a Git repository'), result.stderr)
+        self.assertEqual(list(outside.iterdir()), [])
+        self.assertFalse(Path('/hooks').exists())
+        blocker = self.workspace / 'hooks-is-a-file'
+        blocker.write_text('not a directory\n')
+        self.git('config', 'core.hooksPath', str(blocker))
+        result = self.enable()
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(result.stderr.startswith('BLOCKED / WHY: the hooks path'), result.stderr)
+        self.assertIn('is not a directory', result.stderr)
+        self.assertEqual(blocker.read_text(), 'not a directory\n')
 
     def test_hook_that_already_invokes_the_gate_is_left_alone(self):
         self.hook().parent.mkdir(parents=True, exist_ok=True)

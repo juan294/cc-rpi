@@ -393,6 +393,61 @@ class ReceiptGateAgreesWithPolicyHookTests(test_prepush.PrePushFixture):
         self.assert_blocked('git push -f origin release', 'protected branch')
 
 
+class GateScalingAndTagTests(test_prepush.PrePushFixture):
+    def setUp(self):
+        super().setUp()
+        self.policy(require_verification_receipt=True)
+        self.commit('Opt in')
+
+    def test_cost_is_per_distinct_commit_not_per_pushed_ref(self):
+        log = self.workspace / 'gate-git.log'
+        wrapper = self.fakebin / 'git'
+        wrapper.write_text(wrapper.read_text().replace("name=Path(sys.argv[0]).name\n", "name=Path(sys.argv[0]).name\nopen(os.environ['RPI_GIT_LOG'],'a').write(' '.join(sys.argv[1:])+'\\n')\n"))
+        self.evidence()
+        head = self.git('rev-parse', 'HEAD')
+        lines = [self.line('refs/heads/feature/n%d' % number, head) for number in range(3000)]
+        lines.append(self.line('refs/heads/develop', head))
+        result = self.gate(*lines, environment={**self.environment, 'RPI_GIT_LOG': str(log)})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertLess(len(log.read_text().splitlines()), 40, 'git lookups are shared by refs that name the same commit')
+
+    def test_version_tags_of_every_common_shape_are_gated_and_other_tags_are_not(self):
+        tag_object = self.git('rev-parse', 'HEAD')
+        for name in ('v1.2.3.4', 'v2.0.0rc1', 'v1.0', 'v5.0.0_x', 'V3.0.0', 'release-1.0.0', 'v1', '2.0', '1.2.3', 'v1.2.3-beta.1+build.5'):
+            with self.subTest(tag=name):
+                self.assert_refused(self.line('refs/tags/' + name, tag_object), reason='verification evidence is missing')
+        for name in ('nightly', 'latest', 'release-candidate', 'stable', 'beta', 'x'):
+            with self.subTest(tag=name):
+                self.assert_passes(self.line('refs/tags/' + name, tag_object))
+
+    def test_the_dirty_list_caps_its_names_and_counts_the_rest(self):
+        self.evidence()
+        for number in range(30):
+            (self.project / ('file%02d.txt' % number)).write_text('x')
+        result = self.assert_refused(self.line('refs/heads/develop'), reason='clean')
+        why, fix = result.stderr.strip().split(' / FIX: ', 1)
+        self.assertIn('30 changed paths', why)
+        self.assertIn('file00.txt', why)
+        self.assertIn('file19.txt', why)
+        self.assertNotIn('file20.txt', why)
+        self.assertIn('and 10 more', why)
+        self.assertIn('git status --short', fix)
+
+    def test_unusual_names_are_escaped_unambiguously(self):
+        self.evidence()
+        (self.project / 'a,b.txt').write_text('x')
+        (self.project / 'tab\tname.txt').write_text('x')
+        (self.project / 'quote"name.txt').write_text('x')
+        (self.project / 'line\nbreak.txt').write_text('x')
+        result = self.assert_refused(self.line('refs/heads/develop'), reason='clean')
+        why = result.stderr.strip().split(' / FIX: ', 1)[0]
+        self.assertIn('4 changed paths', why)
+        for shown in ('"a,b.txt"', '"tab\\tname.txt"', '"quote\\"name.txt"', '"line\\nbreak.txt"'):
+            self.assertIn(shown, why)
+        self.assertEqual(result.stderr.count('\n'), 1, 'one line: no raw newline from a file name')
+        self.assertNotIn('\t', result.stderr)
+
+
 class DirtyTreeRefusalTests(test_prepush.PrePushFixture):
     def test_dirty_tree_refusal_lists_tracked_and_untracked_names_in_full(self):
         self.policy(require_verification_receipt=True)
@@ -402,12 +457,12 @@ class DirtyTreeRefusalTests(test_prepush.PrePushFixture):
         (self.project / 'new file.txt').write_text('Untracked.\n')
         result = self.assert_refused(self.line('refs/heads/develop'), reason='clean')
         reason = result.stderr.split(' / FIX:')[0]
-        self.assertIn('(README.md, new file.txt)', reason)
+        self.assertIn('2 changed paths: README.md, new file.txt)', reason)
         self.git('checkout', '--', 'README.md')
         (self.project / 'new file.txt').unlink()
         (self.project / 'a.txt').write_text('Untracked only.\n')
         result = self.assert_refused(self.line('refs/heads/develop'), reason='clean')
-        self.assertIn('(a.txt)', result.stderr.split(' / FIX:')[0])
+        self.assertIn('1 changed path: a.txt)', result.stderr.split(' / FIX:')[0])
 
 
 if __name__ == '__main__':
