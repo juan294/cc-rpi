@@ -75,7 +75,8 @@ class AcceptanceMatrixTests(unittest.TestCase):
         literal.chmod(0o755)
         cls.environment = {**os.environ, 'PATH': str(binary) + os.pathsep + os.environ.get('PATH', ''),
                            'PYTHONDONTWRITEBYTECODE': '1', 'GIT_CONFIG_NOSYSTEM': '1',
-                           'GIT_CONFIG_GLOBAL': os.devnull}
+                           'GIT_CONFIG_GLOBAL': os.devnull,
+                           'CLAUDE_CONFIG_DIR': str(cls.workspace / 'claude-config-empty')}
 
     @classmethod
     def tearDownClass(cls):

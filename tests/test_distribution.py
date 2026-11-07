@@ -69,6 +69,33 @@ class DistributionTests(unittest.TestCase):
         self.assertNotIn(b"disable-model-invocation", first["codex/skills/rpi-example/SKILL.md"])
         self.assertIn(b"allow_implicit_invocation: false", first["codex/skills/rpi-example/agents/openai.yaml"])
 
+    def test_rendered_modes_follow_the_source_executable_bit_not_the_umask(self):
+        import os
+        self.write("templates/skills/rpi-example/references/tool.sh", "#!/bin/sh\necho tool\n")
+        self.write("templates/skills/rpi-example/SKILL.md", '---\nname: "rpi-example"\ndescription: "Run an example workflow."\n---\n\nRead references/detail.md and references/tool.sh. Treat the request literally.\n')
+        (self.root / "templates/skills/rpi-example/references/tool.sh").chmod(0o755)
+        (self.root / "templates/skills/rpi-example/references/detail.md").chmod(0o600)
+        self.manifest["components"][0]["resources"].append("references/tool.sh")
+        tree = self.render()
+        expected = {"claude/skills/rpi-example/references/tool.sh": 0o755, "claude/skills/rpi-example/references/detail.md": 0o644,
+                    "claude/skills/rpi-example/SKILL.md": 0o644, "claude/AGENTS.md": 0o644}
+        self.assertEqual({name: tree.modes[name] for name in expected}, expected)
+        self.assertEqual(distribution.file_inventory(tree)["claude/skills/rpi-example/references/tool.sh"]["mode"], "755")
+        for mask in (0o077, 0o022):
+            with self.subTest(umask=oct(mask)):
+                output = self.root / ("out-%o" % mask)
+                previous = os.umask(mask)
+                try:
+                    distribution.write_tree(tree, output)
+                finally:
+                    os.umask(previous)
+                for name, mode in expected.items():
+                    self.assertEqual((output / name).stat().st_mode & 0o777, mode, name)
+                distribution.check_tree(tree, output)
+                (output / "claude/skills/rpi-example/references/tool.sh").chmod(0o644)  # Exec bit lost, as an installer might.
+                with self.assertRaisesRegex(ValueError, "generated drift: claude/skills/rpi-example/references/tool.sh"):
+                    distribution.check_tree(tree, output)
+
     def test_malformed_and_provider_metadata_rejected(self):
         for line in ('description: |\n  multiline', 'description: "ok"\nmodel: "haiku"', 'description: {bad: yaml}', 'description: "one"\ndescription: "two"'):
             with self.subTest(line=line):

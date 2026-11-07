@@ -55,7 +55,7 @@ class LifecycleCrashTests(unittest.TestCase):
     def invoke(self, *arguments):
         return subprocess.run([sys.executable, str(adopters.ENGINE), *map(str, arguments)],
                               capture_output=True, text=True, timeout=20,
-                              env={**os.environ, 'PYTHONDONTWRITEBYTECODE': '1'})
+                              env={**os.environ, 'PYTHONDONTWRITEBYTECODE': '1', 'CLAUDE_CONFIG_DIR': str(self.workspace / 'claude-config-empty')})
 
     def child(self, mode, argument):
         process = subprocess.Popen([sys.executable, '-B', '-c', CHILD,

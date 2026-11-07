@@ -663,6 +663,183 @@ class RecoveryGuidanceTests(unittest.TestCase):
             self.assertTrue((self.project / name).is_dir(), name)
         self.assertEqual(json.loads((self.project / '.rpi/manifest.json').read_text())['route'], 'detached')
 
+    # WB-L-2: conflicts that used to say only "inspect ... run check" carry a repair that works.
+
+    def plan_json(self, *arguments):
+        self.plan_number += 1
+        output = self.plans / ('l2-%d.json' % self.plan_number)
+        result = self.invoke('plan', '--source', self.source, '--target', self.project, '--output', output, *arguments)
+        return result, json.loads(result.stdout), output
+
+    def replan_from(self, fix):
+        command = shlex.split(fix.rsplit('then create a new plan with ', 1)[1])
+        result = subprocess.run(command, capture_output=True, text=True)
+        return result, json.loads(result.stdout)
+
+    def run_shell(self, command):
+        result = subprocess.run(command, shell=True, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, command + result.stdout + result.stderr)
+
+    def test_a_file_kept_by_detach_is_moved_aside_by_the_printed_fix_and_the_reinstall_then_plans(self):
+        self.apply_ready('install')
+        kept = self.project / '.agents/skills/rpi-plan/SKILL.md'
+        kept.write_text(kept.read_text() + '# keep\\n')
+        self.apply_ready('detach')
+        self.assertIn('# keep', kept.read_text())
+        result, summary, _ = self.plan_json('--harness', 'both', '--route', 'direct', '--action', 'install')
+        self.assertEqual(result.returncode, 2, result.stdout)
+        item = next(c for c in summary['conflicts'] if c['destination'] == '.agents/skills/rpi-plan/SKILL.md')
+        self.assertEqual(item['reason'], 'destination exists without proven ownership')
+        self.assertIn(item['move_aside_command'], summary['fix'])
+        self.assertNotIn('Inspect the local plan', summary['fix'])
+        self.run_shell(item['move_aside_command'])
+        saved = list((self.project / '.rpi/local/saved-edits/plan/project/.agents/skills/rpi-plan').glob('SKILL.md.*'))
+        self.assertEqual(len(saved), 1)
+        self.assertIn('# keep', saved[0].read_text())
+        result, plan = self.replan_from(summary['fix'])
+        self.assertEqual(plan['status'], 'ready', plan.get('conflicts'))
+        replanned = Path(shlex.split(summary['fix'].rsplit('then create a new plan with ', 1)[1])[-1])  # The --output of the printed command.
+        self.assertEqual(self.invoke('apply', '--plan', replanned).returncode, 0)
+        self.assertNotIn('# keep', kept.read_text())
+
+    def test_a_modified_direct_skill_over_the_plugin_route_is_moved_aside_by_the_printed_fix(self):
+        self.apply_ready('install', '--harness', 'claude')
+        modified = self.project / '.claude/skills/rpi-plan/SKILL.md'
+        modified.write_text(modified.read_text() + '# mine\\n')
+        result, summary, _ = self.plan_json('--harness', 'claude', '--route', 'plugin', '--action', 'update')
+        self.assertEqual(result.returncode, 2, result.stdout)
+        item = next(c for c in summary['conflicts'] if c['reason'].startswith('modified direct registration competes'))
+        self.assertIn(item['move_aside_command'], summary['fix'])
+        self.assertIn('--route direct', item['fix'])
+        self.assertNotIn('Inspect the local plan', summary['fix'])
+        self.run_shell(item['move_aside_command'])
+        result, plan = self.replan_from(summary['fix'])
+        self.assertNotEqual(plan['status'], 'conflict', plan.get('conflicts'))
+        self.assertTrue(list((self.project / '.rpi/local/saved-edits/plan/project/.claude/skills/rpi-plan').glob('SKILL.md.*')))
+
+    def test_a_symlinked_target_root_is_replaced_by_its_real_path_in_the_printed_command(self):
+        link = self.workspace / 'linked-project'
+        link.symlink_to(self.project, target_is_directory=True)
+        output = self.plans / 'through-link.json'
+        failed = self.invoke('plan', '--source', self.source, '--target', link, '--output', output)
+        self.assertEqual(failed.returncode, 2, failed.stdout + failed.stderr)
+        summary = json.loads(failed.stdout)
+        self.assertIn('cannot be a symlink', summary['reason'])
+        self.assertIn('is a symbolic link to ' + str(self.project.resolve()), summary['fix'])
+        command = shlex.split(summary['fix'].split('against the real path: ', 1)[1])
+        self.assertIn(str(self.project.resolve()), command)
+        self.assertNotIn(str(link), command)
+        fixed = subprocess.run(command, capture_output=True, text=True)
+        self.assertEqual(fixed.returncode, 0, fixed.stdout + fixed.stderr)
+        self.assertEqual(json.loads(output.read_text())['status'], 'ready')
+        # check names the real path too, and its fix is not the command that was just refused.
+        checked = self.invoke('check', '--source', self.source, '--target', link)
+        self.assertIn('against the real path', json.loads(checked.stdout)['fix'])
+
+    def test_a_symlinked_native_directory_names_the_link_and_the_way_out(self):
+        elsewhere = self.workspace / 'elsewhere-dir'
+        elsewhere.mkdir()
+        (self.project / '.claude').symlink_to(elsewhere, target_is_directory=True)
+        result, summary, _ = self.plan_json('--harness', 'claude', '--route', 'direct', '--action', 'install')
+        self.assertEqual(result.returncode, 2, result.stdout)
+        items = [c for c in summary['conflicts'] if c['reason'].startswith('symlink parent')]
+        self.assertTrue(items)
+        for item in items:
+            self.assertIn(str(self.project.resolve() / '.claude'), item['fix'])
+            self.assertIn('is a symbolic link to ' + str(elsewhere.resolve()), item['fix'])
+            self.assertIn('never writes through a link', item['fix'])
+        self.assertNotIn('Inspect the local plan', summary['fix'])
+        self.assertEqual(list(elsewhere.iterdir()), [], 'nothing was written through the link')
+
+    # WB-L-4: a direct installation and the enabled plugin never register the skills twice.
+
+    def enable_plugin(self, where, key='cc-rpi@juan294', value=True):
+        path = where / 'settings.json'
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({'model': 'owner-choice', 'enabledPlugins': {key: value, 'other@market': True}}))
+        return path
+
+    def engine_with_user_settings(self, directory, *arguments):
+        return subprocess.run([sys.executable, str(adopters.ENGINE), *map(str, arguments)], capture_output=True, text=True,
+                              env={**os.environ, 'CLAUDE_CONFIG_DIR': str(directory)})
+
+    def test_an_enabled_plugin_blocks_a_direct_install_with_a_working_fix(self):
+        for where, label in ((self.project / '.claude', 'project'), (self.workspace / 'user-claude', 'user')):
+            with self.subTest(scope=label):
+                settings = self.enable_plugin(where)
+                output = self.plans / ('dup-%s.json' % label)
+                result = self.engine_with_user_settings(self.workspace / 'user-claude', 'plan', '--source', self.source, '--target', self.project,
+                                                        '--harness', 'claude', '--route', 'direct', '--action', 'install', '--output', output)
+                self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                plan = json.loads(output.read_text())
+                item = next(c for c in plan['conflicts'] if 'plugin is enabled' in c['reason'])
+                self.assertEqual(os.path.realpath(item['destination']), os.path.realpath(settings))
+                self.assertIn('"cc-rpi@juan294": false', item['fix'])
+                self.assertIn('--route plugin', item['fix'])
+                settings.write_text(json.dumps({'enabledPlugins': {'cc-rpi@juan294': False}}))  # The printed repair.
+                again = self.engine_with_user_settings(self.workspace / 'user-claude', 'plan', '--source', self.source, '--target', self.project,
+                                                       '--harness', 'claude', '--route', 'direct', '--action', 'install', '--output', self.plans / ('ok-%s.json' % label))
+                self.assertEqual(again.returncode, 0, again.stdout + again.stderr)
+                settings.unlink()
+
+    def test_other_plugins_disabled_entries_and_the_plugin_route_are_not_conflicts(self):
+        self.enable_plugin(self.project / '.claude', key='cc-rpi@juan294', value=False)
+        self.enable_plugin(self.workspace / 'user-claude', key='cc-rpi-extra@market', value=True)
+        for route in ('direct',):
+            result = self.engine_with_user_settings(self.workspace / 'user-claude', 'plan', '--source', self.source, '--target', self.project,
+                                                    '--harness', 'claude', '--route', route, '--action', 'install', '--output', self.plans / 'fine.json')
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.enable_plugin(self.project / '.claude', value=True)
+        plugin = self.engine_with_user_settings(self.workspace / 'user-claude', 'plan', '--source', self.source, '--target', self.project,
+                                                '--harness', 'claude', '--route', 'plugin', '--action', 'install', '--output', self.plans / 'plugin.json')
+        self.assertNotIn('plugin is enabled', plugin.stdout)
+        detach = self.engine_with_user_settings(self.workspace / 'user-claude', 'plan', '--source', self.source, '--target', self.project,
+                                                '--harness', 'claude', '--action', 'detach', '--output', self.plans / 'detach-dup.json')
+        self.assertNotIn('plugin is enabled', detach.stdout)
+
+    def test_check_and_diagnose_report_the_duplicate_in_both_directions(self):
+        self.apply_ready('install', '--harness', 'claude')
+        self.enable_plugin(self.project / '.claude')
+        checked = self.engine_with_user_settings(self.workspace / 'user-claude', 'check', '--source', self.source, '--target', self.project)
+        summary = json.loads(checked.stdout)
+        self.assertEqual(checked.returncode, 2, checked.stdout)
+        self.assertTrue(any('plugin is enabled' in c['reason'] for c in summary['conflicts']))
+        self.assertIn('"cc-rpi@juan294": false', summary['fix'])
+        diagnosed = self.engine_with_user_settings(self.workspace / 'user-claude', 'diagnose', '--target', self.project, '--source', self.source)
+        issues = [i for i in json.loads(diagnosed.stdout)['config_issues'] if i.get('id') == 'duplicate-registration']
+        self.assertEqual(len(issues), 1, diagnosed.stdout[:400])
+        self.assertIn('also installed directly', issues[0]['status'])
+        # The other direction: the plugin route is recorded while direct skills are present.
+        self.apply_ready('detach')
+        self.enable_plugin(self.project / '.claude', value=False)
+        self.apply_ready('install', '--harness', 'claude', '--route', 'plugin')
+        stray = self.project / '.claude/skills/rpi-plan/SKILL.md'
+        stray.parent.mkdir(parents=True, exist_ok=True)
+        stray.write_text('A direct copy.\n')
+        diagnosed = self.engine_with_user_settings(self.workspace / 'user-claude', 'diagnose', '--target', self.project, '--source', self.source)
+        issues = [i for i in json.loads(diagnosed.stdout)['config_issues'] if i.get('id') == 'duplicate-registration']
+        self.assertEqual(len(issues), 1, diagnosed.stdout[:600])
+        self.assertIn('plugin route is recorded', issues[0]['status'])
+
+    # O-2: the installed copy keeps the source's executable bit, whatever the umask.
+
+    def test_installed_files_keep_the_source_executable_bit_under_any_umask(self):
+        script = self.source / 'templates/skills/rpi-plan/scripts/validate.py'
+        script.chmod(0o755)
+        for mask in (0o077, 0o022):
+            with self.subTest(umask=oct(mask)):
+                shutil.rmtree(self.project)
+                self.project.mkdir()
+                previous = os.umask(mask)
+                try:
+                    self.apply_ready('install', '--harness', 'claude')
+                finally:
+                    os.umask(previous)
+                executable = self.project / '.claude/skills/rpi-plan/scripts/validate.py'
+                ordinary = self.project / '.claude/skills/rpi-plan/references/playbook.md'
+                self.assertEqual(executable.stat().st_mode & 0o777, 0o755)
+                self.assertEqual(ordinary.stat().st_mode & 0o777, 0o644)
+
     def test_every_edited_file_is_named_not_only_the_first(self):
         self.apply_ready()
         self.write(self.source, 'templates/skills/rpi-plan/references/playbook.md', 'Upstream planning change.\n')
@@ -679,34 +856,48 @@ class RecoveryGuidanceTests(unittest.TestCase):
 
     # A-4: repeating an apply explains what happened.
 
-    def test_repeating_an_applied_plan_says_it_was_applied_and_needs_nothing(self):
+    def test_repeating_an_applied_plan_is_a_healthy_noop_with_exit_zero(self):
+        # Contract change (exit 0 means success or no-op): a repeat of a plan that was applied, with the installation
+        # healthy, reports already-applied and the journal instead of a conflict.
         _, path = self.plan()
         self.assertEqual(self.invoke('apply', '--plan', path).returncode, 0)
         journal = self.journals('complete')[-1]
         frozen = self.snapshot(include_local=True)
         result = self.invoke('apply', '--plan', path)
-        summary = self.conflict(result)  # The exit code of this refusal is unchanged.
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        summary = json.loads(result.stdout)
+        self.assertEqual(summary['status'], 'already-applied')
+        self.assertEqual(summary['journal'], str(journal))
+        self.assertEqual(summary['transaction'], journal.parent.name)
+        self.assertEqual(self.snapshot(include_local=True), frozen)
+
+    def test_repeating_a_plan_after_drift_keeps_the_conflict_that_points_at_check(self):
+        _, path = self.plan()
+        self.assertEqual(self.invoke('apply', '--plan', path).returncode, 0)
+        journal = self.journals('complete')[-1]
+        (self.project / '.claude/skills/rpi-plan/SKILL.md').unlink()
+        summary = self.conflict(self.invoke('apply', '--plan', path))
         self.assertIn('already applied', summary['reason'])
         self.assertIn(str(journal), summary['reason'])
         self.assertNotIn('create a new plan', summary['reason'])
         self.assertNotIn('nothing needs doing', summary['reason'], 'the installation can drift after a plan was applied')
-        self.assertIn('check', summary['reason'])
         self.assertIn('needs no further apply', summary['fix'])
         self.assertIn('rpi-distribution.py check', summary['fix'])
-        self.assertEqual(self.snapshot(include_local=True), frozen)
 
-    def test_repeating_a_superseded_plan_names_the_journal_and_the_later_work(self):
+    def test_repeating_a_superseded_plan_is_a_healthy_noop_naming_its_journal(self):
         _, first = self.plan()
         self.assertEqual(self.invoke('apply', '--plan', first).returncode, 0)
         first_journal = self.journals('complete')[-1]
         self.write(self.source, 'templates/skills/rpi-plan/references/playbook.md', 'Upstream planning change.\n')
         self.apply_ready('update')
-        summary = self.conflict(self.invoke('apply', '--plan', first))
-        self.assertIn('already applied', summary['reason'])
-        self.assertIn(str(first_journal), summary['reason'])
-        self.assertIn('later', summary['reason'])
-        self.assertNotIn('nothing needs doing', summary['reason'])
-        self.assertIn('check', summary['fix'])
+        result = self.invoke('apply', '--plan', first)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        summary = json.loads(result.stdout)
+        self.assertEqual((summary['status'], summary['journal']), ('already-applied', str(first_journal)))
+        # With drift after the later work, the conflict mentions the later transactions.
+        (self.project / '.claude/skills/rpi-plan/SKILL.md').unlink()
+        drifted = self.conflict(self.invoke('apply', '--plan', first))
+        self.assertIn('later transactions', drifted['reason'])
 
     def test_a_replanned_install_with_identical_operations_is_not_reported_as_applied(self):
         first_plan, first = self.plan()
@@ -721,7 +912,7 @@ class RecoveryGuidanceTests(unittest.TestCase):
         summary = self.conflict(self.invoke('apply', '--plan', third))
         self.assertIn('plan changed or source/installation preimages changed; create a new plan', summary['reason'])
         self.assertNotIn('already applied', summary['reason'])
-        again = self.conflict(self.invoke('apply', '--plan', first))
+        again = self.conflict(self.invoke('apply', '--plan', first))  # Detached since, so the repeat is not healthy.
         self.assertIn('already applied by transaction journal ' + str(first_journal), again['reason'])
         self.assertIn('later transactions', again['reason'])
 

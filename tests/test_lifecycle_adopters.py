@@ -116,8 +116,9 @@ class LifecycleAdopterTests(unittest.TestCase):
         shutil.copytree(self.source, destination, ignore=_ignore_sockets)
 
     def invoke(self, *arguments):
-        return subprocess.run([sys.executable, str(ENGINE), *map(str, arguments)],
-                              capture_output=True, text=True)
+        # The engine reads Claude's enabledPlugins; point it at an empty configuration directory, never the developer's.
+        return subprocess.run([sys.executable, str(ENGINE), *map(str, arguments)], capture_output=True, text=True,
+                              env={**os.environ, "CLAUDE_CONFIG_DIR": str(self.workspace / "claude-config-empty")})
 
     def plan(self, action="install", *extra):
         self.plan_number += 1

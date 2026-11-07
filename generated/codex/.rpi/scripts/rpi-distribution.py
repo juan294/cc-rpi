@@ -295,18 +295,29 @@ def marked_block(cid, body):
     return f"<!-- rpi:{name}:start -->\n".encode() + body.strip() + f"\n<!-- rpi:{name}:end -->\n".encode()
 
 
+class RenderedTree(dict):
+    """Rendered output (name -> bytes) with its deterministic file modes (name -> 0o644 or 0o755)."""
+    modes = None
+
+
+def file_mode(path):
+    """The one mode rule: 0o755 when the source file is executable, else 0o644, whatever the umask."""
+    return 0o755 if Path(path).stat().st_mode & 0o111 else 0o644
+
+
 def render_tree(root, harnesses=HARNESSES, domains=None, include_runtime=True):
     root = Path(root).resolve()
     manifest = load_manifest(root)
     if not harnesses or set(harnesses) - set(HARNESSES):
         raise ValueError("nonempty supported harness selection required")
     components = selected_components(manifest, domains)
-    tree = {}
-    def emit(name, data):
+    tree, modes = {}, {}
+    def emit(name, data, source=None):
         safe_path(Path("/virtual-output"), name)
         if name in tree:
             raise ValueError("duplicate generated output: " + name)
         tree[name] = data
+        modes[name] = file_mode(source) if source is not None else 0o644
     for harness in harnesses:
         adapter = load_adapter(root, harness)
         blocks = []
@@ -320,12 +331,12 @@ def render_tree(root, harnesses=HARNESSES, domains=None, include_runtime=True):
                 prefix = f"{harness}/skills/{component['name']}/"
                 emit(prefix + "SKILL.md", native_skill(metadata, body, adapter, component))
                 for resource, destination in resource_pairs(root, component):
-                    emit(prefix + destination, resource.read_bytes())
+                    emit(prefix + destination, resource.read_bytes(), resource)
                 if harness == "codex":
                     value = "false" if component["explicit_only"] else "true"
                     emit(prefix + adapter["sidecar"], f"policy:\n  allow_implicit_invocation: {value}\n".encode())
             elif kind == "rule":
-                emit(f"{harness}/rules/{source.name}", source.read_bytes())
+                emit(f"{harness}/rules/{source.name}", source.read_bytes(), source)
                 if component["mapping"]["mode"] == "universal":
                     blocks.append(marked_block(component["id"], strip_frontmatter(source.read_bytes())))
             elif kind == "instruction":
@@ -334,7 +345,7 @@ def render_tree(root, harnesses=HARNESSES, domains=None, include_runtime=True):
                     raise ValueError("shared instruction import cycle")
                 blocks.append(marked_block(component["id"], body))
             else:
-                emit(harness + "/" + component["outputs"][harness], source.read_bytes())
+                emit(harness + "/" + component["outputs"][harness], source.read_bytes(), source)
         agents = b"\n".join(blocks)
         if not agents or len(agents) > manifest["managed_root_budget_bytes"]:
             raise ValueError(f"{harness}: managed root is {len(agents)} bytes; limit {manifest['managed_root_budget_bytes']}")
@@ -347,13 +358,18 @@ def render_tree(root, harnesses=HARNESSES, domains=None, include_runtime=True):
         raise ValueError("rendered zero skills")
     if include_runtime and "codex" in harnesses and manifest.get("runtime_sources"):
         package = load_sibling("rpi-package")
-        for name, data in package.bundle_sources(root, manifest).items():
+        bundle = package.bundle_sources(root, manifest)
+        for name, data in bundle.items():
             emit("codex/runtime/" + name, data)
-    return dict(sorted(tree.items()))
+            modes["codex/runtime/" + name] = bundle.modes.get(name, 0o644)
+    rendered = RenderedTree(sorted(tree.items()))
+    rendered.modes = {name: modes[name] for name in rendered}
+    return rendered
 
 
 def file_inventory(tree):
-    return {name: {"sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data)}
+    modes = getattr(tree, "modes", None) or {}
+    return {name: {"sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data), "mode": format(modes.get(name, 0o644), "o")}
             for name, data in tree.items()}
 
 
@@ -388,13 +404,16 @@ def write_tree(tree, output):
         path = safe_path(output, name)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
+        path.chmod((getattr(tree, "modes", None) or {}).get(name, 0o644))  # Not the umask's choice.
     receipt.write_text(json.dumps(file_inventory(tree), indent=2, sort_keys=True) + "\n")
 
 
 def check_tree(tree, output):
     output = Path(output)
     actual = {str(path.relative_to(output)) for path in output.rglob("*") if path.is_file() and path.name != "distribution-inventory.json" and "__pycache__" not in path.parts}
-    errors = [name for name, data in tree.items() if not (output / name).is_file() or (output / name).read_bytes() != data]
+    modes = getattr(tree, "modes", None) or {}
+    errors = [name for name, data in tree.items() if not (output / name).is_file() or (output / name).read_bytes() != data
+              or bool((output / name).stat().st_mode & 0o100) != bool(modes.get(name, 0o644) & 0o100)]  # Git keeps only the executable bit.
     errors.extend(sorted(actual - set(tree)))
     receipt = output / "distribution-inventory.json"
     if not receipt.is_file() or json.loads(receipt.read_text()) != file_inventory(tree):

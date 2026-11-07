@@ -42,7 +42,7 @@ class ExtractedPackageTests(unittest.TestCase):
         else:
             argv = [os.sys.executable, *arguments]
         result = subprocess.run(argv, cwd=self.target, capture_output=True, text=True,
-                                env={**os.environ, 'PYTHONDONTWRITEBYTECODE': '1'}, timeout=90)
+                                env={**os.environ, 'PYTHONDONTWRITEBYTECODE': '1', 'CLAUDE_CONFIG_DIR': str(self.fixture / 'claude-config-empty')}, timeout=90)
         self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
         return result
 

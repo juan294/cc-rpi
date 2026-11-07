@@ -226,12 +226,14 @@ def desired_entries(engine, source, manifest, request, domains):
     harnesses = request['harnesses']
     tree = engine.render_tree(source, harnesses, domains, include_runtime=False)
     desired = {}
-    def add(component, harness, destination, data, block=None):
+    def add(component, harness, destination, data, block=None, mode=None):
         root_id = 'project' if request['scope'] == 'project' else harness + '-user-skills'
         validate_component_destination(root_id, destination)
         entry = {'component_id': component, 'root_id': root_id, 'destination': destination,
                  'ownership': 'cc-rpi', 'consumers': [harness],
                  'adapter': {'harness': harness, 'sha256': digest(serialized(engine.load_adapter(source, harness)))}, 'data': data}
+        if mode is not None:
+            entry['mode'] = mode  # In memory only: it never reaches the manifest.
         declaration = next((item for item in manifest['components'] if item['id'] == component), {})
         if declaration.get('capability'):
             entry['capability'] = True
@@ -258,17 +260,18 @@ def desired_entries(engine, source, manifest, request, domains):
                                if request['scope'] == 'project' else '') + component['name'] + '/'
                 for name, data in tree.items():
                     if name.startswith(prefix):
-                        add(component['id'], harness, destination + name[len(prefix):], data)
+                        add(component['id'], harness, destination + name[len(prefix):], data, mode=tree.modes.get(name))
             elif kind == 'rule':
                 name = Path(component['source']).name
-                add(component['id'], harness, '.rpi/rules/' + name, tree[harness + '/rules/' + name])
+                add(component['id'], harness, '.rpi/rules/' + name, tree[harness + '/rules/' + name], mode=tree.modes.get(harness + '/rules/' + name))
                 if harness == 'claude' and component['mapping']['mode'] == 'conditional':
-                    add(component['id'], harness, '.claude/rules/' + name, tree[harness + '/rules/' + name])
+                    add(component['id'], harness, '.claude/rules/' + name, tree[harness + '/rules/' + name], mode=tree.modes.get(harness + '/rules/' + name))
             elif kind in ('hook', 'resource'):
                 destination = component['outputs'][harness]
                 if kind == 'hook' and not destination.startswith('.'):
                     destination = '.' + harness + '/' + destination
-                add(component['id'], harness, destination, tree[harness + '/' + component['outputs'][harness]])
+                add(component['id'], harness, destination, tree[harness + '/' + component['outputs'][harness]],
+                    mode=tree.modes.get(harness + '/' + component['outputs'][harness]))
             elif kind == 'config':
                 continue  # Entry-level reconciliation owns native configuration below.
     if request['scope'] == 'project':
@@ -346,6 +349,66 @@ def legacy_source_path(manifest, proposed):
         if isinstance(resource, dict) and resource['destination'] == relative:
             return resource['source']
     return None
+
+
+def enabled_cc_rpi_plugins(project_root):
+    """(settings file, plugin key) for each enabled cc-rpi plugin in Claude's user and project settings.
+
+    Claude Code records plugins in the enabledPlugins object of settings.json as "name@marketplace": true or false
+    (key shape seen in a real ~/.claude/settings.json). The user file is read from CLAUDE_CONFIG_DIR or ~/.claude;
+    project scope is .claude/settings.json and .claude/settings.local.json."""
+    candidates = [Path(os.environ.get('CLAUDE_CONFIG_DIR') or Path.home() / '.claude') / 'settings.json']
+    if project_root:
+        candidates += [Path(project_root) / '.claude/settings.json', Path(project_root) / '.claude/settings.local.json']
+    found = []
+    for path in candidates:
+        try:
+            value = json.loads(path.read_text())
+        except (OSError, ValueError):
+            continue
+        plugins = value.get('enabledPlugins') if isinstance(value, dict) else None
+        if isinstance(plugins, dict):
+            found += [(str(path), key) for key, enabled in plugins.items()
+                      if enabled is True and isinstance(key, str) and key.split('@', 1)[0] == 'cc-rpi']
+    return found
+
+
+def duplicate_registration_conflict(found):
+    path, key = found[0]
+    return {'destination': path, 'reason': 'the cc-rpi Claude plugin is enabled (' + key + ' in ' + path + '), so a direct installation would register every skill twice',
+            'fix': 'disable the plugin by setting "' + key + '": false under enabledPlugins in ' + path + ' (or remove that entry), or install through the plugin '
+                   'instead by re-planning with --route plugin; then re-plan'}
+
+
+def move_aside_command(state, roots, root_id, destination):
+    """A shell line that keeps a path under local/saved-edits (a fresh time-stamped name; a directory or link moves whole)."""
+    live = bound_path(roots[root_id], destination)
+    saved = Path(state) / 'local/saved-edits/plan' / root_id / destination
+    return ('mkdir -p -- ' + shlex.quote(str(saved.parent)) + ' && mv -- ' + shlex.quote(str(live)) + ' ' +
+            shlex.quote(str(saved)) + '.$(date +%Y%m%d-%H%M%S)')
+
+
+def conflict_repair(reason, state, roots, root_id, destination, block):
+    """The concrete repair for conflict classes that otherwise only say to inspect the plan, or {}."""
+    if reason == 'destination exists without proven ownership':
+        if block:
+            return {'fix': 'the marked ' + block + ' block in ' + destination + ' is not recorded as installed here (for example a detach kept it): cut that block '
+                           'out of the file and keep it elsewhere, or delete it if it is only a copy of the template'}
+        command = move_aside_command(state, roots, root_id, destination)
+        return {'fix': 'keep your version by moving it aside with ' + command + ' (the install then writes the template; merge your changes back from the saved copy)',
+                'move_aside_command': command}
+    if reason.startswith('modified direct registration competes with requested plugin route'):
+        command = move_aside_command(state, roots, root_id, destination)
+        return {'fix': 'either keep the direct route (re-plan with --route direct), or move your modified file aside with ' + command +
+                       ' and re-plan with the plugin route (the direct copy is then removed)',
+                'move_aside_command': command}
+    if reason.startswith(('symlink parent: ', 'non-directory parent: ')):
+        link = reason.split(': ', 1)[1]
+        real = os.path.realpath(link)
+        return {'fix': 'the engine never writes through a link: ' + link + (' is a symbolic link to ' + real if os.path.islink(link) else ' is not a directory') +
+                       '; point --target at the project that really holds ' + (destination or 'the native directories') + ', or replace ' + link +
+                       ' with a real directory (move the link away and copy in what you need), then re-plan'}
+    return {}
 
 
 def reconciliation_conflict(destination, reason, base, local, upstream):
@@ -472,6 +535,10 @@ def make_plan(engine, request):
     authorized = set(request.get('allow_capabilities', []))
     capability_ids = {c['id'] for c in manifest['components'] if c.get('capability')}
     conflicts, retained, operations, baselines, next_entries = [], [], [], {}, []
+    if request['scope'] == 'project' and request['action'] != 'detach' and 'claude' in request['harnesses'] and routes.get('claude') == 'direct':
+        plugins = enabled_cc_rpi_plugins(roots.get('project'))
+        if plugins:
+            conflicts.append(duplicate_registration_conflict(plugins))
     file_changes = {}
     observations = {}
     source_provenance = source_identity(source, manifest)
@@ -556,6 +623,8 @@ def make_plan(engine, request):
                     raise Conflict('destination exists without proven ownership')
                 result = upstream
             elif proposed is None:
+                if local is None:
+                    continue  # Already gone (for example moved aside by the printed repair): only the ownership record is dropped.
                 if local != base:
                     if proposed is None and prior['component_id'].startswith('skill:') and routes.get(prior['adapter']['harness']) == 'plugin' and request['action'] != 'detach':
                         raise Conflict('modified direct registration competes with requested plugin route')
@@ -586,7 +655,7 @@ def make_plan(engine, request):
             if capability and (result != local or proposed and (not prior or upstream != base)) and cid not in authorized and request['action'] != 'detach':
                 raise Conflict('native capability file addition/change/removal requires --allow-capabilities ' + cid)
             if proposed:
-                entry = {k: v for k, v in proposed.items() if k != 'data'}
+                entry = {k: v for k, v in proposed.items() if k not in ('data', 'mode')}
                 entry['consumers'] = sorted(set(entry['consumers']) | surviving_consumers)
                 harness = entry['consumers'][0]
                 entry['adapter'] = {'harness': harness, 'sha256': digest(serialized(engine.load_adapter(source, harness)))}
@@ -623,6 +692,8 @@ def make_plan(engine, request):
                 record['allow_capabilities'] = flag
             if isinstance(error, MergeConflict):
                 record.update(merge_repair(state, roots, root_id, destination, block, prior, flag))
+            else:
+                record.update(conflict_repair(str(error), state, roots, root_id, destination, block))
             conflicts.append(record)
 
     # Legacy command names are only candidates. An immutable local source commit
@@ -638,7 +709,11 @@ def make_plan(engine, request):
                     destination = ('.claude/skills/' if harness == 'claude' else '.agents/skills/') + component['name']
                     direct = bound_path(roots['project'], destination)
                     if not any(e['destination'].startswith(destination + '/') for e in old.values()) and has_direct_content(direct):
-                        conflicts.append({'destination': destination, 'reason': 'unknown direct registration competes with requested plugin route'})
+                        command = move_aside_command(state, roots, 'project', destination)
+                        conflicts.append({'destination': destination, 'reason': 'unknown direct registration competes with requested plugin route',
+                                          'fix': 'either keep a direct installation (re-plan with --route direct), or move the unmanaged skill aside with ' + command +
+                                                 ' and re-plan with the plugin route',
+                                          'move_aside_command': command})
         for component in manifest['components']:
             for destination in component.get('former_paths', []):
                 if any(e['destination'].startswith(destination + '/') for e in next_entries):
@@ -737,7 +812,11 @@ def make_plan(engine, request):
 
     for (root_id, destination), data in sorted(file_changes.items()):
         before = observations[(root_id, destination)]
-        after = file_node(data, before.get('mode', 0o644)) if data is not None else {'kind': 'missing'}
+        wanted = next((entry['mode'] for key, entry in desired.items() if key[:2] == (root_id, destination) and entry.get('mode')), 0o644)
+        mode = before.get('mode', wanted)
+        if wanted & 0o100 and not mode & 0o100:
+            mode |= 0o111  # The source is executable (a hook, a script): the installed copy keeps that, whatever the umask.
+        after = file_node(data, mode) if data is not None else {'kind': 'missing'}
         if before != after:
             operations.append({'root_id': root_id, 'destination': destination, 'before': before, 'after': after})
     for name, data in sorted(baselines.items()):
@@ -1065,8 +1144,20 @@ def already_applied(plan):
     return None
 
 
+def healthy_now(engine, request):
+    """True when check would report this installation healthy (a detach: nothing left to remove)."""
+    try:
+        current = make_plan(engine, {**request, 'action': request['action'] if request['action'] == 'detach' else 'update'})
+    except (Conflict, OSError, ValueError):
+        return False
+    return current['status'] == 'noop' or (current['status'] == 'ready' and status_bookkeeping_only(current))
+
+
 def validate_unapplied_plan(engine, plan):
-    """validate_plan, but a plan the installation already recorded says so instead of 'create a new plan'."""
+    """validate_plan, but a plan the installation already recorded says so instead of 'create a new plan'.
+
+    Returns {'status': 'already-applied', ...} when the plan was applied and the installation is healthy now (a no-op,
+    exit 0, like a repeated detach); drift after the apply keeps the conflict."""
     try:
         validate_plan(engine, plan)
     except Conflict as error:
@@ -1074,6 +1165,8 @@ def validate_unapplied_plan(engine, plan):
         if applied is None:
             raise
         journal, followed = applied
+        if healthy_now(engine, plan['request']):
+            return {'status': 'already-applied', 'journal': str(journal), 'transaction': journal.parent.name}
         reason = ('this plan was already applied by transaction journal ' + str(journal) + ' (status complete)' +
                   ('; later transactions have since changed the installation' if followed else '') +
                   '; run check to see the current state of the installation')
@@ -1112,7 +1205,9 @@ def remove_created_directories(roots, candidates):
 
 
 def apply_plan(engine, plan, fail_after=None, fail_after_rename=None):
-    validate_unapplied_plan(engine, plan)
+    done = validate_unapplied_plan(engine, plan)
+    if done:
+        return done
     if plan['status'] == 'noop':
         return {'status': 'noop'}
     try:
@@ -1694,6 +1789,10 @@ def recorded_harness(args):
 
 
 def blocked_hint(args, reason, fix=None):
+    if fix is None and getattr(args, 'target', None) and Path(args.target).absolute().is_symlink():
+        real = Path(args.target).absolute().resolve()
+        fix = ('the target ' + str(args.target) + ' is a symbolic link to ' + str(real) + ' and the engine never writes through a link; '
+               'run the same command against the real path: ' + rerun(drop=('--target', (str(args.target),)), add=('--target', real)))
     if fix is None:
         target, source, harness = getattr(args, 'target', None), getattr(args, 'source', None), getattr(args, 'harness', None) or 'both'
         if not target:
@@ -1806,6 +1905,8 @@ def cli(engine, args):
                 error.fix += '; rerun ' + rerun(drop=error.drop)
             raise
         except Conflict as error:
+            if not error.fix and str(error).startswith(('symlink parent: ', 'non-directory parent: ')):
+                error.fix = conflict_repair(str(error), None, {}, None, '', None)['fix']
             pending_fix = error.fix
             result = {'schema_version': 1, 'request': request, 'status': 'conflict', 'operations': [],
                       'conflicts': [{'destination': '', 'reason': str(error), **({'fix': error.fix} if error.fix else {})}],
