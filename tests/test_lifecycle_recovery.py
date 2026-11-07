@@ -115,6 +115,20 @@ class RecoveryGuidanceTests(unittest.TestCase):
         self.assertIn('an apply stopped before completing', summary['fix'])
         self.assertIn('rollback --journal', summary['fix'])
 
+    def test_check_after_a_full_rollback_of_a_fresh_install_says_install(self):
+        self.apply_ready()
+        for journal in reversed(self.journals('complete')):
+            self.assertEqual(self.invoke('rollback', '--journal', journal).returncode, 0)
+        summary = self.conflict(self.check())
+        self.assertIn('--action install', summary['fix'])
+        self.assertNotIn('--action update', summary['fix'])
+        self.assertIn('create the install plan', summary['fix'])
+        # An installed project keeps the update wording.
+        self.apply_ready()
+        self.write(self.source, 'templates/skills/rpi-plan/references/playbook.md', 'Upstream planning change.\n')
+        drift = self.conflict(self.check())
+        self.assertIn('--action update', drift['fix'])
+
     def test_a_project_that_was_never_installed_keeps_its_existing_check_result(self):
         result = self.check()
         summary = self.conflict(result)
@@ -166,8 +180,9 @@ class RecoveryGuidanceTests(unittest.TestCase):
         self.assertEqual([path.read_bytes() for path in saved], [edited], 'the owner edit is intact')
         # Following the same instructions again is harmless and never overwrites the saved edit.
         again = self.follow(fix)
-        self.assertEqual(again.returncode, 0, again.stdout + again.stderr)
-        # Nothing is left to move aside once the recorded content is back, so a second run changes nothing.
+        # The journal is rolled back, so a second run refuses and changes nothing.
+        self.assertNotEqual(again.returncode, 0)
+        self.assertIn('already rolled back', again.stderr)
         self.assertEqual([path.read_bytes() for path in self.saved_edits(destination)], [edited])
         self.assertEqual(self.snapshot(), before)
 
@@ -239,7 +254,11 @@ class RecoveryGuidanceTests(unittest.TestCase):
         target.write_bytes(target.read_bytes() + b'Second owner edit.\n')
         second = target.read_bytes()
         fcntl.flock(descriptor, fcntl.LOCK_UN)
-        again = self.follow(fix)  # The same printed line.
+        stale = self.follow(fix)  # The same printed line: the path is no longer as reported, so it touches nothing.
+        self.assertIn('noop', stale.stdout)
+        self.assertEqual(target.read_bytes(), second)
+        self.assertEqual([path.read_bytes() for path in self.saved_edits(destination)], [first])
+        again = self.follow(self.refused(journal))  # A fresh fix for the new state.
         self.assertEqual(again.returncode, 0, again.stdout + again.stderr)
         self.assertEqual(sorted(path.read_bytes() for path in self.saved_edits(destination)), sorted([first, second]))
         self.assertEqual(self.snapshot(), before)
@@ -273,10 +292,11 @@ class RecoveryGuidanceTests(unittest.TestCase):
 
     # S-3: temporary names are unique and never left behind.
 
-    def helper(self, journal, index, live, saved, *, prelude=''):
+    def helper(self, journal, index, live, saved, *, prelude='', expected=None):
         lifecycle = adopters_module('rpi-lifecycle')
         code = 'import os, sys\n' + prelude + '\n' + lifecycle.RESTORE_PREIMAGE
-        return subprocess.run([sys.executable, '-c', code, str(journal), str(index), str(live), str(saved)],
+        expected = lifecycle.path_signature(live) if expected is None else expected  # What the conflict would have reported.
+        return subprocess.run([sys.executable, '-c', code, str(journal), str(index), str(live), str(saved), expected],
                               capture_output=True, text=True)
 
     def synthetic_journal(self, before):
@@ -299,7 +319,8 @@ class RecoveryGuidanceTests(unittest.TestCase):
 
     def test_a_failure_after_the_temporary_write_leaves_no_temporary_file_and_a_rerun_works(self):
         data = adopters.base64.b64encode(b'Recorded content.\n').decode()
-        cases = {'file': {'kind': 'file', 'data': data, 'mode': 0o644}, 'symlink': {'kind': 'symlink', 'target': 'elsewhere'}}
+        cases = {'file': {'kind': 'file', 'data': data, 'mode': 0o644, 'sha256': adopters.hashlib.sha256(b'Recorded content.\n').hexdigest()},
+                 'symlink': {'kind': 'symlink', 'target': 'elsewhere'}}
         for kind, before in cases.items():
             with self.subTest(kind=kind):
                 parent = self.workspace.resolve() / ('fail-' + kind)
@@ -492,6 +513,37 @@ class RecoveryGuidanceTests(unittest.TestCase):
         result = subprocess.run(failing, shell=True, capture_output=True, text=True, cwd=self.workspace)
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(json.loads(journal.read_text())['status'], 'applying', 'the && chain stopped before the rollback')
+
+    def test_a_finished_rollback_makes_the_printed_script_refuse_and_touch_nothing(self):
+        before, destination, journal, target = self.blocked_update()
+        self.owner_edit(target)
+        fix = self.refused(journal)
+        self.assertEqual(self.follow(fix).returncode, 0)
+        self.assertEqual(json.loads(journal.read_text())['status'], 'rolled-back')
+        target.write_text('a new owner file\n')
+        again = self.follow(fix)
+        self.assertNotEqual(again.returncode, 0)
+        self.assertIn('already rolled back', again.stderr)
+        self.assertEqual(target.read_text(), 'a new owner file\n')
+        self.assertEqual([path.read_bytes() for path in self.saved_edits(destination)][1:], [], 'no second copy')
+
+    def test_the_script_only_touches_a_path_that_is_still_as_reported(self):
+        before, destination, journal, target = self.blocked_update()
+        self.owner_edit(target)
+        fix = self.refused(journal)
+        target.write_bytes(b'Edited again before the line was run.\n')
+        result = self.follow(fix)
+        self.assertIn('noop', result.stdout)
+        self.assertEqual(target.read_bytes(), b'Edited again before the line was run.\n')
+        self.assertEqual(self.saved_edits(destination), [])
+        self.assertEqual(json.loads(journal.read_text())['status'], 'applying')
+
+    def test_the_literal_run_marker_occurs_once_so_first_and_last_split_agree(self):
+        before, destination, journal, target = self.blocked_update()
+        self.owner_edit(target)
+        fix = self.refused(journal)
+        self.assertEqual(fix.count('run: '), 1, fix)
+        self.assertEqual(fix.split('run: ', 1)[1], fix.rsplit('run: ', 1)[1])
 
     def test_every_edited_file_is_named_not_only_the_first(self):
         self.apply_ready()

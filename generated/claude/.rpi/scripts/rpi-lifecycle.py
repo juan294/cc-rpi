@@ -1274,26 +1274,60 @@ def live_node(path):
 # does nothing. Otherwise it moves whatever is there (a file, a symlink or a directory, never following
 # a link) to a fresh numbered name, then writes the recorded preimage to a uniquely named temporary entry
 # in the same directory and renames it over the path; the temporary entry never survives a failure.
+def path_signature(path):
+    """One comparable token for what is at a path: missing, a link target, a file's hash and mode, or other."""
+    path = str(path)
+    if not os.path.lexists(path):
+        return 'missing'
+    if os.path.islink(path):
+        return 'symlink:' + os.readlink(path)
+    if os.path.isfile(path):
+        with open(path, 'rb') as handle:
+            return 'file:' + hashlib.sha256(handle.read()).hexdigest() + ':' + format(stat.S_IMODE(os.stat(path).st_mode), 'o')
+    return 'other'
+
+
+def node_signature(node):
+    if node['kind'] == 'file':
+        return 'file:' + node['sha256'] + ':' + format(node['mode'], 'o')
+    return 'symlink:' + node['target'] if node['kind'] == 'symlink' else 'missing'
+
+
+# Runs outside the engine, from the printed fix. It only touches a path while the path still has the state the
+# conflict reported (its signature at print time); a path that already holds the recorded preimage, or has
+# changed since, is left alone, and a journal that is already rolled back is refused. Otherwise it moves whatever
+# is there (a file, a symlink or a directory, never following a link) to a fresh numbered name, then writes the
+# recorded preimage to a uniquely named temporary entry in the same directory and renames it over the path; the
+# temporary entry never survives a failure.
 RESTORE_PREIMAGE = r"""
-import base64, json, os, secrets, shutil, stat, sys, tempfile
-operations = json.load(open(sys.argv[1]))['operations']
+import base64, hashlib, json, os, secrets, shutil, stat, sys, tempfile
+document = json.load(open(sys.argv[1]))
+operations = document['operations']
+if document.get('status') == 'rolled-back':
+    sys.exit('this journal is already rolled back, so nothing is restored; run the rollback command again only if it reports a new conflict')
 
-def present(live):
-    if not os.path.lexists(live):
-        return {'kind': 'missing'}
-    if os.path.islink(live):
-        return {'kind': 'symlink', 'target': os.readlink(live)}
-    if os.path.isfile(live):
-        with open(live, 'rb') as handle:
-            return {'kind': 'file', 'data': base64.b64encode(handle.read()).decode(), 'mode': stat.S_IMODE(os.stat(live).st_mode)}
-    return {'kind': 'other'}
+def signature(path):
+    if not os.path.lexists(path):
+        return 'missing'
+    if os.path.islink(path):
+        return 'symlink:' + os.readlink(path)
+    if os.path.isfile(path):
+        with open(path, 'rb') as handle:
+            return 'file:' + hashlib.sha256(handle.read()).hexdigest() + ':' + format(stat.S_IMODE(os.stat(path).st_mode), 'o')
+    return 'other'
 
-def restore(index, live, saved):
+def restore(index, live, saved, expected):
     node = operations[int(index)]['before']
     parent = os.path.dirname(live)
     if os.path.realpath(parent) != parent:
         sys.exit('refusing to restore through a symlinked parent directory: ' + parent)
-    if present(live) == {key: node[key] for key in node if key in ('kind', 'data', 'mode', 'target')}:
+    wanted = ('file:' + node['sha256'] + ':' + format(node['mode'], 'o') if node['kind'] == 'file'
+              else 'symlink:' + node['target'] if node['kind'] == 'symlink' else 'missing')
+    now = signature(live)
+    if now == wanted:
+        return
+    if now != expected:
+        print('noop: ' + live + ' changed after the conflict was reported; run the rollback command again for a fresh fix')
         return
     if os.path.lexists(live):
         target, number = saved, 0
@@ -1327,10 +1361,11 @@ def restore(index, live, saved):
         if temporary and os.path.lexists(temporary):
             os.unlink(temporary)
 
-# Arguments after the journal are (operation index, live path, saved path) triples; the first failure stops everything.
+# Arguments after the journal are (operation index, live path, saved path, signature at print time) groups;
+# the first failure stops everything.
 rest = sys.argv[2:]
-for position in range(0, len(rest), 3):
-    restore(*rest[position:position + 3])
+for position in range(0, len(rest), 4):
+    restore(*rest[position:position + 4])
 """
 
 
@@ -1344,12 +1379,14 @@ def newer_work_conflict(journal, journal_path, blocked, reason):
     saved = Path(journal['state_root']) / 'local/saved-edits' / journal['transaction'] / time.strftime('%Y%m%d-%H%M%S')
     arguments = [argument for index, operation in blocked
                  for argument in (str(index), str(operation_path(journal, operation)),
-                                  str(saved / operation['root_id'] / operation['destination']))]
+                                  str(saved / operation['root_id'] / operation['destination']),
+                                  path_signature(operation_path(journal, operation)))]
     steps = [shlex.join([sys.executable, '-c', RESTORE_PREIMAGE, str(journal_path), *arguments])]
     names = ', '.join(operation['destination'] for _, operation in blocked)
     error = Conflict(reason)
-    error.fix = ('your newer version of ' + names + ' would be overwritten and nothing was changed; the command line after "run: " moves it to ' +
-                 str(saved) + ' (a number is added when that name is taken), restores the installed content so the rollback can proceed, then re-runs it; run: ' +
+    error.fix = ('your newer version of ' + names + ' would be overwritten and nothing was changed; the command line at the end of this message moves it to ' +
+                 str(saved) + ' (a number is added when that name is taken), restores the installed content so the rollback can proceed, then re-runs it; ' +
+                 'it only touches a path that is still as reported here, and it refuses once this journal is rolled back; run: ' +
                  ' && '.join(steps + [engine_command('rollback', '--journal', journal_path)]))
     return error
 
@@ -1702,12 +1739,19 @@ def cli(engine, args):
             pending_fix = result.pop('detach_fix')
         if pending_fix is None and state_root:
             stamp = time.strftime('%Y%m%d-%H%M%S')
+            fix_request = request
+            if args.command == 'check':  # Nothing installed (a fresh project, or an install that was rolled back) needs an install, not an update.
+                try:
+                    installed = load_state(state_root) is not None
+                except (Conflict, OSError, ValueError):
+                    installed = True
+                fix_request = request if installed else {**request, 'action': 'install'}
             output = (saved.with_name(saved.stem + '-' + stamp + saved.suffix) if saved else
-                      Path(state_root) / 'local/plans' / (request['action'] + '-' + stamp + '.json'))
-            pending_fix = conflict_fix(request, result.get('conflicts', []), saved, output)
+                      Path(state_root) / 'local/plans' / (fix_request['action'] + '-' + stamp + '.json'))
+            pending_fix = conflict_fix(fix_request, result.get('conflicts', []), saved, output)
             if pending_fix is None and args.command == 'check' and result['status'] == 'action-needed' and not result.get('conflicts'):
-                pending_fix = ('review the pending operations listed here; create the update plan with ' +
-                               replan_command(request, sorted(request.get('allow_capabilities') or []), output) +
+                pending_fix = ('review the pending operations listed here; create the ' + fix_request['action'] + ' plan with ' +
+                               replan_command(fix_request, sorted(request.get('allow_capabilities') or []), output) +
                                ', review it, then apply it with ' + engine_command('apply', '--plan', output))
     summary = {key: value for key, value in result.items() if key not in ('observations', 'operations', 'request', 'roots')}
     if 'conflicts' in summary:
