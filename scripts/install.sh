@@ -4,6 +4,8 @@ set -euo pipefail
 
 rpi_source=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 rpi_engine="$rpi_source/templates/scripts/rpi-distribution.py"
+rpi_script="$rpi_source/scripts/install.sh"
+rpi_original=("$@")
 rpi_operation=plan
 rpi_arguments=()
 rpi_destination=false
@@ -33,9 +35,19 @@ blocked() {
 value_required() {
   [[ $# -ge 2 && -n "$2" && "$2" != --* ]] || blocked "missing value for $1"
 }
+shell_quote() {  # One argument in single quotes, safe for any bytes (printf %q would escape non-ASCII bytes one by one).
+  local escaped
+  escaped=$(printf '%s' "$1" | sed "s/'/'\\\\''/g")
+  printf "'%s' " "$escaped"
+}
 runtime_required() {
   if ! command -v python3 >/dev/null 2>&1 || ! python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 11))'; then
-    printf '%s\n' 'BLOCKED / WHY: installation requires Python 3.11 or newer / FIX: uv python install 3.13 && uv run --python 3.13 bash scripts/install.sh --help; rerun the intended command through uv run --python 3.13' >&2
+    local found rerun
+    found=$(command -v python3 2>/dev/null || true)
+    [[ -n $found ]] && found="$found (Python $(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:3])))' 2>/dev/null || echo unknown))" || found=missing
+    # The same command with the same arguments, quoted for the shell, on a supported interpreter.
+    rerun=$(shell_quote bash; shell_quote "$rpi_script"; for argument in ${rpi_original[@]+"${rpi_original[@]}"}; do shell_quote "$argument"; done)
+    printf 'BLOCKED / WHY: installation requires Python 3.11 or newer; python3 on PATH is %s / FIX: uv python install 3.13 && uv run --python 3.13 %s\n' "$found" "${rerun% }" >&2
     exit 1
   fi
 }

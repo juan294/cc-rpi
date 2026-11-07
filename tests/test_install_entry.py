@@ -51,6 +51,22 @@ class InstallationEntryTests(unittest.TestCase):
                 self.assertNotIn('ENGINE', result.stdout)
                 self.assertEqual(sentinel, 'custom command sentinel\n')
 
+    def test_the_runtime_fix_reruns_the_same_command_on_a_supported_python(self):
+        import shlex
+        for arguments in (('--check',), ('--apply', '/tmp/plan with space.json'),
+                          ('--target', "/tmp/π & 'quoted'", '--output', '/tmp/plan.json', '--harness', 'claude')):
+            with self.subTest(arguments=arguments):
+                result, _, _ = self.invoke(*arguments, unsupported_runtime=True)
+                self.assertNotEqual(result.returncode, 0)
+                why, fix = result.stderr.strip().split(' / FIX: ', 1)
+                self.assertIn('Python 3.11 or newer', why)
+                self.assertIn('python3 on PATH is', why)
+                self.assertTrue(fix.startswith('uv python install 3.13 && uv run --python 3.13 '), fix)
+                rerun = shlex.split(fix.split('uv run --python 3.13 ', 1)[1])
+                self.assertEqual(rerun[0], 'bash')
+                self.assertTrue(os.path.isabs(rerun[1]) and rerun[1].endswith('source with spaces/scripts/install.sh'), rerun[1])
+                self.assertEqual(tuple(rerun[2:]), arguments, 'the original arguments, unchanged')
+
     def test_default_requires_explicit_destination_and_preserves_unknown_commands(self):
         result, sentinel, files = self.invoke()
         self.assertNotEqual(result.returncode, 0)
