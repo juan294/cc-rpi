@@ -69,8 +69,35 @@ under `refs/heads` that still climbs out with `..` after normalisation is blocke
 repository is unknown, so only the default protected branches apply. Each command
 segment is evaluated on its own: a segment the policy cannot evaluate prints
 `POLICY UNAVAILABLE` and never hides a later destructive segment.
-Literal `echo`, `printf`, `cat`, `grep` and `rg` arguments and quoted `cat`/`tee`
-here-document bodies are text.
+Literal `echo`, `printf`, `cat`, `grep` and `rg` arguments are text.
+
+The tokenizer resolves the spellings the shell itself resolves before it looks for a command:
+
+- Quote, escape and line-continuation splits of a command name (`g\it`, `gi"t"`, `ver\cel`) and `$'...'`
+  words, which are decoded (`$'git'`, `$'\x69'`, octal and `\u` escapes), anywhere in the command line.
+- Static brace lists such as `{main,x}`, `ma{in,}`, `{,+}main` and `{git,push}`, nested or repeated, are expanded
+  when unquoted. A command that expands to more than 1024 words per word is blocked, because it cannot be inspected.
+- A redirection glued to a word (`main>/dev/null`, `main>&2`, `main</dev/null`, `main>>log`) is not part of the word.
+- A branch may be written `NAME`, `heads/NAME` or `refs/heads/NAME`, as Git resolves a short ref.
+- `git push` options may be abbreviated to any prefix of a long option, as Git accepts (`--dele`, `--force-w`,
+  `--mir`, `--al`). A prefix that is ambiguous is applied as every option it could mean, so `--forc` counts as a force.
+  The option list is fixed in the script and a test compares it with the installed Git. `gh` options (cobra) are not
+  abbreviated by their parser, and `gh` and `vercel` options are matched exactly as written.
+- `function NAME { ... }` runs its body like a command list.
+
+Here-documents are read where the shell reads them: a `<<` that is inside a comment, a quote or a string is not an
+operator, and a body ends at its terminator line. A body is text, never parsed as commands, unless its consumer is
+a shell (`bash`, `sh`, `zsh`, `dash`, `ksh`), `eval`, `source`, `.` or `xargs`, or its pipeline ends in one of
+them (`cat <<'EOF' | bash`); then it is inspected like script text. Bodies fed to anything else (`cat`, `tee`,
+`git commit -F -`, `gh pr create --body-file -`, an interpreter such as `ruby`) are text. The command substitutions in
+the body of an unquoted here-document (`$(...)` and backticks) are always inspected, because the shell runs them.
+A body that an interpreter or a script later executes is not seen (see the unclassifiable forms below).
+
+One hook invocation is bounded. Git answers (branch lists, configuration, builtins) are cached for the invocation, so a
+long command pays for each distinct lookup once. Alias chains and nesting are limited to 100 (a chain of exactly 100
+expansions is still followed; the 101st makes the command unclassifiable), brace expansion to 1024 words, and the
+whole evaluation to 10 seconds (`RPI_POLICY_BUDGET_SECONDS` changes it). A command that needs more than the time
+or brace budget is blocked, not passed, with a message that says to split it.
 
 Anything the parser cannot read, including unterminated quotes, unknown wrappers,
 package scripts, Git aliases defined in configuration files (only `git -c`
@@ -82,7 +109,7 @@ rewrite a protected branch: arguments supplied at run time, such as
 through `ssh host '...'` or `find . -exec git push -f origin main ';'`. Variables
 exported by an earlier command (`export GIT_CONFIG_COUNT=1 ...` followed by a later
 `git` call, or a `--config-env` variable set elsewhere) are not known to the parser.
-A shell function or alias, and a Git alias from `.gitconfig`, are never expanded. A missing working directory or missing Git passes silently. The
+A shell function or alias that is defined elsewhere, and a Git alias from `.gitconfig`, are never expanded. A missing working directory or missing Git passes silently. The
 wrapper prefers `python3.14` through `python3.11` over an older default `python3`
 (macOS ships 3.9). With no supported runtime, or a missing policy script, it
 prints `RPI POLICY SKIPPED`. The opt-in receipt gate is a separate Git hook and

@@ -1,5 +1,6 @@
 """Branch-name spelling and shell/gh spelling coverage of the pre-action denylist."""
 import json
+import os
 import subprocess
 import unittest
 
@@ -251,6 +252,133 @@ class GitCommandLineConfigTests(test_policy.PolicyFixture):
                         "git -c user.name=x push -f", "git -c remote.other.push=+HEAD:main push -f origin"):
             with self.subTest(command=command):
                 self.assert_allowed(command)
+
+
+class TokenizerHardeningTests(test_policy.PolicyFixture):
+    """Shell spellings that name the same command or branch as a plain one (Wave B policy findings)."""
+
+    def setUp(self):
+        super().setUp()
+        self.git('checkout', '-qb', 'main')
+
+    def blocked_all(self, commands, reason='protected branch'):
+        for command in commands:
+            with self.subTest(command=command):
+                self.sentinel.unlink(missing_ok=True)
+                result = self.invoke(command)
+                self.assertEqual(result.returncode, 2, command + '\n' + result.stderr)
+                self.assertIn(reason, result.stderr)
+
+    def allowed_all(self, commands):
+        for command in commands:
+            with self.subTest(command=command):
+                self.assert_allowed(command)
+
+    def test_a_command_name_split_by_quotes_or_escapes_is_still_inspected(self):
+        self.blocked_all(['g\\it push -f origin main', 'gi"t" push -f origin main', "g''it push -f origin main",
+                          'g\\\nit push -f origin main', '"g"i\\t push -f origin main'])
+        self.blocked_all(['ver\\cel deploy', "'vercel' deploy", 'v"er"cel deploy'], 'Preview')
+        self.blocked_all(['g\\h repo delete x'], 'irreversible')
+        self.allowed_all(['echo "g it"', 'gi"t" status', 'echo g\\it'])
+
+    def test_ansi_c_quoted_words_are_decoded(self):
+        self.blocked_all(["$'git' push -f origin main", "git $'push' -f origin main", "git push $'-f' origin main",
+                          "git push -f origin $'ma\\x69n'", "git push -f origin $'\\155ain'", "git push -f origin $'ma\\u0069n'",
+                          "$'g\\x69t' push -f origin main", "git push -f origin $'main'"])
+        self.allowed_all(["git push -f origin $'feature'", "git push -f origin $'a\\nmain'", "echo $'git push -f origin main'"])
+
+    def test_short_ref_spellings_name_the_same_branch(self):
+        self.blocked_all(['git push -f origin HEAD:heads/main', 'git push origin :heads/main', 'git push origin +HEAD:heads/main',
+                          'git push -f origin x:refs/heads/main', 'git push -f origin x:main', 'git push -f origin HEAD:refs/heads/main'])
+        self.allowed_all(['git push -f origin HEAD:heads/feature', 'git push origin :heads/feature/old',
+                          'git push -f origin HEAD:tags/main'])
+
+    def test_unambiguous_long_option_prefixes_are_recognised(self):
+        self.blocked_all(['git push --dele origin main', 'git push --delet origin main', 'git push --force-w origin main',
+                          'git push --force-with origin main', 'git push --force-with-l origin main', 'git push --fo origin main',
+                          'git push --mir', 'git push --mirr origin', 'git push --prun origin', 'git push --al --force origin',
+                          'git push --all --forc origin', 'git push --delete origin main', 'git push --forc origin main'], reason='')
+        self.allowed_all(['git push --verb origin main', 'git push --tag origin v1.0.0', 'git push --dry origin main',
+                          'git push --set-u origin feature/work', 'git push --follow origin feature/work',
+                          'git push --force-with-lease --dry-run origin main', 'git push --dr -f origin main'])
+
+    def test_the_static_push_option_list_covers_the_installed_git(self):
+        lifecycle = subprocess.run([self.environment['RPI_REAL_GIT'], 'push', '--git-completion-helper'], capture_output=True, text=True,
+                                   cwd=self.project, env={**os.environ, 'GIT_CONFIG_NOSYSTEM': '1'})
+        if lifecycle.returncode != 0 or not lifecycle.stdout.strip():
+            self.skipTest('this git has no push completion helper')
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('policy_options_fixture', test_policy.POLICY)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        real = {word.rstrip('=') for word in lifecycle.stdout.split() if word.startswith('--') and word != '--'}
+        self.assertEqual(sorted(real - module.PUSH_LONG_OPTIONS), [], 'a new git push option is missing from the hook list')
+
+    def test_redirections_glued_to_a_word_are_not_part_of_it(self):
+        self.blocked_all(['git push -f origin main>/dev/null', 'git push -f origin main>&2', 'git push -f origin main</dev/null',
+                          'git push -f origin main>>log', 'git push -f origin main 2>/dev/null', 'git push -f origin main>/dev/null 2>&1',
+                          'git push origin :main>/dev/null', 'git push>/dev/null -f origin main'])
+        self.allowed_all(['git push -f origin feature/work>/dev/null', 'git push origin feature/work>out.txt'])
+
+    def test_static_brace_lists_are_expanded(self):
+        self.blocked_all(['git push -f origin {main,x}', 'git push -f origin ma{in,}', 'git push -f origin {,+}main',
+                          'git push origin {,+}main', 'git push origin :{main,x}', 'git push --delete origin {main,feature}',
+                          'git push {-f,-u} origin main', 'git push -f origin {x,{main,y}}', '{git,push} -f origin main',
+                          'gh api -X DELETE repos/o/r/git/refs/heads/{main,x}', 'git push -f origin {,a}{,}main'])
+        self.allowed_all(['git push -f origin {x,y}', 'git push -f origin "{main,x}"', "git push -f origin '{main,x}'",
+                          'git push -f origin {main}', 'git push -f origin {feature,hotfix}/a', 'echo {git,push} -f origin main'])
+
+    def test_a_brace_expansion_over_the_cap_fails_closed(self):
+        huge = 'git push -f origin ' + ''.join('{a,b}' for _ in range(11))
+        result = self.invoke(huge)
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn('brace expansion', result.stderr)
+        self.assertFalse(self.sentinel.exists())
+
+    def test_quoted_heredoc_markers_in_comments_and_strings_do_not_hide_commands(self):
+        self.blocked_all(["# cat <<'EOF'\ngit push -f origin main\nEOF", "echo \"cat <<'EOF'\"\ngit push -f origin main\nEOF",
+                          "echo 'x' # cat <<'EOF'\ngit push -f origin main\nEOF",
+                          "cat <<'EOF'\nhello\nEOF\ngit push -f origin main",
+                          "cat <<-'EOF'\n\thello\n\tEOF\ngit push -f origin main",
+                          "function f { git push -f origin main; }; f", "f() { git push -f origin main; }; f",
+                          "function f() { git push -f origin main; }; f"])
+
+    def test_heredoc_bodies_are_text_unless_a_shell_consumes_them(self):
+        self.allowed_all(["git commit -F - <<'EOF'\nfix: docs\n\ngit push -f origin main is forbidden\nEOF",
+                          "gh pr create --body-file - <<'EOF'\nUse git push -f origin main never.\nEOF",
+                          "ruby <<'RB'\nputs 'git push -f origin main'\nRB",
+                          "cat <<EOF\ngit push -f origin main\nEOF", "cat <<'EOF'\n$(git push -f origin main)\nEOF",
+                          "tee notes.txt <<EOF\ngit push -f origin main\nEOF",
+                          "cat <<'EOF'\ngit push -f origin main"])
+        self.blocked_all(["bash <<'EOF'\ngit push -f origin main\nEOF", "sh <<EOF\ngit push -f origin main\nEOF",
+                          "cat <<'EOF' | bash\ngit push -f origin main\nEOF", "cat <<'EOF' | sudo bash -s\ngit push -f origin main\nEOF",
+                          "cat <<'EOF' | tr a b | zsh\ngit push -f origin main\nEOF", "bash -s <<'EOF'\ngit push -f origin main\nEOF",
+                          ". /dev/stdin <<'EOF'\ngit push -f origin main\nEOF", "source /dev/stdin <<'EOF'\ngit push -f origin main\nEOF",
+                          "cat <<EOF\n$(git push -f origin main)\nEOF", "cat <<EOF\n`git push -f origin main`\nEOF",
+                          "xargs sh -c <<'EOF'\ngit push -f origin main\nEOF"])
+
+    def test_alias_chain_boundary_is_exactly_the_documented_cap(self):
+        def chain(length):
+            links = ['-c alias.a%d=a%d' % (number, number + 1) for number in range(length - 1)]
+            return 'git ' + ' '.join(links) + ' -c alias.a%d=push a0 -f origin main' % (length - 1)
+        self.blocked_all([chain(100)])
+        self.allowed_all([chain(101)])
+
+    def test_many_segments_cost_few_git_lookups_and_a_budget_fails_closed(self):
+        log = self.workspace / 'git-calls.log'
+        wrapper = self.fakebin / 'git'
+        original = wrapper.read_text()
+        wrapper.write_text(original.replace("name=Path(sys.argv[0]).name\n", "name=Path(sys.argv[0]).name\nopen(os.environ['RPI_GIT_LOG'],'a').write(' '.join(sys.argv[1:])+'\\n')\n"))
+        env = {**self.environment, 'RPI_GIT_LOG': str(log)}
+        command = '; '.join(['git push -f origin feature/work'] * 400)
+        result = self.invoke(command, environment=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertLess(len(log.read_text().splitlines()), 12, 'git lookups are cached per hook invocation')
+        tiny = {**self.environment, 'RPI_POLICY_BUDGET_SECONDS': '0.000001'}
+        blocked = self.invoke('git status', environment=tiny)
+        self.assertEqual(blocked.returncode, 2, blocked.stderr)
+        self.assertIn('time budget', blocked.stderr)
+        self.assertEqual(self.invoke('echo hello', environment=tiny).returncode, 0, 'commands without a policy word cost nothing')
 
 
 class ReceiptGateAgreesWithPolicyHookTests(test_prepush.PrePushFixture):
