@@ -270,6 +270,22 @@ skills, native caches, models or schedules. Plugin manager updates remain separa
 Verify the actual scheduler environment/authentication and keep local recovery
 records; do not assume a universal launchd file-descriptor requirement.
 
+The update provider is always Claude unless the probe reports a quota or
+authentication limit, and then it is Codex; `RPI_HARNESS` only scopes which
+installation (Claude, Codex or both) is updated. The Codex prompt names the
+installed user-scope skill and the project and carries no Claude slash command.
+The probe stops after `RPI_UPDATE_PROBE_TIMEOUT_SECONDS` (default 300; `0` disables
+it): its whole process group is killed and the run ends with a `BLOCKED` message. The
+update itself has no timeout, because stopping a half-applied update is the owner's
+decision. If an update hangs, find its process with `lsof` on
+`.rpi/local/update-runs/launcher.lock`, stop it, inspect `.rpi/local/transactions`,
+roll back an unfinished journal with the printed `rollback --journal` command, and run
+the launcher again; the lock is released when the last process holding it exits.
+Every `BLOCKED` after the run directory exists is also written to that directory's
+`report.md` and `status.txt`, and an abort is recorded as a failure (never exit 0). A
+launcher ended by a signal cannot record anything, so a run directory without
+`status.txt` means the run was cut off.
+
 ## Further reading
 
 The index contains 92 operational rules with permanent IDs. The distribution

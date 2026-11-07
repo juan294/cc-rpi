@@ -46,6 +46,13 @@ class ScheduledUpdateTests(unittest.TestCase):
             '    with open(events, "a") as log: log.write("enter " + os.environ.get("FAKE_RUN_ID", "?") + "\\n")\n'
             '    time.sleep(float(os.environ.get("FAKE_CLI_PAUSE", "0.05")))\n'
             '    with open(events, "a") as log: log.write("exit " + os.environ.get("FAKE_RUN_ID", "?") + "\\n")\n'
+            'if probe and os.environ.get("FAKE_CLI_KILL_SELF"): os.kill(os.getpid(), 9)\n'
+            'hang = os.environ.get("FAKE_CLI_HANG")\n'
+            'if probe and hang:\n'
+            '    import subprocess\n'
+            '    grandchild = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(600)"])\n'
+            '    open(hang, "w").write(str(os.getpid()) + " " + str(grandchild.pid))\n'
+            '    time.sleep(600)\n'
             'lock = os.environ.get("FAKE_CLI_LOCK_ACTION")\n'
             'if lock and probe:\n'
             '    action, path = lock.split(":", 1)\n'
@@ -71,7 +78,7 @@ class ScheduledUpdateTests(unittest.TestCase):
             'import json, os, sys\n'
             'with open(os.environ["FAKE_CODEX_LOG"],"a") as log: log.write(json.dumps({"argv":sys.argv[1:],"cwd":os.getcwd(),"prompt":sys.stdin.read(),"openai_api_key":os.environ.get("OPENAI_API_KEY"),"codex_api_key":os.environ.get("CODEX_API_KEY")})+"\\n")\n'
             'args = sys.argv[1:]\n'
-            'open(args[args.index("--output-last-message") + 1], "w").write("" if os.environ.get("FAKE_CODEX_EMPTY") else "Fake Codex update result\\n")\n'
+            'if not os.environ.get("FAKE_CODEX_NOWRITE"): open(args[args.index("--output-last-message") + 1], "w").write("" if os.environ.get("FAKE_CODEX_EMPTY") else "Fake Codex update result\\n")\n'
             'raise SystemExit(int(os.environ.get("FAKE_CODEX_CODE", "0")))\n')
         self.codex.chmod(0o700)
         self.env = {**os.environ, 'RPI_UPDATE_ENABLED': '1', 'CC_RPI_PATH': str(self.source),
@@ -495,6 +502,142 @@ class ScheduledUpdateTests(unittest.TestCase):
         while self.alive(child):
             self.assertLess(time.time(), deadline)
             time.sleep(0.05)
+        self.assertEqual(self.run_launcher().returncode, 0)
+
+    def last_run(self):
+        runs = sorted((self.project / '.rpi/local/update-runs').glob('run.*'), key=lambda path: path.stat().st_mtime_ns)
+        self.assertTrue(runs, 'a run directory exists')
+        return runs[-1]
+
+    def assert_reason_kept_in_run(self, text):
+        run = self.last_run()
+        self.assertIn(text, (run / 'report.md').read_text())
+        self.assertIn('native_exit=1', (run / 'status.txt').read_text())
+
+    def test_unset_home_is_a_blocked_message_not_a_silent_abort(self):
+        self.env.update({'FAKE_CLI_PROBE_BODY': 'rate_limit_error', 'FAKE_CLI_PROBE_CODE': '1'})
+        self.env.pop('HOME', None)
+        self.env.pop('RPI_UPDATE_CODEX_SKILL_DIR', None)
+        result = self.run_launcher()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertTrue(result.stderr.startswith('BLOCKED / WHY: HOME is not set'), result.stderr)
+        self.assertNotIn('unbound variable', result.stderr)
+        self.assertEqual(self.calls('codex'), [])
+        self.assert_reason_kept_in_run('HOME is not set')
+
+    def test_an_abort_under_set_u_never_exits_zero(self):
+        script = self.root / 'abort-launcher.sh'
+        text = (ROOT / 'templates/scripts/cc-rpi-update-agent.sh').read_text()
+        marker = 'trap on_exit EXIT\n'
+        self.assertIn(marker, text)
+        script.write_text(text.replace(marker, marker + ': "${RPI_UNDEFINED_VARIABLE_FOR_TEST}"\n'))
+        env = {key: value for key, value in self.env.items() if key != 'HOME'}
+        result = subprocess.run(['/bin/bash', str(script)], env=env, capture_output=True, text=True, timeout=30)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('unbound variable', result.stderr)
+        self.assertEqual(self.calls('cli'), [], 'the abort came before any provider call')
+
+    def test_a_codex_run_that_writes_nothing_is_a_failure(self):
+        self.env.update({'FAKE_CLI_PROBE_BODY': 'rate_limit_error', 'FAKE_CLI_PROBE_CODE': '1', 'FAKE_CODEX_NOWRITE': '1'})
+        self.enable_codex_skill()
+        result = self.run_launcher()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn('native_exit=1', result.stdout)
+        report = (self.last_run() / 'report.md').read_text()
+        self.assertIn('Codex returned no final report', report)
+        self.assertIn('using Codex subscription fallback', report)
+
+    def test_an_unwritable_run_directory_is_a_blocked_message(self):
+        if os.geteuid() == 0:
+            self.skipTest('root ignores directory permissions')
+        runs = self.project / '.rpi/local/update-runs'
+        runs.mkdir(parents=True)
+        (runs / 'launcher.lock').write_text('')
+        runs.chmod(0o500)
+        self.addCleanup(runs.chmod, 0o755)
+        result = self.run_launcher()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertTrue(result.stderr.startswith('BLOCKED / WHY: cannot create the run directory'), result.stderr)
+        self.assertIn('/ FIX: ', result.stderr)
+        self.assertEqual(self.calls('cli'), [])
+
+    def test_blocks_after_the_run_directory_exists_are_written_into_it(self):
+        # The lock file disappears during the probe.
+        self.env['FAKE_CLI_LOCK_ACTION'] = 'unlink:' + str(self.lock_file)
+        result = self.run_launcher()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assert_reason_kept_in_run('removed or replaced while this run was active')
+        del self.env['FAKE_CLI_LOCK_ACTION']
+        # The Codex skill is missing.
+        self.env.update({'FAKE_CLI_PROBE_BODY': 'rate_limit_error', 'FAKE_CLI_PROBE_CODE': '1',
+                         'RPI_UPDATE_CODEX_SKILL_DIR': str(self.root / 'no-such-skill')})
+        result = self.run_launcher()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assert_reason_kept_in_run('differ from selected source')
+        # A missing Codex executable.
+        self.env['CODEX_BIN'] = str(self.root / 'no-such-codex')
+        result = self.run_launcher()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assert_reason_kept_in_run('Codex is unavailable')
+
+    def test_a_provider_killed_during_the_probe_leaves_a_report_and_a_status(self):
+        self.env['FAKE_CLI_KILL_SELF'] = '1'
+        result = self.run_launcher()
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        run = self.last_run()
+        self.assertIn('Claude preflight failed', (run / 'report.md').read_text())
+        self.assertIn('native_exit=', (run / 'status.txt').read_text())
+
+    def test_the_codex_prompt_is_route_neutral(self):
+        self.env.update({'FAKE_CLI_PROBE_BODY': 'rate_limit_error', 'FAKE_CLI_PROBE_CODE': '1'})
+        self.enable_codex_skill()
+        self.assertEqual(self.env['RPI_ROUTE'], 'plugin')
+        result = self.run_launcher()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        prompt = self.calls('codex')[0]['prompt']
+        self.assertNotIn('/cc-rpi:', prompt)
+        self.assertNotIn('Route: plugin', prompt)
+        self.assertFalse([line for line in prompt.splitlines() if line.startswith('/')], 'no Claude slash command')
+        self.assertIn(str(self.project.resolve()), prompt)
+        self.assertIn('rpi-update', prompt)
+        claude = self.run_launcher_claude_prompt()
+        self.assertIn('/cc-rpi:rpi-update', claude)
+        self.assertIn('Route: plugin', claude)
+
+    def run_launcher_claude_prompt(self):
+        for key in ('FAKE_CLI_PROBE_BODY', 'FAKE_CLI_PROBE_CODE'):
+            self.env.pop(key, None)
+        (self.root / 'cli.jsonl').unlink(missing_ok=True)
+        self.assertEqual(self.run_launcher().returncode, 0)
+        argv = self.calls('cli')[1]['argv']
+        return argv[argv.index('-p') + 1]
+
+    def test_a_hung_probe_is_stopped_with_its_whole_process_group(self):
+        hang = self.root / 'hang.pids'
+        self.env.update({'FAKE_CLI_HANG': str(hang), 'RPI_UPDATE_PROBE_TIMEOUT_SECONDS': '1'})
+        started = time.time()
+        result = self.run_launcher()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertLess(time.time() - started, 9)
+        self.assertTrue(result.stderr.startswith('BLOCKED / WHY: the Claude probe did not answer within 1 seconds'), result.stderr)
+        self.assertIn('RPI_UPDATE_PROBE_TIMEOUT_SECONDS', result.stderr)
+        parent, grandchild = map(int, hang.read_text().split())
+        deadline = time.time() + 10
+        while self.alive(parent) or self.alive(grandchild):
+            self.assertLess(time.time(), deadline, 'the probe and its child must both be gone')
+            time.sleep(0.05)
+        self.assertEqual(self.probe_calls(), 1, 'no update followed')
+        self.assert_reason_kept_in_run('did not answer within 1 seconds')
+        del self.env['FAKE_CLI_HANG']
+        self.assertEqual(self.run_launcher().returncode, 0, 'the lock was released')
+
+    def test_the_probe_timeout_must_be_a_whole_number_and_zero_disables_it(self):
+        self.env['RPI_UPDATE_PROBE_TIMEOUT_SECONDS'] = 'soon'
+        result = self.run_launcher()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('must be a whole number of seconds', result.stderr)
+        self.assertEqual(self.calls('cli'), [])
+        self.env['RPI_UPDATE_PROBE_TIMEOUT_SECONDS'] = '0'
         self.assertEqual(self.run_launcher().returncode, 0)
 
     def test_lock_area_must_be_ignored_before_any_provider_call(self):

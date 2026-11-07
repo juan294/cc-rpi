@@ -99,6 +99,69 @@ after verified disposal is safe. Live owners, unknown birth identities and orpha
 intents remain protected and require review of the retained receipt and exact
 resources; editing a receipt or deleting a lock is not a supported recovery path.
 
+## Owner review of a retained orphan
+
+`--finish` prints `retained: Unsettled or orphan command intent requires preservation` when the receipt still
+records a command that never settled, for example after the recipe was killed with SIGKILL. The recorded child
+process being gone does not clear that intent, because the daemon may still hold a resource that request created.
+Only the owner of the task decides. Run these from the repository root; every command is read-only until step 5.
+
+1. Read the receipt. Bind its path and fields (the receipt is in `$HOME/.local/state/cc-rpi/postgres-recipes/`):
+
+   ```sh
+   RECEIPT=$HOME/.local/state/cc-rpi/postgres-recipes/TASK.json   # the path --finish printed
+   python3 -m json.tool "$RECEIPT"
+   ENDPOINT=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["docker"]["endpoint"])' "$RECEIPT")
+   NONCE=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["nonce"])' "$RECEIPT")
+   NAME=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["name"])' "$RECEIPT")
+   ```
+
+2. Confirm the recorded owner and command child are gone (no output means gone; a live process means wait for it):
+
+   ```sh
+   python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); print(r["owner"]["pid"], (r["command"] or {}).get("child"))' "$RECEIPT"
+   ps -p OWNER_PID            # the first number printed above
+   ps -p CHILD_PID            # only when a child pid was printed
+   ```
+
+3. Find what the daemon holds under this task's identity. The container name is `$NAME` and every resource carries
+   the label `com.cc-rpi.postgres-recipe.nonce=$NONCE`; list by both and compare with the receipt's `container.id`
+   (full IDs only, never abbreviations):
+
+   ```sh
+   docker --host "$ENDPOINT" container ls -a --no-trunc --filter "name=^/$NAME\$" --filter "label=com.cc-rpi.postgres-recipe.nonce=$NONCE"
+   docker --host "$ENDPOINT" volume ls --filter "label=com.cc-rpi.postgres-recipe.nonce=$NONCE"
+   ```
+
+4. Confirm project identity before touching anything. The container must carry `nonce=$NONCE`, `repository=cc-rpi` and
+   `workdir=` this checkout's absolute path, use the receipt's `image_id`, and expose only the receipt's anonymous
+   volumes. Anything else is not this task's resource: stop here and leave it:
+
+   ```sh
+   CID=FULL_CONTAINER_ID   # from step 3
+   docker --host "$ENDPOINT" container inspect "$CID" --format '{{json .Config.Labels}} {{.Image}} {{json .Mounts}}'
+   git rev-parse --show-toplevel
+   ```
+
+5. Only when step 4 matches, stop and remove exactly that container by its full ID (the recipe starts it with `--rm`, so
+   stopping it removes it and its anonymous volumes), then verify nothing remains:
+
+   ```sh
+   docker --host "$ENDPOINT" container stop "$CID"
+   docker --host "$ENDPOINT" container ls -a --no-trunc --filter "name=^/$NAME\$"
+   docker --host "$ENDPOINT" volume ls --filter "label=com.cc-rpi.postgres-recipe.nonce=$NONCE"
+   ```
+
+6. Record the disposition. The recipe has no command that clears an orphan intent, on purpose, and editing the receipt
+   is not supported. Keep the receipt and write a retained-resource handoff in the task notes: receipt path, owner,
+   the commands above with their output, and the result ("container <full id> stopped and verified absent on
+   <date>; no volumes remain"). Then `--finish` on the same receipt still reports the retained intent; that is the
+   expected final state for an orphan, and the handoff is the record that lets the source worktree be removed.
+
+If step 3 shows nothing under the name and label, nothing was created that this task can find; the handoff still
+records that, and a daemon request that was in flight when the recipe died may publish a resource later, so repeat
+step 3 once more after a minute before removing the worktree.
+
 Do not delete the source worktree until every owned receipt is disposed or has an
 explicit retained-resource handoff naming its owner, reason and next review
 action. No machine-wide prune or broad name-based cleanup is part of this recipe.
