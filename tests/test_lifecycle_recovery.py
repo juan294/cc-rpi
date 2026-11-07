@@ -545,6 +545,124 @@ class RecoveryGuidanceTests(unittest.TestCase):
         self.assertEqual(fix.count('run: '), 1, fix)
         self.assertEqual(fix.split('run: ', 1)[1], fix.rsplit('run: ', 1)[1])
 
+    # WB-L-3: a live operation is waited for, never rolled back.
+
+    def test_a_held_lock_means_wait_not_roll_back(self):
+        self.apply_ready()
+        self.write(self.source, 'templates/skills/rpi-plan/references/playbook.md', 'Upstream planning change.\n')
+        _, path = self.plan('update')
+        self.assertEqual(self.invoke('apply', '--plan', path, '--fail-after', '1').returncode, 2)
+        lock = self.project / '.rpi/local/lock'
+        descriptor = os.open(lock, os.O_RDWR | os.O_CREAT, 0o600)
+        self.addCleanup(lambda: os.close(descriptor) if descriptor is not None else None)
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        check = self.conflict(self.check())
+        self.assertEqual(check['status'], 'action-needed')
+        self.assertIn('running lifecycle operation', check['active_operation'])
+        self.assertNotIn('rollback --journal', check['fix'])
+        self.assertIn('wait', check['fix'])
+        planned, _ = self.plan('update')
+        reasons = ' '.join(item['reason'] + item.get('fix', '') for item in planned['conflicts'])
+        self.assertIn('locked by a running lifecycle operation', reasons)
+        self.assertNotIn('rollback --journal', reasons)
+        applied = self.conflict(self.invoke('apply', '--plan', path))
+        self.assertIn('locked by a running lifecycle operation', applied['reason'])
+        self.assertNotIn('rollback --journal', applied['fix'])
+        fcntl.flock(descriptor, fcntl.LOCK_UN)
+        os.close(descriptor)
+        descriptor = None
+        released = self.conflict(self.check())
+        self.assertIn('rollback --journal', released['fix'])
+        self.assertNotIn('active_operation', released)
+
+    # WB-L-5: a project moved during an unfinished apply can still be recovered.
+
+    def moved_interrupted_project(self):
+        plan, path = self.plan()
+        self.assertEqual(self.invoke('apply', '--plan', path, '--fail-after', '2').returncode, 2)
+        original = self.project
+        moved = self.workspace / 'moved-project'
+        shutil.move(str(original), str(moved))
+        self.project = moved
+        return original, moved
+
+    def test_check_and_plan_name_the_move_and_how_to_undo_it(self):
+        original, moved = self.moved_interrupted_project()
+        check = self.conflict(self.check())
+        self.assertEqual(len(check['interrupted_transactions']), 1)
+        self.assertIn(str(moved.resolve()), check['interrupted_transactions'][0])
+        self.assertIn('moved while a transaction', check['fix'])
+        self.assertIn(shlex.join(['mv', '--', str(moved.resolve()), str(original.resolve())]), check['fix'])
+        self.assertIn('rollback --journal', check['fix'])
+        self.assertNotIn(shlex.join(['rm', str(moved.resolve() / '.rpi/local/root-binding.json')]), check['fix'])
+        planned, _ = self.plan()
+        self.assertEqual(planned['status'], 'conflict')
+        self.assertEqual(len(planned['conflicts']), 1, 'one clear conflict, not one per file')
+        self.assertIn('moved while a transaction', planned['conflicts'][0]['reason'])
+
+    def test_rollback_of_a_moved_journal_names_the_move_back_and_it_works(self):
+        original, moved = self.moved_interrupted_project()
+        journal = next((moved / '.rpi/local/transactions').glob('*/journal.json'))
+        failed = self.conflict(self.invoke('rollback', '--journal', journal))
+        fix = failed['fix']
+        self.assertNotIn(shlex.join([sys.executable, str(adopters.ENGINE), 'rollback', '--journal', str(journal)]), fix, 'not the command that failed')
+        self.assertIn(shlex.join(['mv', '--', str(moved.resolve()), str(original.resolve())]), fix)
+        result = subprocess.run(fix.split(' (if the recorded path')[0].split('undo the transaction there: ', 1)[1], shell=True,
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(original.is_dir() and not moved.exists())
+        self.project = original
+        self.assertEqual(self.snapshot(), {})
+
+    def test_a_project_moved_back_after_the_old_rebind_step_can_still_be_rolled_back(self):
+        original, moved = self.moved_interrupted_project()
+        (moved / '.rpi/local/root-binding.json').unlink()  # What the old hint told the owner to do.
+        shutil.move(str(moved), str(original))
+        self.project = original
+        journal = next((original / '.rpi/local/transactions').glob('*/journal.json'))
+        result = self.invoke('rollback', '--journal', journal)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.snapshot(), {})
+
+    # WB-L-6: directories the engine created do not outlive the files in them.
+
+    def empty_directories(self):
+        return sorted(str(path.relative_to(self.project)) for path in self.project.rglob('*')
+                      if path.is_dir() and not path.is_symlink() and not any(path.iterdir()) and '.rpi/local' not in path.as_posix())
+
+    def prepare_owner_directories(self):
+        (self.project / 'docs/notes').mkdir(parents=True)                       # Pre-existing and empty.
+        (self.project / '.claude/skills/owner-skill').mkdir(parents=True)        # Pre-existing and used by the owner.
+        (self.project / '.claude/skills/owner-skill/SKILL.md').write_text('Owner skill.\n')
+        return {'docs/notes', '.claude/skills/owner-skill'}
+
+    def test_rollback_removes_the_empty_directories_it_created_and_keeps_every_other(self):
+        kept = self.prepare_owner_directories()
+        self.apply_ready('install', '--harness', 'claude')
+        self.assertGreater(len(self.journals('complete')), 0)
+        self.assertEqual(self.invoke('rollback', '--journal', self.journals('complete')[-1]).returncode, 0)
+        self.assertEqual(self.empty_directories(), ['docs/notes'], 'only the directory that was there before and is empty remains')
+        for name in kept:
+            self.assertTrue((self.project / name).is_dir(), name)
+        self.assertEqual((self.project / '.claude/skills/owner-skill/SKILL.md').read_text(), 'Owner skill.\n')
+        self.assertFalse((self.project / '.claude/skills/rpi-plan').exists())
+
+    def test_a_directory_that_gained_other_content_is_never_removed(self):
+        self.apply_ready('install', '--harness', 'claude')
+        (self.project / '.claude/skills/rpi-plan/notes.txt').write_text('Owner note.\n')
+        self.assertEqual(self.invoke('rollback', '--journal', self.journals('complete')[-1]).returncode, 0)
+        self.assertEqual((self.project / '.claude/skills/rpi-plan/notes.txt').read_text(), 'Owner note.\n')
+
+    def test_detach_removes_the_empty_directories_an_install_created(self):
+        kept = self.prepare_owner_directories()
+        self.apply_ready('install', '--harness', 'claude')
+        self.apply_ready('detach')
+        leftovers = [name for name in self.empty_directories() if name != 'docs/notes']
+        self.assertEqual(leftovers, [])
+        for name in kept:
+            self.assertTrue((self.project / name).is_dir(), name)
+        self.assertEqual(json.loads((self.project / '.rpi/manifest.json').read_text())['route'], 'detached')
+
     def test_every_edited_file_is_named_not_only_the_first(self):
         self.apply_ready()
         self.write(self.source, 'templates/skills/rpi-plan/references/playbook.md', 'Upstream planning change.\n')

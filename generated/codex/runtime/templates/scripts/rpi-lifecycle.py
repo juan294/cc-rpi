@@ -403,6 +403,11 @@ def make_plan(engine, request):
                          ' with roots ' + ', '.join(map(str, previous.get('root_ids') or [])),
                          'rerun with --scope ' + str(previous.get('scope')) + ' and that installation\'s roots, '
                          'or inspect ' + str(Path(state) / 'manifest.json') + ' if it was edited by hand')
+    moved = moved_journals(state)
+    if moved:  # The documented rebind step would strand this transaction, so it is never offered here.
+        error = Conflict('the project was moved while a transaction was unfinished: ' + str(moved[-1][0]))
+        error.fix = move_back_fix(state, moved)
+        raise error
     # Local root binding is separate from the portable ownership manifest.
     binding_path = bound_path(state, 'local/root-binding.json')
     binding = snapshot(binding_path)
@@ -417,9 +422,10 @@ def make_plan(engine, request):
                      'the new roots; journals from the old location cannot roll back here); otherwise pass the '
                      'recorded roots shown in this message')
         raise error
-    interrupted, recovery = interrupted_recovery(state)
+    interrupted, recovery, kind = interrupted_status(state)
     if interrupted:
-        error = Conflict('interrupted transaction must be rolled back before planning: ' + str(interrupted[-1]))
+        error = Conflict(('locked by a running lifecycle operation; wait for it to finish and run again: ' if kind == 'active' else
+                          'interrupted transaction must be rolled back before planning: ') + str(interrupted[-1]))
         error.fix = recovery
         raise error
     defaults = [c['name'] for c in manifest['components'] if c.get('category') == 'domain' and c['selection'] == 'default']
@@ -1078,6 +1084,33 @@ def validate_unapplied_plan(engine, plan):
         raise conflict from error
 
 
+def planned_directories(plan):
+    """Directories this plan's writes will create (they do not exist yet), deepest first."""
+    found = set()
+    for operation in plan['operations']:
+        if operation['after']['kind'] == 'missing':
+            continue
+        root = Path(plan['state_root'] if operation['root_id'] == 'state' else plan['roots'][operation['root_id']])
+        parent = (root / operation['destination']).parent
+        while parent != root and root in parent.parents and not parent.exists():
+            found.add(str(parent))
+            parent = parent.parent
+    return sorted(found, key=lambda name: (-len(Path(name).parts), name))
+
+
+def remove_created_directories(roots, candidates):
+    """rmdir each engine-created directory that is empty now, deepest first; a directory with any content stays."""
+    bases = [Path(root) for root in roots]
+    for name in sorted({name for name in candidates if isinstance(name, str)}, key=lambda name: (-len(Path(name).parts), name)):
+        path = Path(name)
+        if path.is_symlink() or not any(base in path.parents for base in bases):
+            continue
+        try:
+            path.rmdir()
+        except OSError:
+            continue
+
+
 def apply_plan(engine, plan, fail_after=None, fail_after_rename=None):
     validate_unapplied_plan(engine, plan)
     if plan['status'] == 'noop':
@@ -1105,6 +1138,9 @@ def apply_plan(engine, plan, fail_after=None, fail_after_rename=None):
                    'roots': plan['roots'], 'state_root': plan['state_root'],
                    'operations': plan['operations'], 'completed': 0, 'pending': None,
                    'scope': plan['request']['scope'], 'sequence': sequence, **plan_identity(plan)}
+        created = planned_directories(plan)
+        if created:
+            journal['created_directories'] = created
         receipt = {'roots': plan['roots'], 'state_root': plan['state_root'], 'sequence': sequence,
                    'scope': plan['request']['scope'], 'operations_sha256': digest(serialized(plan['operations'])),
                    **plan_identity(plan)}
@@ -1119,6 +1155,13 @@ def apply_plan(engine, plan, fail_after=None, fail_after_rename=None):
             raise
         journal['status'] = 'complete'
         atomic_node(journal_path, file_node(serialized(journal), 0o600))
+        if plan['request']['action'] == 'detach':  # Directories an earlier install created and nothing uses now.
+            earlier = [name for _, _, path in journals(plan['state_root']) if path != journal_path
+                       for name in (json.loads(path.read_bytes()).get('created_directories') or [])]
+            removed = [(Path(plan['state_root'] if op['root_id'] == 'state' else plan['roots'][op['root_id']]) / op['destination']).parent
+                       for op in plan['operations'] if op['after']['kind'] == 'missing']
+            ancestors = {str(parent) for start in removed for parent in [start, *start.parents]}
+            remove_created_directories([plan['state_root'], *plan['roots'].values()], ancestors & set(earlier))
         atomic_node(bound_path(plan['state_root'], 'local/root-binding.json'), file_node(serialized(plan['roots']), 0o600))
         atomic_node(bound_path(plan['state_root'], 'local/source-receipt.json'), file_node(serialized(plan['request']), 0o600))
         return {'status': 'applied', 'journal': str(journal_path)}
@@ -1178,11 +1221,21 @@ def rollback(journal_path):
         raise ValueError('completed journal has inconsistent recovery progress')
     expected = bound_path(journal['state_root'], 'local/transactions/' + journal['transaction'] + '/journal.json')
     if expected != journal_path:
+        if journal.get('scope') == 'project' and len(journal_path.parents) > 4 and journal_path.parents[3].name == '.rpi':
+            error = Conflict('this journal was recorded for the project at ' + str(Path(journal['state_root']).parent) +
+                             ' but it is at ' + str(journal_path.parents[4]))
+            error.fix = ('move the project back to the recorded path, then undo the transaction there: ' +
+                         shlex.join(['mv', '--', str(journal_path.parents[4]), str(Path(journal['state_root']).parent)]) + ' && ' +
+                         engine_command('rollback', '--journal', expected) +
+                         ' (if the recorded path is occupied, move that out of the way first)')
+            raise error
         raise ValueError('journal does not match its bound state root')
     binding_path = bound_path(journal['state_root'], 'local/root-binding.json')
     binding_node = snapshot(binding_path)
     binding = node_bytes(binding_node)
-    if binding != serialized(journal['roots']):
+    # A project-scope journal is also checked against its own location below, so a missing binding (removed by the old
+    # rebind hint, then the project moved back) must not make the transaction impossible to undo.
+    if binding != serialized(journal['roots']) and not (binding is None and journal.get('scope') == 'project'):
         raise Conflict('journal roots differ from recorded installation bindings')
     if journal.get('scope') == 'project' and journal['roots'] != {'project': str(Path(journal['state_root']).parent)}:
         raise ValueError('project journal root must be the parent of its .rpi state')
@@ -1257,6 +1310,9 @@ def rollback(journal_path):
             atomic_node(operation_path(journal, operation), operation['before'])
         journal['status'] = 'rolled-back'
         atomic_node(journal_path, file_node(serialized(journal), 0o600))
+        created = journal.get('created_directories')
+        if isinstance(created, list):  # Only directories this transaction created, and only while empty.
+            remove_created_directories([journal['state_root'], *journal['roots'].values()], created)
         return {'status': 'rolled-back'}
     finally:
         os.close(lock)
@@ -1468,16 +1524,73 @@ def journals(state_root, bound=False):
     return [item[:3] for item in sorted(found, key=lambda item: (item[0], item[3], str(item[2])))]
 
 
-def interrupted_recovery(state_root):
-    """Interrupted journals here, and the exact newest-first rollbacks that clear them."""
+def lock_is_held(state_root):
+    """True while a live process holds the installation lock. The lock file is only opened if it exists."""
+    try:
+        import fcntl
+        descriptor = os.open(bound_path(state_root, 'local/lock'), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except (ImportError, OSError, ValueError, Conflict):
+        return False
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return True
+    except OSError:
+        return False
+    finally:
+        os.close(descriptor)  # Closing releases a lock this check just took.
+    return False
+
+
+def moved_journals(state_root):
+    """(journal, recorded state root) of unfinished journals that were written for another location of this project."""
+    found = []
+    try:
+        here = str(Path(state_root).resolve())
+        directory = bound_path(state_root, 'local/transactions')
+        for path in sorted(directory.glob('*/journal.json')) if directory.is_dir() else []:
+            try:
+                value = json.loads(path.read_bytes()) if not path.is_symlink() else None
+            except (OSError, ValueError):
+                continue
+            if (isinstance(value, dict) and value.get('status') == 'applying' and isinstance(value.get('state_root'), str)
+                    and value['state_root'] != here):
+                found.append((path.resolve(), value['state_root']))
+    except (OSError, ValueError, Conflict):
+        return []
+    return found
+
+
+def move_back_fix(state_root, moved):
+    path, recorded = moved[-1]
+    here = Path(state_root).resolve()
+    recorded_journal = Path(recorded) / path.relative_to(here)
+    return ('this project was moved while a transaction recorded at ' + str(Path(recorded).parent) + ' was unfinished; '
+            'move it back to the recorded path and undo the transaction there: ' +
+            shlex.join(['mv', '--', str(here.parent), str(Path(recorded).parent)]) + ' && ' +
+            engine_command('rollback', '--journal', recorded_journal) +
+            ' (if the recorded path is occupied, move that out of the way first; removing root-binding.json to rebind would '
+            'strand the transaction, so it is not offered while one is unfinished), then create a new plan')
+
+
+def interrupted_status(state_root):
+    """(unfinished journals, how to clear them, kind) with kind 'rollback', 'active' (a live operation holds
+    the lock: wait, never roll back) or 'moved' (the project was moved: move it back first)."""
     ordered = [(status, path) for _, status, path in journals(state_root, bound=True) if status in ('applying', 'complete')]
     first = next((index for index, (status, _) in enumerate(ordered) if status == 'applying'), None)
     if first is None:
-        return [], None
+        moved = moved_journals(state_root)
+        if moved:
+            return [path for path, _ in moved], move_back_fix(state_root, moved), 'moved'
+        return [], None, None
+    paths = [path for status, path in ordered if status == 'applying']
+    if lock_is_held(state_root):
+        return paths, ('a running lifecycle operation holds the lock on this installation; wait for it to finish and run '
+                       'the command again. Do not roll back while it runs: a transaction that completes is healthy'), 'active'
     chain = ' && '.join(engine_command('rollback', '--journal', path) for _, path in reversed(ordered[first:]))
     lead = ('an apply stopped before completing; undo it exactly with ' if first == len(ordered) - 1 else
             'an apply stopped before completing and newer transactions followed it; undo them newest first with ')
-    return [path for status, path in ordered if status == 'applying'], lead + chain + ', then create a new plan'
+    return paths, lead + chain + ', then create a new plan', 'rollback'
 
 
 def replan_command(request, flags, output, command='plan'):
@@ -1726,11 +1839,13 @@ def cli(engine, args):
                 result['status'] = 'healthy' if result['status'] == 'noop' else 'action-needed'
         try:
             state_root = request_roots(request)[1]
-            interrupted, recovery = interrupted_recovery(state_root)
+            interrupted, recovery, kind = interrupted_status(state_root)
         except (Conflict, OSError, ValueError):
-            state_root, interrupted, recovery = None, [], None
+            state_root, interrupted, recovery, kind = None, [], None, None
         if interrupted:
             result['interrupted_transactions'] = [str(path) for path in interrupted]
+            if kind == 'active':
+                result['active_operation'] = 'a running lifecycle operation holds the installation lock'
             if result['status'] in ('healthy', 'detached'):
                 result['status'] = 'action-needed'
                 result.pop('note', None)
