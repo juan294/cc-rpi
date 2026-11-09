@@ -967,28 +967,35 @@ def unwritable_conflicts(roots, state, operations):
 GATE_DOC = 'https://github.com/juan294/cc-rpi/blob/main/docs/native-policy.md#optional-verification-receipt-gate'
 # Verbatim from docs/native-policy.md (a test keeps them identical); adopters do not have that file.
 PRE_PUSH_ENABLE = r'''hooks_common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+top=$(git rev-parse --show-toplevel 2>/dev/null)
 hooks=$(git config --type=path --get core.hooksPath || echo "$hooks_common/hooks")
+case $hooks in /*) ;; *) hooks="$top/$hooks" ;; esac
+gate_line='/^[[:space:]]*#|^[[:space:]]*(echo|printf|:)[[:space:]]/'
 if [ -z "$hooks_common" ]; then
   echo "BLOCKED / WHY: the current directory is not inside a Git repository, so there is no hooks directory to write. / FIX: cd to the repository root of the integration checkout, then run this command again." >&2
+  false
+elif [ -z "$top" ]; then
+  echo "BLOCKED / WHY: this is a bare repository or the inside of a .git directory: it has no working tree, so there is no integration checkout whose receipt the gate could read, and a relative core.hooksPath has no root to resolve against. / FIX: cd to the repository root of the integration checkout, then run this command again." >&2
   false
 elif [ -e "$hooks" ] && [ ! -d "$hooks" ]; then
   echo "BLOCKED / WHY: the hooks path $hooks (core.hooksPath, or the clone's hooks directory) exists and is not a directory. / FIX: point core.hooksPath at a directory (git config core.hooksPath PATH) or move that file away, then run this command again." >&2
   false
 elif [ -L "$hooks/pre-push" ]; then
-  if [ -f "$hooks/pre-push" ] && grep -Eq '^[[:space:]]*[^[:space:]#].*rpi-prepush\.py' "$hooks/pre-push"; then
-    echo "$hooks/pre-push is a symbolic link to a hook that already invokes rpi-prepush.py; left unchanged."
+  if [ -f "$hooks/pre-push" ] && awk "$gate_line { next } /^[[:space:]]*exit([[:space:]]|;|\$)/ { stopped = 1 } /rpi-prepush\\.py/ && !stopped { found = 1 } END { exit !found }" "$hooks/pre-push"; then
+    echo "$hooks/pre-push is a symbolic link to a hook that runs rpi-prepush.py; left unchanged. WARNING: if an earlier line can end the hook, or the hook drops the gate's exit status, the gate cannot refuse; check one refusal."
   else
     echo "BLOCKED / WHY: $hooks/pre-push is a symbolic link, and this command never writes through a link. / FIX: add this line to the hook the link points to, or replace the link with a regular file that contains it, before any command that reads standard input (replace python3.13 with any Python 3.11 or newer on PATH), then push again: python3.13 \"\$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py\" \"\$@\" || exit 1" >&2
     false
   fi
 elif [ -e "$hooks/pre-push" ] && ! grep -q 'cc-rpi receipt gate wrapper' "$hooks/pre-push"; then
-  if grep -Eq '^[[:space:]]*[^[:space:]#].*rpi-prepush\.py' "$hooks/pre-push"; then
-    echo "$hooks/pre-push already invokes rpi-prepush.py; left unchanged."
+  if awk "$gate_line { next } /^[[:space:]]*exit([[:space:]]|;|\$)/ { stopped = 1 } /rpi-prepush\\.py/ && !stopped { found = 1 } END { exit !found }" "$hooks/pre-push"; then
+    echo "$hooks/pre-push runs rpi-prepush.py; left unchanged. WARNING: if an earlier line can end the hook, or the hook drops the gate's exit status, the gate cannot refuse; check one refusal."
   else
-    echo "BLOCKED / WHY: $hooks/pre-push already exists and does not invoke rpi-prepush.py outside a comment, and this command never overwrites an existing hook. / FIX: add this line to that hook before any command that reads standard input (replace python3.13 with any Python 3.11 or newer on PATH), then push again: python3.13 \"\$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py\" \"\$@\" || exit 1" >&2
+    echo "BLOCKED / WHY: $hooks/pre-push already exists and does not run rpi-prepush.py (a comment, an echo or a line after an exit does not count), and this command never overwrites an existing hook. / FIX: add this line near the top of that hook, before any exit and before any command that reads standard input (replace python3.13 with any Python 3.11 or newer on PATH), then push again: python3.13 \"\$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py\" \"\$@\" || exit 1" >&2
     false
   fi
 else
+  find "$hooks" -maxdepth 1 -type f -name '.pre-push.[0-9]*' -exec sh -c 'for stale; do kill -0 "${stale##*.}" 2>/dev/null || rm -f "$stale"; done' sh {} + 2>/dev/null
   tmp="$hooks/.pre-push.$$"
   if mkdir -p "$hooks" 2>/dev/null && cat 2>/dev/null > "$tmp" <<'EOF'
 #!/bin/sh
@@ -996,6 +1003,10 @@ else
 top=$(git rev-parse --show-toplevel 2>/dev/null)
 gate="$top/.rpi/scripts/rpi-prepush.py"
 case $0 in /*) hook=$0 ;; *) hook=$PWD/$0 ;; esac
+if [ -z "$top" ]; then
+  echo "BLOCKED / WHY: this push runs in a repository without a working tree (a bare repository), so there is no .rpi/scripts/rpi-prepush.py receipt gate to run and no checkout to attest the pushed commit. / FIX: push from a working checkout of the integration branch; or, for this repository only, the owner pushes with git push --no-verify, or removes this hook: rm \"$hook\"" >&2
+  exit 1
+fi
 if [ ! -f "$gate" ]; then
   echo "BLOCKED / WHY: this checkout has no .rpi/scripts/rpi-prepush.py receipt gate. / FIX: push from a checkout that contains it, such as the integration worktree; or restore it with a reviewed update (RPI_SOURCE is your cc-rpi checkout): bash \"\$RPI_SOURCE/scripts/install.sh\" --target \"$top\" --action update --output \"$top/.rpi/local/plans/restore.json\"; review it, then bash \"\$RPI_SOURCE/scripts/install.sh\" --apply \"$top/.rpi/local/plans/restore.json\"; or, if this project no longer opts in, remove this hook: rm \"$hook\"" >&2
   exit 1

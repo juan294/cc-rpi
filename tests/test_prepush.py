@@ -16,28 +16,35 @@ DOCS = test_policy.ROOT / 'docs/native-policy.md'
 # The documented enable command, verbatim: a shared (or committed) wrapper that runs the
 # pushing worktree's own gate and refuses with BLOCKED / WHY / FIX when that checkout has none.
 INSTALL = r'''hooks_common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+top=$(git rev-parse --show-toplevel 2>/dev/null)
 hooks=$(git config --type=path --get core.hooksPath || echo "$hooks_common/hooks")
+case $hooks in /*) ;; *) hooks="$top/$hooks" ;; esac
+gate_line='/^[[:space:]]*#|^[[:space:]]*(echo|printf|:)[[:space:]]/'
 if [ -z "$hooks_common" ]; then
   echo "BLOCKED / WHY: the current directory is not inside a Git repository, so there is no hooks directory to write. / FIX: cd to the repository root of the integration checkout, then run this command again." >&2
+  false
+elif [ -z "$top" ]; then
+  echo "BLOCKED / WHY: this is a bare repository or the inside of a .git directory: it has no working tree, so there is no integration checkout whose receipt the gate could read, and a relative core.hooksPath has no root to resolve against. / FIX: cd to the repository root of the integration checkout, then run this command again." >&2
   false
 elif [ -e "$hooks" ] && [ ! -d "$hooks" ]; then
   echo "BLOCKED / WHY: the hooks path $hooks (core.hooksPath, or the clone's hooks directory) exists and is not a directory. / FIX: point core.hooksPath at a directory (git config core.hooksPath PATH) or move that file away, then run this command again." >&2
   false
 elif [ -L "$hooks/pre-push" ]; then
-  if [ -f "$hooks/pre-push" ] && grep -Eq '^[[:space:]]*[^[:space:]#].*rpi-prepush\.py' "$hooks/pre-push"; then
-    echo "$hooks/pre-push is a symbolic link to a hook that already invokes rpi-prepush.py; left unchanged."
+  if [ -f "$hooks/pre-push" ] && awk "$gate_line { next } /^[[:space:]]*exit([[:space:]]|;|\$)/ { stopped = 1 } /rpi-prepush\\.py/ && !stopped { found = 1 } END { exit !found }" "$hooks/pre-push"; then
+    echo "$hooks/pre-push is a symbolic link to a hook that runs rpi-prepush.py; left unchanged. WARNING: if an earlier line can end the hook, or the hook drops the gate's exit status, the gate cannot refuse; check one refusal."
   else
     echo "BLOCKED / WHY: $hooks/pre-push is a symbolic link, and this command never writes through a link. / FIX: add this line to the hook the link points to, or replace the link with a regular file that contains it, before any command that reads standard input (replace python3.13 with any Python 3.11 or newer on PATH), then push again: python3.13 \"\$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py\" \"\$@\" || exit 1" >&2
     false
   fi
 elif [ -e "$hooks/pre-push" ] && ! grep -q 'cc-rpi receipt gate wrapper' "$hooks/pre-push"; then
-  if grep -Eq '^[[:space:]]*[^[:space:]#].*rpi-prepush\.py' "$hooks/pre-push"; then
-    echo "$hooks/pre-push already invokes rpi-prepush.py; left unchanged."
+  if awk "$gate_line { next } /^[[:space:]]*exit([[:space:]]|;|\$)/ { stopped = 1 } /rpi-prepush\\.py/ && !stopped { found = 1 } END { exit !found }" "$hooks/pre-push"; then
+    echo "$hooks/pre-push runs rpi-prepush.py; left unchanged. WARNING: if an earlier line can end the hook, or the hook drops the gate's exit status, the gate cannot refuse; check one refusal."
   else
-    echo "BLOCKED / WHY: $hooks/pre-push already exists and does not invoke rpi-prepush.py outside a comment, and this command never overwrites an existing hook. / FIX: add this line to that hook before any command that reads standard input (replace python3.13 with any Python 3.11 or newer on PATH), then push again: python3.13 \"\$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py\" \"\$@\" || exit 1" >&2
+    echo "BLOCKED / WHY: $hooks/pre-push already exists and does not run rpi-prepush.py (a comment, an echo or a line after an exit does not count), and this command never overwrites an existing hook. / FIX: add this line near the top of that hook, before any exit and before any command that reads standard input (replace python3.13 with any Python 3.11 or newer on PATH), then push again: python3.13 \"\$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py\" \"\$@\" || exit 1" >&2
     false
   fi
 else
+  find "$hooks" -maxdepth 1 -type f -name '.pre-push.[0-9]*' -exec sh -c 'for stale; do kill -0 "${stale##*.}" 2>/dev/null || rm -f "$stale"; done' sh {} + 2>/dev/null
   tmp="$hooks/.pre-push.$$"
   if mkdir -p "$hooks" 2>/dev/null && cat 2>/dev/null > "$tmp" <<'EOF'
 #!/bin/sh
@@ -45,6 +52,10 @@ else
 top=$(git rev-parse --show-toplevel 2>/dev/null)
 gate="$top/.rpi/scripts/rpi-prepush.py"
 case $0 in /*) hook=$0 ;; *) hook=$PWD/$0 ;; esac
+if [ -z "$top" ]; then
+  echo "BLOCKED / WHY: this push runs in a repository without a working tree (a bare repository), so there is no .rpi/scripts/rpi-prepush.py receipt gate to run and no checkout to attest the pushed commit. / FIX: push from a working checkout of the integration branch; or, for this repository only, the owner pushes with git push --no-verify, or removes this hook: rm \"$hook\"" >&2
+  exit 1
+fi
 if [ ! -f "$gate" ]; then
   echo "BLOCKED / WHY: this checkout has no .rpi/scripts/rpi-prepush.py receipt gate. / FIX: push from a checkout that contains it, such as the integration worktree; or restore it with a reviewed update (RPI_SOURCE is your cc-rpi checkout): bash \"\$RPI_SOURCE/scripts/install.sh\" --target \"$top\" --action update --output \"$top/.rpi/local/plans/restore.json\"; review it, then bash \"\$RPI_SOURCE/scripts/install.sh\" --apply \"$top/.rpi/local/plans/restore.json\"; or, if this project no longer opts in, remove this hook: rm \"$hook\"" >&2
   exit 1
@@ -366,7 +377,7 @@ class PrePushTests(PrePushFixture):
         self.assert_passes(self.line('refs/heads/develop'), environment=hooked)
 
 
-class InstalledHookTests(PrePushFixture):
+class InstalledHookFixture(PrePushFixture):
     """The documented wrapper under a real git push to a temporary bare remote."""
 
     def setUp(self):
@@ -402,6 +413,23 @@ class InstalledHookTests(PrePushFixture):
     def enable(self):
         return subprocess.run(['bash', '-c', INSTALL], cwd=self.project, env=self.environment,
                               capture_output=True, text=True)
+
+    def push(self, *arguments, cwd=None):
+        return subprocess.run([self.environment['RPI_REAL_GIT'], 'push', '--porcelain', str(self.remote), *arguments],
+                              cwd=cwd or self.project, env=self.environment, capture_output=True, text=True)
+
+    def remote_ref(self, ref):
+        result = subprocess.run([self.environment['RPI_REAL_GIT'], '-C', str(self.remote), 'rev-parse', '--verify', '--quiet', ref],
+                                capture_output=True, text=True)
+        return result.stdout.strip() or None
+
+
+class InstalledHookTests(InstalledHookFixture):
+
+
+
+
+
 
     def test_existing_owner_hook_is_refused_untouched_with_the_line_to_add(self):
         self.hook().parent.mkdir(parents=True, exist_ok=True)
@@ -555,14 +583,7 @@ class InstalledHookTests(PrePushFixture):
     def test_documented_command_is_the_tested_command(self):
         self.assertIn('```bash\n' + INSTALL + '```', DOCS.read_text())
 
-    def push(self, *arguments, cwd=None):
-        return subprocess.run([self.environment['RPI_REAL_GIT'], 'push', '--porcelain', str(self.remote), *arguments],
-                              cwd=cwd or self.project, env=self.environment, capture_output=True, text=True)
 
-    def remote_ref(self, ref):
-        result = subprocess.run([self.environment['RPI_REAL_GIT'], '-C', str(self.remote), 'rev-parse', '--verify', '--quiet', ref],
-                                capture_output=True, text=True)
-        return result.stdout.strip() or None
 
     def test_real_pushes_are_gated_by_the_refs_git_reports(self):
         self.install()
@@ -737,6 +758,185 @@ class InstalledHookTests(PrePushFixture):
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('verification evidence is missing', result.stderr)
         self.assertIsNone(self.remote_ref('refs/heads/develop'))
+
+
+
+class GateFindingTests(InstalledHookFixture):
+    """Wave B round 2: WB2-P-14 (bare repository), P-15 (foreign hooks), P-16 (subdirectory), P-17 (stale temporary file),
+    P-18 (hidden changes) and P-19 (case)."""
+
+    def refuse(self, *arguments, reason):
+        result = self.push(*arguments)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(reason, result.stderr)
+        return result
+
+    def test_a_bare_repository_cannot_attest_a_gated_push(self):
+        bare = self.workspace / 'bare.git'
+        self.install()
+        subprocess.run([self.environment['RPI_REAL_GIT'], 'clone', '-q', '--bare', str(self.project), str(bare)], check=True, capture_output=True)
+        develop = self.git('rev-parse', 'HEAD')
+        for lines, code in (((self.line('refs/heads/develop', develop),), 1), ((self.line('refs/tags/v1.0.0', develop),), 1),
+                            ((self.line('refs/heads/feature/x', develop),), 0), ((), 0)):
+            result = subprocess.run([sys.executable, str(PREPUSH), 'origin', 'url'], input=''.join(line + '\n' for line in lines),
+                                    capture_output=True, text=True, cwd=bare, env=self.environment)
+            self.assertEqual(result.returncode, code, result.stdout + result.stderr)
+            if code:
+                self.assertIn('bare repository', result.stderr)
+                self.assertIn('/ FIX: Push from a working checkout', result.stderr)
+                self.assertIn('git push --no-verify', result.stderr)
+        # Outside any repository there is nothing to gate.
+        outside = self.workspace / 'nowhere'
+        outside.mkdir()
+        result = subprocess.run([sys.executable, str(PREPUSH), 'origin', 'url'], input=self.line('refs/heads/develop', develop) + '\n',
+                                capture_output=True, text=True, cwd=outside,
+                                env={**self.environment, 'GIT_CEILING_DIRECTORIES': str(self.workspace)})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_the_installed_wrapper_in_a_bare_repository_prints_a_runnable_fix(self):
+        bare = self.workspace / 'bare.git'
+        self.install()
+        subprocess.run([self.environment['RPI_REAL_GIT'], 'clone', '-q', '--bare', str(self.project), str(bare)], check=True, capture_output=True)
+        wrapper = self.hook()
+        result = subprocess.run([str(wrapper), 'origin', 'url'], input='', capture_output=True, text=True, cwd=bare, env=self.environment)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn('bare repository', result.stderr)
+        self.assertNotIn('--target ""', result.stderr)
+        self.assertNotIn('"/.rpi', result.stderr)
+        self.assertIn('rm "%s"' % wrapper, result.stderr)
+        self.assertIn('git push --no-verify', result.stderr)
+        enable = subprocess.run(['bash', '-c', INSTALL], cwd=bare, env=self.environment, capture_output=True, text=True)
+        self.assertNotEqual(enable.returncode, 0)
+        self.assertTrue(enable.stderr.startswith('BLOCKED / WHY: this is a bare repository'), enable.stderr)
+        self.assertIn('/ FIX: cd to the repository root', enable.stderr)
+
+    def foreign(self, text, link=False):
+        hooks = self.hook().parent
+        hooks.mkdir(parents=True, exist_ok=True)
+        self.hook().unlink(missing_ok=True)
+        if link:
+            target = self.workspace / 'managed-pre-push'
+            target.write_text(text)
+            self.hook().symlink_to(target)
+        else:
+            self.hook().write_text(text)
+        return self.enable()
+
+    def test_a_foreign_hook_counts_only_when_it_really_reaches_the_gate(self):
+        gate = '"$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py" "$@" || exit 1\n'
+        for link in (False, True):
+            for text in ('#!/bin/sh\necho rpi-prepush.py\nexit 0\n', '#!/bin/sh\nexit 0\npython3 ' + gate,
+                         '#!/bin/sh\n# python3 ' + gate, '#!/bin/sh\nprintf "%s\\n" rpi-prepush.py\n', '#!/bin/sh\n: rpi-prepush.py\n',
+                         '#!/bin/sh\nexit\npython3 ' + gate, '#!/bin/sh\nexit 0; python3 ' + gate):
+                with self.subTest(link=link, text=text):
+                    result = self.foreign(text, link)
+                    self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                    self.assertTrue(result.stderr.startswith('BLOCKED / WHY:'), result.stderr)
+                    self.assertIn('does not run rpi-prepush.py', result.stderr + 'does not run rpi-prepush.py' * link)
+                    self.assertEqual(self.hook().read_text(), text)
+        for link in (False, True):
+            for text in ('#!/bin/sh\npython3 ' + gate, '#!/bin/sh\necho before\nexec python3 ' + gate.replace(' || exit 1', ''),
+                         '#!/bin/sh\nset -e\nif true; then\n  python3 ' + gate + 'fi\n', '#!/bin/sh\nsh -c "echo x"\n[ -x z ] && exit 0\npython3 ' + gate):
+                with self.subTest(link=link, text=text):
+                    result = self.foreign(text, link)
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    self.assertIn('runs rpi-prepush.py; left unchanged', result.stdout)
+                    self.assertIn('WARNING', result.stdout)
+
+    def test_the_refusal_for_a_foreign_hook_says_where_to_add_the_line(self):
+        result = self.foreign('#!/bin/sh\nexit 0\n')
+        self.assertIn('near the top of that hook, before any exit', result.stderr)
+
+    def test_a_relative_hooks_path_resolves_against_the_checkout_root_from_any_directory(self):
+        self.git('config', 'core.hooksPath', '.githooks')
+        nested = self.project / 'deep' / 'er'
+        nested.mkdir(parents=True)
+        result = subprocess.run(['bash', '-c', INSTALL], cwd=nested, env=self.environment, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue((self.project / '.githooks/pre-push').is_file())
+        self.assertFalse((nested / '.githooks').exists())
+        self.assertEqual(self.enable().returncode, 0)
+        self.git('config', 'core.hooksPath', 'tools/hooks')
+        result = subprocess.run(['bash', '-c', INSTALL], cwd=nested, env=self.environment, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue((self.project / 'tools/hooks/pre-push').is_file())
+        # Git itself runs that wrapper for a push from the nested directory.
+        self.git('config', 'core.hooksPath', '.githooks')
+        self.commit('Wrapper')
+        result = self.push('develop', cwd=nested)
+        self.assertIn('verification evidence is missing', result.stderr)
+
+    def test_a_killed_enable_leaves_nothing_that_the_next_run_keeps(self):
+        self.install()
+        hooks = self.hook().parent
+        dead = hooks / '.pre-push.2147483646'
+        alive = hooks / ('.pre-push.%d' % os.getpid())
+        other = hooks / '.pre-push.notapid'
+        for path in (dead, alive, other):
+            path.write_text('partial\n')
+        result = self.enable()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertFalse(dead.exists(), 'the temporary file of a process that is gone is removed')
+        self.assertTrue(alive.exists(), 'a file of a running process is not touched')
+        self.assertTrue(other.exists(), 'only .pre-push.PID files are ours')
+        self.assertIn('cc-rpi receipt gate wrapper', self.hook().read_text())
+        self.assertEqual(sorted(path.name for path in hooks.iterdir() if path.name.startswith('.pre-push.') and path not in (alive, other)), [])
+
+    def test_changes_hidden_from_git_status_are_not_attested_by_a_receipt(self):
+        (self.project / 'data.txt').write_text('committed\n')
+        self.commit('Add data')
+        for flag in ('--skip-worktree', '--assume-unchanged'):
+            with self.subTest(flag=flag):
+                self.git('update-index', flag, 'data.txt')
+                (self.project / 'data.txt').write_text('LOCAL ONLY\n')
+                self.assertEqual(self.git('status', '--porcelain'), '', 'git status cannot see the change')
+                self.evidence()
+                result = self.assert_refused(self.line('refs/heads/develop'), reason='skip-worktree or assume-unchanged')
+                self.assertIn('data.txt', result.stderr)
+                fix = result.stderr.split('/ FIX: ', 1)[1]
+                self.assertIn('git update-index --no-skip-worktree -- data.txt && git update-index --no-assume-unchanged -- data.txt', fix)
+                subprocess.run(['bash', '-c', fix.split(': ', 1)[1].split('; git status')[0]], cwd=self.project, env=self.environment, check=True)
+                self.assertIn('data.txt', self.git('status', '--porcelain'))
+                self.git('checkout', '--', 'data.txt')
+                self.evidence()
+                self.assert_passes(self.line('refs/heads/develop'))
+
+    def test_a_flagged_path_that_matches_the_commit_or_is_absent_is_fine(self):
+        (self.project / 'big.bin').write_text('committed\n')
+        (self.project / 'link').symlink_to('big.bin')
+        self.commit('Add files')
+        self.git('update-index', '--skip-worktree', 'big.bin', 'link')
+        self.evidence()
+        self.assert_passes(self.line('refs/heads/develop'))
+        (self.project / 'big.bin').unlink()  # A sparse checkout leaves flagged files out.
+        self.evidence()
+        self.assert_passes(self.line('refs/heads/develop'))
+        (self.project / 'big.bin').write_text('committed\n')
+        (self.project / 'link').unlink()
+        (self.project / 'link').symlink_to('elsewhere')
+        self.evidence()
+        self.assert_refused(self.line('refs/heads/develop'), reason='link')
+
+    def test_many_hidden_paths_print_a_command_that_lists_them(self):
+        for number in range(25):
+            (self.project / ('f%02d.txt' % number)).write_text('x\n')
+        self.commit('Many files')
+        self.git('update-index', '--skip-worktree', *['f%02d.txt' % number for number in range(25)])
+        for number in range(25):
+            (self.project / ('f%02d.txt' % number)).write_text('y\n')
+        self.evidence()
+        result = self.assert_refused(self.line('refs/heads/develop'), reason='25 paths differ')
+        self.assertIn('and 5 more', result.stderr)
+        self.assertIn("git ls-files -v | grep '^[a-zS]'", result.stderr)
+
+    def test_the_integration_branch_is_recognised_without_case(self):
+        for ref in ('refs/heads/Develop', 'refs/heads/DEVELOP'):
+            with self.subTest(ref=ref):
+                self.assert_refused(self.line(ref), reason='verification evidence is missing')
+                self.assert_refused(self.line(ref, ZERO), reason='Deleting the integration branch')
+        self.evidence()
+        self.assert_passes(self.line('refs/heads/Develop'), self.line('refs/heads/developer'))
+        self.assert_passes(self.line('refs/heads/feature/Develop'))
 
 
 if __name__ == '__main__':

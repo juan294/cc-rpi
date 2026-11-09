@@ -224,28 +224,35 @@ macOS's stock `python3` 3.9 is never used:
 
 ```bash
 hooks_common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+top=$(git rev-parse --show-toplevel 2>/dev/null)
 hooks=$(git config --type=path --get core.hooksPath || echo "$hooks_common/hooks")
+case $hooks in /*) ;; *) hooks="$top/$hooks" ;; esac
+gate_line='/^[[:space:]]*#|^[[:space:]]*(echo|printf|:)[[:space:]]/'
 if [ -z "$hooks_common" ]; then
   echo "BLOCKED / WHY: the current directory is not inside a Git repository, so there is no hooks directory to write. / FIX: cd to the repository root of the integration checkout, then run this command again." >&2
+  false
+elif [ -z "$top" ]; then
+  echo "BLOCKED / WHY: this is a bare repository or the inside of a .git directory: it has no working tree, so there is no integration checkout whose receipt the gate could read, and a relative core.hooksPath has no root to resolve against. / FIX: cd to the repository root of the integration checkout, then run this command again." >&2
   false
 elif [ -e "$hooks" ] && [ ! -d "$hooks" ]; then
   echo "BLOCKED / WHY: the hooks path $hooks (core.hooksPath, or the clone's hooks directory) exists and is not a directory. / FIX: point core.hooksPath at a directory (git config core.hooksPath PATH) or move that file away, then run this command again." >&2
   false
 elif [ -L "$hooks/pre-push" ]; then
-  if [ -f "$hooks/pre-push" ] && grep -Eq '^[[:space:]]*[^[:space:]#].*rpi-prepush\.py' "$hooks/pre-push"; then
-    echo "$hooks/pre-push is a symbolic link to a hook that already invokes rpi-prepush.py; left unchanged."
+  if [ -f "$hooks/pre-push" ] && awk "$gate_line { next } /^[[:space:]]*exit([[:space:]]|;|\$)/ { stopped = 1 } /rpi-prepush\\.py/ && !stopped { found = 1 } END { exit !found }" "$hooks/pre-push"; then
+    echo "$hooks/pre-push is a symbolic link to a hook that runs rpi-prepush.py; left unchanged. WARNING: if an earlier line can end the hook, or the hook drops the gate's exit status, the gate cannot refuse; check one refusal."
   else
     echo "BLOCKED / WHY: $hooks/pre-push is a symbolic link, and this command never writes through a link. / FIX: add this line to the hook the link points to, or replace the link with a regular file that contains it, before any command that reads standard input (replace python3.13 with any Python 3.11 or newer on PATH), then push again: python3.13 \"\$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py\" \"\$@\" || exit 1" >&2
     false
   fi
 elif [ -e "$hooks/pre-push" ] && ! grep -q 'cc-rpi receipt gate wrapper' "$hooks/pre-push"; then
-  if grep -Eq '^[[:space:]]*[^[:space:]#].*rpi-prepush\.py' "$hooks/pre-push"; then
-    echo "$hooks/pre-push already invokes rpi-prepush.py; left unchanged."
+  if awk "$gate_line { next } /^[[:space:]]*exit([[:space:]]|;|\$)/ { stopped = 1 } /rpi-prepush\\.py/ && !stopped { found = 1 } END { exit !found }" "$hooks/pre-push"; then
+    echo "$hooks/pre-push runs rpi-prepush.py; left unchanged. WARNING: if an earlier line can end the hook, or the hook drops the gate's exit status, the gate cannot refuse; check one refusal."
   else
-    echo "BLOCKED / WHY: $hooks/pre-push already exists and does not invoke rpi-prepush.py outside a comment, and this command never overwrites an existing hook. / FIX: add this line to that hook before any command that reads standard input (replace python3.13 with any Python 3.11 or newer on PATH), then push again: python3.13 \"\$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py\" \"\$@\" || exit 1" >&2
+    echo "BLOCKED / WHY: $hooks/pre-push already exists and does not run rpi-prepush.py (a comment, an echo or a line after an exit does not count), and this command never overwrites an existing hook. / FIX: add this line near the top of that hook, before any exit and before any command that reads standard input (replace python3.13 with any Python 3.11 or newer on PATH), then push again: python3.13 \"\$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py\" \"\$@\" || exit 1" >&2
     false
   fi
 else
+  find "$hooks" -maxdepth 1 -type f -name '.pre-push.[0-9]*' -exec sh -c 'for stale; do kill -0 "${stale##*.}" 2>/dev/null || rm -f "$stale"; done' sh {} + 2>/dev/null
   tmp="$hooks/.pre-push.$$"
   if mkdir -p "$hooks" 2>/dev/null && cat 2>/dev/null > "$tmp" <<'EOF'
 #!/bin/sh
@@ -253,6 +260,10 @@ else
 top=$(git rev-parse --show-toplevel 2>/dev/null)
 gate="$top/.rpi/scripts/rpi-prepush.py"
 case $0 in /*) hook=$0 ;; *) hook=$PWD/$0 ;; esac
+if [ -z "$top" ]; then
+  echo "BLOCKED / WHY: this push runs in a repository without a working tree (a bare repository), so there is no .rpi/scripts/rpi-prepush.py receipt gate to run and no checkout to attest the pushed commit. / FIX: push from a working checkout of the integration branch; or, for this repository only, the owner pushes with git push --no-verify, or removes this hook: rm \"$hook\"" >&2
+  exit 1
+fi
 if [ ! -f "$gate" ]; then
   echo "BLOCKED / WHY: this checkout has no .rpi/scripts/rpi-prepush.py receipt gate. / FIX: push from a checkout that contains it, such as the integration worktree; or restore it with a reviewed update (RPI_SOURCE is your cc-rpi checkout): bash \"\$RPI_SOURCE/scripts/install.sh\" --target \"$top\" --action update --output \"$top/.rpi/local/plans/restore.json\"; review it, then bash \"\$RPI_SOURCE/scripts/install.sh\" --apply \"$top/.rpi/local/plans/restore.json\"; or, if this project no longer opts in, remove this hook: rm \"$hook\"" >&2
   exit 1
@@ -286,7 +297,7 @@ Where the wrapper lands depends on `core.hooksPath`:
 - Absolute: that directory. Worktrees and clones that use the same setting
   share it.
 - Relative, such as `.githooks`: Git resolves it inside each worktree, so the
-  command writes an untracked `.githooks/pre-push`. Commit it with the
+  command writes an untracked `.githooks/pre-push` at the root of the worktree it runs in, from any subdirectory of it. Commit it with the
   integration branch (`git add .githooks/pre-push`) so every worktree checked
   out from that commit has the file. `core.hooksPath` itself is local
   configuration: a fresh clone has none and runs no hook until the enable
@@ -301,12 +312,13 @@ printed fix names the three ways out: push from a checkout that has the gate,
 restore it with a reviewed update, or, when the project no longer opts in,
 remove the hook file at its printed absolute path.
 The enable command never overwrites a `pre-push` hook it did not write. When one
-already exists (for example one managed by a hook tool) and does not invoke
+already exists (for example one managed by a hook tool) and does not run
 `rpi-prepush.py`, the command leaves it untouched, prints `BLOCKED / WHY / FIX`
-with the exact line to add to that hook, and exits nonzero. A hook that already
-invokes `rpi-prepush.py` on a line that is not a comment (a comment that only
-mentions the name does not count), or a symbolic link to such a hook, is left
-alone. A file that this command wrote earlier (it carries a
+with the exact line to add near the top of that hook (before any `exit`), and exits nonzero. A hook counts as running
+the gate when a line that is not a comment, an `echo`, a `printf` or a `:` names `rpi-prepush.py` before any line that
+starts with `exit`; a comment, a printed name or a line after an `exit` does not count. Such a hook, or a symbolic link
+to one, is left alone and the command prints a `WARNING`: the check is textual, so a hook that ends earlier by other
+means (`[ -z "$X" ] && exit 0`) or drops the gate's exit status still lets a push through; check one refusal. A file that this command wrote earlier (it carries a
 `cc-rpi receipt gate wrapper` comment) is rewritten in place, so running the
 command again is safe. Any other symbolic link is refused, so the command never
 writes through a link. A file with that comment counts as the
@@ -314,10 +326,22 @@ generated wrapper and is rewritten in place, so edits to it are not kept; to add
 your own checks, use a hook file without the comment that calls `rpi-prepush.py`
 (the line the refusal prints). The wrapper is written to a temporary file in the hooks directory and renamed over
 `pre-push`, so a stale read-only wrapper is replaced too. Every failure to write ends the command with a nonzero
-status and a `BLOCKED / WHY / FIX` line: outside a Git repository, when the hooks path exists and is not a directory,
-and when the hooks directory cannot be written (an existing hook is then left unchanged).
+status and a `BLOCKED / WHY / FIX` line: outside a Git repository, in a bare repository or inside a `.git` directory
+(there is no integration checkout to gate), when the hooks path exists and is not a directory,
+and when the hooks directory cannot be written (an existing hook is then left unchanged). A run killed between creating
+`.pre-push.PID` and renaming it leaves that file behind; the next run removes every `.pre-push.PID` whose process is gone.
+The wrapper itself refuses every push from a bare repository with `BLOCKED / WHY / FIX` (the fix names pushing from a
+working checkout, `git push --no-verify` and the `rm` of the hook at its absolute path); the gate script, called
+directly from a bare repository, refuses a gated update (the integration branch, a version tag) the same way and passes
+the rest, because no receipt can exist without a checkout.
 `git push --no-verify` skips every
 pre-push hook, so the gate is a guard against mistakes, not a security boundary.
+
+The receipt covers the files on disk, so the gate also refuses a push when a tracked file marked `skip-worktree` or
+`assume-unchanged` differs from the pushed commit (`git status` cannot show such a change; a flagged file that is absent,
+as in a sparse checkout, or equal to the commit is fine). The refusal lists the paths and prints
+`git update-index --no-skip-worktree -- PATHS && git update-index --no-assume-unchanged -- PATHS`. The integration
+branch name is compared without case, so a push of `refs/heads/Main` is gated like `main`.
 
 A branch update is gated when the pushing checkout's `.rpi/policy.json`, the
 policy committed in the pushed commit, or the policy committed in the remote

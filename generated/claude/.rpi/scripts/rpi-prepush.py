@@ -240,6 +240,29 @@ def printable(name):
     return name
 
 
+def hidden_changes(root):
+    """Tracked paths whose file on disk differs from the index although git status cannot show it: those flagged
+    skip-worktree or assume-unchanged. A flagged path that is absent (a sparse checkout) or equal to the commit is fine."""
+    flagged = git(root, 'ls-files', '-v', '-z', text=False)
+    if not flagged:
+        return []
+    names = [entry[2:] for entry in flagged.split(b'\0') if entry[:1] == b'S' or entry[:1].islower() and entry[:1].isalpha()]
+    hidden = []
+    for name in names:
+        path = root / os.fsdecode(name)
+        staged = git(root, 'ls-files', '-s', '-z', '--', os.fsdecode(name), text=False)
+        if not staged or not (path.is_symlink() or path.is_file()):
+            continue
+        blob = staged.split(b'\0')[0].split()[1].decode()
+        if path.is_symlink():
+            matches = git(root, 'cat-file', 'blob', blob, text=False) == os.fsencode(os.readlink(path))
+        else:
+            matches = git(root, 'hash-object', '--', os.fsdecode(path)) == blob
+        if not matches:
+            hidden.append(os.fsdecode(name))
+    return hidden
+
+
 def verified_candidate(root, policy):
     """The commit that exact local evidence attests for this clean candidate."""
     import importlib.util
@@ -254,6 +277,16 @@ def verified_candidate(root, policy):
         count = (str(len(names)) + (' changed path: ' if len(names) == 1 else ' changed paths: ')) if names else ''
         fail('Publication requires a clean completed integration candidate (' + count + listed + ').',
              'Commit or remove those changes (git status --short lists every path), then run ' + runner)
+    hidden = hidden_changes(root)
+    if hidden:
+        listed = ', '.join(printable(name) for name in hidden[:LIST_NAMES]) + (', and ' + str(len(hidden) - LIST_NAMES) + ' more' if len(hidden) > LIST_NAMES else '')
+        clear = 'git update-index --no-skip-worktree -- %s && git update-index --no-assume-unchanged -- %s'
+        fix = ('Make the changes visible, then commit or revert them and run ' + runner + ': ' +
+               (clear % ((' '.join(shlex.quote(name) for name in hidden),) * 2) if len(hidden) <= LIST_NAMES else
+                "git ls-files -v | grep '^[a-zS]' lists the flagged paths; clear each with " + clear % ('PATH', 'PATH')) +
+               '; git status --short shows them afterwards.')
+        fail('The verification receipt covers the files on disk, but ' + str(len(hidden)) + (' path differs' if len(hidden) == 1 else ' paths differ') +
+             ' from the pushed commit while marked skip-worktree or assume-unchanged, which hides the change from git status (' + listed + ').', fix)
     path = root / '.rpi/local/verification.json'
     if path.is_symlink() or not path.is_file():
         fail('Exact-candidate local verification evidence is missing.', 'Run ' + runner + ' in the completed integration checkout.')
@@ -281,6 +314,11 @@ def verified_candidate(root, policy):
     return actual['commit']
 
 
+def is_integration_ref(remote_ref, policy):
+    """Is `remote_ref` the integration branch? Compared without case: on a case-insensitive remote refs/heads/Main is main."""
+    return remote_ref.casefold() == ('refs/heads/' + policy['integration_branch']).casefold()
+
+
 def gated_updates(root, checkout, lines):
     """(remote ref, pushed commit, policy) triples that need the receipt; deleting an integration branch is refused.
 
@@ -306,10 +344,10 @@ def gated_updates(root, checkout, lines):
         policies = [policy for policy in ([] if tag else [checkout]) +
                     [committed_policy(root, sha) for sha in (commit, replaced) if sha] if policy]
         for policy in policies:
-            if remote_ref == 'refs/heads/' + policy['integration_branch'] and deleted:
+            if is_integration_ref(remote_ref, policy) and deleted:
                 fail('Deleting the integration branch (' + policy['integration_branch'] + ') removes the published history.',
                      'Delete only working branches; if it is truly intended, the owner runs the exact command without this hook.')
-        gate = next((policy for policy in policies if tag or remote_ref == 'refs/heads/' + policy['integration_branch']), None)
+        gate = next((policy for policy in policies if tag or is_integration_ref(remote_ref, policy)), None)
         if deleted or gate is None:
             continue
         if commit is None:
@@ -319,10 +357,24 @@ def gated_updates(root, checkout, lines):
     return updates
 
 
+def bare_repository(lines, cwd):
+    """A bare repository has no checkout, so no receipt can attest a push from it: a gated update is refused, the rest passes."""
+    git_dir = git(cwd, 'rev-parse', '--absolute-git-dir')
+    if git_dir is None:
+        return  # Not a repository: nothing to gate.
+    updates = gated_updates(Path(git_dir), None, lines)
+    if updates:
+        refs = ', '.join(update[0] for update in updates[:LIST_NAMES])
+        fail('The receipt gate cannot attest a push from a bare repository (' + refs + '): there is no checkout whose verification '
+             'receipt could cover the pushed commit.',
+             'Push from a working checkout of the integration branch after running its verifier there; or, when this bare '
+             'repository must publish without the gate, the owner pushes with git push --no-verify.')
+
+
 def evaluate(argv, lines, cwd):
     top = git(cwd, 'rev-parse', '--show-toplevel')
     if top is None:
-        return  # A bare repository has no candidate or policy to gate.
+        return bare_repository(lines, cwd)
     root = Path(top).resolve()
     checkout = project_policy(root)
     if checkout is not None and len(argv) != 2:
