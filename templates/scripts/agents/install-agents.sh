@@ -282,10 +282,12 @@ scheduler_inventory() {
     printf 'UNKNOWN: scheduler query failed (exit %s)\n%s\n' "$query_status" "$SCHEDULER_INVENTORY" >&2
     return "$query_status"
   fi
+  # The validator reads the whole inventory and decides in END: an awk that exits on the first bad row would leave
+  # printf writing into a closed pipe, which pipefail reports as a failure of the whole pipeline.
   if ! printf '%s\n' "$SCHEDULER_INVENTORY" | awk '
-    NR == 1 { if (NF != 3 || $1 != "PID" || $2 != "Status" || $3 != "Label") exit 1; next }
-    NF != 3 || ($1 != "-" && $1 !~ /^[0-9]+$/) || $2 !~ /^-?[0-9]+$/ { exit 1 }
-    END { if (NR == 0) exit 1 }
+    NR == 1 { if (NF != 3 || $1 != "PID" || $2 != "Status" || $3 != "Label") bad = 1; next }
+    NF != 3 || ($1 != "-" && $1 !~ /^[0-9]+$/) || $2 !~ /^-?[0-9]+$/ { bad = 1 }
+    END { if (NR == 0 || bad) exit 1 }
   '; then
     printf 'UNKNOWN: unrecognized scheduler inventory\n%s\n' "$SCHEDULER_INVENTORY" >&2
     return 1

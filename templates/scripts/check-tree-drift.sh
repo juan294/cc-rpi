@@ -22,10 +22,11 @@ cd "$REPO_ROOT"
 
 MANIFEST=".claude/DIVERGENCE.md"
 
-# list_has <entry> <newline-separated list> -- whole-line literal membership. A here-string, never `printf | grep -q`:
+# list_has <entry> <newline-separated list> -- whole-line literal membership, in the shell alone. Never `printf | grep -q`:
 # under pipefail grep -q leaves on its first match, printf then dies of SIGPIPE on a list larger than the pipe buffer, and a
-# present entry is reported absent.
-list_has() { grep -qxF -- "$1" <<< "$2"; }
+# present entry is reported absent. Never a here-string or here-document either: bash 3.2 writes those to a temporary file,
+# and where no temporary directory is writable the redirection fails and the loop or test it feeds is silently skipped.
+list_has() { case $'\n'"$2"$'\n' in *$'\n'"$1"$'\n'*) return 0 ;; esac; return 1; }
 
 # emit_block <what> <why> <fix> -- corrective-hint convention.
 # See methodology/ci-and-guardrails.md "Block messages are corrective hints".
@@ -50,6 +51,7 @@ fi
 # backticked path; the section heading decides which set the row belongs to.
 parse_section() {
   awk -v want="$1" '
+    { sub(/\r$/, "") }
     /^## / { section = substr($0, 4) }
     section == want && /^\| `/ {
       line = $0
@@ -70,8 +72,19 @@ if [[ -z "$LINKED" && -z "$DIVERGENT" ]]; then
   exit 2
 fi
 
+# next_line <list> -- sets LINE to the first line of the newline-separated list and REST to what follows. Pure shell:
+# no here-string or here-document, so no temporary file stands between a list and its loop.
+next_line() {
+  case $1 in
+    *$'\n'*) LINE=${1%%$'\n'*}; REST=${1#*$'\n'} ;;
+    *) LINE=$1; REST='' ;;
+  esac
+}
+
 # --- Linked entries must be symlinks resolving into templates/ ---------------
-while IFS= read -r path; do
+REST=$LINKED
+while [[ -n "$REST" ]]; do
+  next_line "$REST"; path=$LINE
   [[ -n "$path" ]] || continue
   src=".claude/$path"
   tgt="templates/$path"
@@ -103,7 +116,7 @@ while IFS= read -r path; do
     continue
   fi
 
-  resolved="$(cd "$(dirname "$src")" && readlink "$(basename "$src")")"
+  resolved="$(readlink -- "$src")"
   if [[ "$resolved" != "../../templates/$path" ]]; then
     emit_block "$src points at '$resolved', expected '../../templates/$path'" \
       "A symlink into an unexpected location means the self-application is running something other than the template it claims to mirror." \
@@ -118,10 +131,12 @@ while IFS= read -r path; do
       "  Restore $tgt, or remove $src and drop its row from $MANIFEST."
     FAILED=1
   fi
-done <<< "$LINKED"
+done
 
 # --- Divergent entries must be real files that still actually differ ---------
-while IFS= read -r path; do
+REST=$DIVERGENT
+while [[ -n "$REST" ]]; do
+  next_line "$REST"; path=$LINE
   [[ -n "$path" ]] || continue
   src=".claude/$path"
   tgt="templates/$path"
@@ -149,7 +164,7 @@ while IFS= read -r path; do
   # and move $path from the Divergent table to the Linked table in $MANIFEST"
     FAILED=1
   fi
-done <<< "$DIVERGENT"
+done
 
 # --- Every shared filename appears in the manifest exactly once ---------------
 # A file present in both trees but in neither table is unrecorded drift.
@@ -163,7 +178,28 @@ if [[ -n "$DUPES" ]]; then
   FAILED=1
 fi
 
-while IFS= read -r src; do
+# The shared files are read as one name per line, so a name with a line break in it would be cut in two and its halves
+# skipped as "not in templates/": an unrecorded shared file would pass. Refuse such names instead of misreading them.
+set --
+for shared_dir in .claude/commands .claude/hooks .claude/scripts .claude/rules .claude/skills; do
+  if [[ -d "$shared_dir" ]]; then set -- "$@" "$shared_dir"; fi
+done
+SHARED=""
+if [[ "$#" -gt 0 ]]; then
+  NEWLINE_NAMES="$(find "$@" \( -type f -o -type l \) -name $'*\n*' -print | tr '\n' ' ')"
+  if [[ -n "$NEWLINE_NAMES" ]]; then
+    emit_block "A shared file name contains a line break: $NEWLINE_NAMES" \
+      "The drift check reads one file name per line, so it cannot compare such a name against $MANIFEST and an unrecorded shared file could pass unseen." \
+      "  Rename the file so its name has no line break, in both templates/ and .claude/."
+    exit 2
+  fi
+  SHARED="$(find "$@" \( -type f -o -type l \) | sort)"
+fi
+
+REST=$SHARED
+while [[ -n "$REST" ]]; do
+  next_line "$REST"; src=$LINE
+  [[ -n "$src" ]] || continue
   # Generated self-application is checked against a fresh render above.
   if list_has "$src" "$MANAGED_PATHS"; then
     continue
@@ -176,8 +212,7 @@ while IFS= read -r src; do
       "  Add \`$path\` to the Linked table (and symlink it) or to the Divergent table (with the reason) in $MANIFEST."
     FAILED=1
   fi
-done < <(find .claude/commands .claude/hooks .claude/scripts .claude/rules .claude/skills \
-           -type f -o -type l 2>/dev/null | sort)
+done
 
 if [[ "$FAILED" -ne 0 ]]; then
   exit 2

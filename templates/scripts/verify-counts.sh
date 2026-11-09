@@ -42,7 +42,18 @@ ERROR_COUNT=$(grep -c '^## Error #' "$ERRORS_FILE")
 RULE_COUNT=$(grep -cE '^[0-9]+\.' "$RULES_FILE")
 MANIFEST_COUNTS=$(python3 templates/scripts/rpi-distribution.py counts --json)
 COUNT_VALUES=$(python3 -c 'import json,sys; c=json.loads(sys.argv[1]); print(c["workflow"], c["domain"], c["helper"], c["rule"])' "$MANIFEST_COUNTS")
-read -r WORKFLOW_COUNT SKILL_COUNT HELPER_COUNT RULE_TEMPLATE_COUNT <<< "$COUNT_VALUES"
+# Split by parameter expansion, not `read <<<`: bash 3.2 writes a here-string to a temporary file, and where no temporary
+# directory is writable the read fails and the counts would be empty.
+WORKFLOW_COUNT=${COUNT_VALUES%% *}; COUNT_VALUES=${COUNT_VALUES#* }
+SKILL_COUNT=${COUNT_VALUES%% *}; COUNT_VALUES=${COUNT_VALUES#* }
+HELPER_COUNT=${COUNT_VALUES%% *}; RULE_TEMPLATE_COUNT=${COUNT_VALUES#* }
+case "$WORKFLOW_COUNT$SKILL_COUNT$HELPER_COUNT$RULE_TEMPLATE_COUNT" in
+  ''|*[!0-9]*)
+    emit_block "The distribution manifest counts are not four whole numbers: $WORKFLOW_COUNT $SKILL_COUNT $HELPER_COUNT $RULE_TEMPLATE_COUNT" \
+      "The workflow, skill, helper and rule-template totals printed below come from these values, so an empty or garbled one would print a wrong PASS." \
+      "  python3 templates/scripts/rpi-distribution.py counts --json    # read the output and repair templates/distribution.json"
+    exit 1 ;;
+esac
 
 # Audit coverage counts domains, independently of staffing or model instances.
 DOMAIN_TOTAL=$(grep -cE '^\*\*.* domain ' templates/skills/rpi-pre-launch/SKILL.md || true)
@@ -151,7 +162,21 @@ fi
 # lost its home and no longer loads anywhere. That is the failure mode
 # relocation introduces, so it is checked mechanically.
 UNRESOLVED=""
-while IFS= read -r dest; do
+# The destinations are collected in a variable, then walked in the shell: no here-string, here-document or process
+# substitution stands between the list and its loop, so a failing producer or temporary directory cannot empty it unseen.
+DESTINATIONS=$(
+  grep -oE '^[0-9]+\..* -> .*$' "$RULES_FILE" \
+    | sed 's/.* -> //' \
+    | tr '+' '\n' \
+    | sed 's/^ *//; s/ *$//' \
+    | sort -u
+)
+REST=$DESTINATIONS
+while [[ -n "$REST" ]]; do
+  case $REST in
+    *$'\n'*) dest=${REST%%$'\n'*}; REST=${REST#*$'\n'} ;;
+    *) dest=$REST; REST='' ;;
+  esac
   case "$dest" in
     hook:*) target="templates/hooks/${dest#hook: }" ;;
     skills/*) target="templates/${dest}/SKILL.md" ;;
@@ -161,13 +186,7 @@ while IFS= read -r dest; do
   esac
   [[ -e "$target" ]] || UNRESOLVED="$UNRESOLVED
   $dest -> $target"
-done < <(
-  grep -oE '^[0-9]+\..* -> .*$' "$RULES_FILE" \
-    | sed 's/.* -> //' \
-    | tr '+' '\n' \
-    | sed 's/^ *//; s/ *$//' \
-    | sort -u
-)
+done
 
 if [[ -n "$UNRESOLVED" ]]; then
   emit_block "Rule index destination(s) do not exist:$UNRESOLVED" \

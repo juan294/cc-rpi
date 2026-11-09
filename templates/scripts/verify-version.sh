@@ -47,10 +47,11 @@ emit_block() {
 
 FAILED=0
 
-# list_has <entry> <newline-separated list> -- whole-line literal membership. A here-string, never `printf | grep -q`:
+# list_has <entry> <newline-separated list> -- whole-line literal membership, in the shell alone. Never `printf | grep -q`:
 # under pipefail grep -q leaves on its first match, printf then dies of SIGPIPE on a list larger than the pipe buffer, and a
-# present entry is reported absent.
-list_has() { grep -qxF -- "$1" <<< "$2"; }
+# present entry is reported absent. Never a here-string or here-document either: bash 3.2 writes those to a temporary file,
+# and where no temporary directory is writable the redirection fails and the loop or test it feeds is silently skipped.
+list_has() { case $'\n'"$2"$'\n' in *$'\n'"$1"$'\n'*) return 0 ;; esac; return 1; }
 
 # released_versions -- newest first, excluding [Unreleased].
 released_versions() {
@@ -164,10 +165,15 @@ if [[ -f "$LEDGER" ]]; then
   )"
 
   PENDING=""
-  while IFS= read -r lv; do
+  REST=$LEDGER_VERSIONS
+  while [[ -n "$REST" ]]; do
+    case $REST in
+      *$'\n'*) lv=${REST%%$'\n'*}; REST=${REST#*$'\n'} ;;
+      *) lv=$REST; REST='' ;;
+    esac
     [[ -n "$lv" ]] || continue
     list_has "$lv" "$RELEASED_LIST" || PENDING="$PENDING $lv"
-  done <<< "$LEDGER_VERSIONS"
+  done
   PENDING="${PENDING# }"
 
   PENDING_N="$(printf '%s' "$PENDING" | wc -w | tr -d ' ')"

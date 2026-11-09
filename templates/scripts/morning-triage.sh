@@ -244,6 +244,14 @@ Write your final summary as your text output."
 done
 
 # ── Cross-project summary ──
+# split_result <STATUS|PROJECT|DETAILS> -- parameter expansion, not `read <<<`: bash 3.2 writes a here-string to a
+# temporary file, and where no temporary directory is writable the read fails and the row would come out empty.
+split_result() {
+  STATUS=${1%%|*}
+  local rest=${1#*|}
+  PROJECT=${rest%%|*}
+  DETAILS=${rest#*|}
+}
 {
   echo "# Morning Triage Summary"
   echo "> Generated on $(date) | ${#PROJECTS[@]} projects | $PASS passed | $FAIL failed"
@@ -254,7 +262,7 @@ done
   echo "|---|---------|--------|---------|"
   IDX=1
   for RESULT in "${RESULTS[@]}"; do
-    IFS='|' read -r STATUS PROJECT DETAILS <<< "$RESULT"
+    split_result "$RESULT"
     echo "| $IDX | \`$PROJECT\` | $STATUS | $DETAILS |"
     IDX=$((IDX + 1))
   done
@@ -263,7 +271,7 @@ done
     echo "## Failed Projects"
     echo ""
     for RESULT in "${RESULTS[@]}"; do
-      IFS='|' read -r STATUS PROJECT DETAILS <<< "$RESULT"
+      split_result "$RESULT"
       if [ "$STATUS" = "FAIL" ]; then
         echo "- \`$PROJECT\`: $DETAILS"
       fi
