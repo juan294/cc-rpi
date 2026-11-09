@@ -37,7 +37,7 @@ class ScheduledUpdateTests(unittest.TestCase):
             path.write_text('{}\n')
         self.cli = self.root / 'fake-claude'
         self.cli.write_text(f'#!{sys.executable}\n' +
-            'import json, os, sys, time\n'
+            'import json, os, signal, sys, time\n'
             'with open(os.environ["FAKE_CLI_LOG"],"a") as log: log.write(json.dumps({"argv":sys.argv[1:],"cwd":os.getcwd(),"home":os.environ.get("HOME")})+"\\n")\n'
             'probe = "Reply READY only" in " ".join(sys.argv)\n'
             'hold = os.environ.get("FAKE_CLI_HOLD")\n'
@@ -65,11 +65,23 @@ class ScheduledUpdateTests(unittest.TestCase):
             '    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"], start_new_session=True, close_fds=False,\n'
             '                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n'
             '    open(detach, "w").write(str(child.pid))\n'
-            'if hold and probe:\n'
-            '    open(hold + ".pid", "w").write(str(os.getpid()))\n'
-            '    open(hold + ".ready", "w").close()\n'
-            '    deadline = time.time() + 20\n'
-            '    while not os.path.exists(hold + ".release") and time.time() < deadline: time.sleep(0.05)\n'
+            'update_hold = os.environ.get("FAKE_CLI_UPDATE_HOLD")\n'
+            'if os.environ.get("FAKE_CLI_IGNORE_TERM"): signal.signal(signal.SIGTERM, signal.SIG_IGN)\n'
+            'fd_report = os.environ.get("FAKE_CLI_FD_REPORT")\n'
+            'if fd_report:\n'
+            '    lock = os.environ["FAKE_LOCK_FILE"]\n'
+            '    held = []\n'
+            '    for number in range(3, 256):\n'
+            '        try: info = os.fstat(number)\n'
+            '        except OSError: continue\n'
+            '        held.append([number, info.st_ino == os.stat(lock).st_ino])\n'
+            '    with open(fd_report, "a") as out: out.write(json.dumps({"probe": probe, "open": held, "lock_env": sorted(k for k in os.environ if k.startswith("RPI_UPDATE_LOCK"))}) + "\\n")\n'
+            'for marker in (hold if probe else update_hold,):\n'
+            '    if marker:\n'
+            '        open(marker + ".pid", "w").write(str(os.getpid()))\n'
+            '        open(marker + ".ready", "w").close()\n'
+            '        deadline = time.time() + 40\n'
+            '        while not os.path.exists(marker + ".release") and time.time() < deadline: time.sleep(0.05)\n'
             'print(os.environ.get("FAKE_CLI_PROBE_BODY", "READY") if probe else "Fake update result")\n'
             'raise SystemExit(int(os.environ.get("FAKE_CLI_PROBE_CODE" if probe else "FAKE_CLI_CODE", "0")))\n')
         self.cli.chmod(0o700)
@@ -88,24 +100,28 @@ class ScheduledUpdateTests(unittest.TestCase):
                     'CODEX_BIN': str(self.codex),
                     'FAKE_CLI_LOG': str(self.root / 'cli.jsonl'),
                     'FAKE_CODEX_LOG': str(self.root / 'codex.jsonl'),
+                    'FAKE_LOCK_FILE': str(self.project / '.rpi/local/update-runs/launcher.lock'),
                     'FAKE_ENGINE_LOG': str(self.root / 'engine.jsonl')}
 
     def run_launcher(self):
         return subprocess.run(['bash', str(ROOT / 'templates/scripts/cc-rpi-update-agent.sh')],
                               env=self.env, capture_output=True, text=True, timeout=10)
 
-    def start_held_run(self, name='first', env=None):
-        """A launcher run that parks inside its provider probe until the test releases it."""
+    def start_held_run(self, name='first', env=None, phase='probe', group=False):
+        """A launcher run that parks inside its provider call (probe or update) until the test releases it.
+
+        With group=True the launcher leads its own session and process group, so a test can signal exactly that group."""
         hold = self.root / ('hold-' + name)
+        variable = 'FAKE_CLI_HOLD' if phase == 'probe' else 'FAKE_CLI_UPDATE_HOLD'
         process = subprocess.Popen(['bash', str(ROOT / 'templates/scripts/cc-rpi-update-agent.sh')],
-                                   env={**self.env, **(env or {}), 'FAKE_CLI_HOLD': str(hold)},
+                                   env={**self.env, **(env or {}), variable: str(hold)}, start_new_session=group,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         self.addCleanup(lambda: (process.kill() if process.poll() is None else None, process.communicate()))
         deadline = time.time() + 15
         while not Path(str(hold) + '.ready').exists():
             if process.poll() is not None:
                 self.fail('held run exited early: ' + str(process.communicate()))
-            self.assertLess(time.time(), deadline, 'held run never reached its provider probe')
+            self.assertLess(time.time(), deadline, 'held run never reached its provider ' + phase)
             time.sleep(0.05)
         child = int(Path(str(hold) + '.pid').read_text())
         self.addCleanup(lambda: os.kill(child, signal.SIGKILL) if self.alive(child) else None)
@@ -189,6 +205,15 @@ class ScheduledUpdateTests(unittest.TestCase):
         self.assertNotIn('--plugin-dir', argv)
         self.assertTrue(argv[argv.index('-p') + 1].startswith('/rpi-update'))
 
+    def test_a_missing_direct_skill_resource_is_named_as_missing_not_as_different(self):
+        self.env['RPI_ROUTE'] = 'direct'
+        self.env['RPI_UPDATE_SKILL_DIR'] = str(self.root / 'no-such-direct-skill')
+        result = self.run_launcher()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn('direct lifecycle skill resource is missing', result.stderr)
+        self.assertNotIn('differ', result.stderr)
+        self.assertEqual(self.calls('cli'), [])
+
     def test_invalid_source_preflight_preserves_failure_without_native_invocation(self):
         self.env['FAKE_ENGINE_CODES'] = json.dumps({'check-generated': 9})
         result = self.run_launcher()
@@ -252,7 +277,8 @@ class ScheduledUpdateTests(unittest.TestCase):
         self.assertEqual(codex[0]['codex_api_key'], None)
         args = codex[0]['argv']
         self.assertEqual(args[:2], ['exec', '--ephemeral'])
-        self.assertIn('sandbox_workspace_write.network_access=true', args)
+        self.assertIn('sandbox_workspace_write.network_access=false', args)
+        self.assertNotIn('sandbox_workspace_write.network_access=true', args)
         self.assertIn(str(self.project.resolve()), args)
         self.assertIn(str(skill / 'SKILL.md'), codex[0]['prompt'])
         self.assertEqual([call[0] for call in self.calls('engine')], ['validate', 'check-generated', 'check'])
@@ -305,6 +331,15 @@ class ScheduledUpdateTests(unittest.TestCase):
         self.assertEqual(len(self.calls('cli')), 1)
         self.assertEqual(self.calls('codex'), [])
 
+    def test_a_probe_failure_is_reported_as_the_probe_not_as_an_update_exit(self):
+        self.env['FAKE_CLI_PROBE_BODY'] = 'permission denied'
+        self.env['FAKE_CLI_PROBE_CODE'] = '3'
+        result = self.run_launcher()
+        self.assertEqual(result.returncode, 3, result.stdout + result.stderr)
+        self.assertIn('native_exit=not-run probe_exit=3 check_exit=0', result.stdout)
+        self.assertNotIn('native_exit=3', result.stdout)
+        self.assertIn('native_exit=not-run probe_exit=3', (self.last_run() / 'status.txt').read_text())
+
     def test_a_second_run_during_a_held_lock_is_blocked_before_any_provider_call(self):
         first, hold, _ = self.start_held_run()
         for _ in range(2):
@@ -349,21 +384,99 @@ class ScheduledUpdateTests(unittest.TestCase):
                 self.assertEqual([kind for kind, other in log if other == run], ['enter', 'exit'] * 2)
             self.assertTrue(codes.count(0) >= 1)
 
-    def test_killing_the_launcher_keeps_the_lock_until_its_provider_child_exits(self):
+    def wait_gone(self, pid, seconds=20):
+        deadline = time.time() + seconds
+        while self.alive(pid):
+            self.assertLess(time.time(), deadline, 'process %d never exited' % pid)
+            time.sleep(0.05)
+
+    def test_killing_the_launcher_stops_its_provider_and_then_frees_the_lock(self):
+        # The provider is never left running without a launcher to report on it. The supervisor notices the launcher
+        # is gone, stops the provider group, writes the status the launcher could not and releases the lock.
         first, hold, child = self.start_held_run()
+        run = self.last_run()
         first.kill()
         first.communicate(timeout=10)
+        self.wait_gone(child)
+        status = run / 'status.txt'
+        deadline = time.time() + 15
+        while not status.exists():
+            self.assertLess(time.time(), deadline, 'the supervisor wrote no status after the launcher was killed')
+            time.sleep(0.05)
+        self.assertIn('aborted: the launcher ended during the probe call (it was killed); the provider process group was stopped', status.read_text())
+        self.assertIn('probe provider pid=%d ended' % child, (run / 'provider.log').read_text())
+        proceed = self.run_launcher()
+        self.assertEqual(proceed.returncode, 0, proceed.stdout + proceed.stderr)
+
+    def test_the_lock_stays_held_while_a_provider_that_ignores_sigterm_is_being_stopped(self):
+        first, hold, child = self.start_held_run(env={'FAKE_CLI_IGNORE_TERM': '1'})
+        first.kill()
+        first.communicate(timeout=10)
+        time.sleep(1.5)  # The supervisor has sent SIGTERM; the provider ignores it and lives for up to 10 seconds more.
         self.assertTrue(self.alive(child))
         blocked = self.run_launcher()
         self.assertEqual(blocked.returncode, 1, blocked.stdout + blocked.stderr)
         self.assertIn('another update run for this project is active', blocked.stderr)
-        Path(str(hold) + '.release').touch()
+        self.assertEqual(self.probe_calls(), 1)
+        self.wait_gone(child, 30)  # SIGKILL follows the grace period.
         deadline = time.time() + 15
-        while self.alive(child):
-            self.assertLess(time.time(), deadline, 'the provider child never exited')
-            time.sleep(0.05)
-        proceed = self.run_launcher()
+        while True:
+            proceed = self.run_launcher()
+            if proceed.returncode == 0 or time.time() > deadline:
+                break
+            time.sleep(0.2)
         self.assertEqual(proceed.returncode, 0, proceed.stdout + proceed.stderr)
+
+    def test_a_signal_to_the_launcher_stops_the_provider_and_records_it(self):
+        for phase in ('probe', 'update'):
+            for name in ('SIGTERM', 'SIGINT', 'SIGHUP'):
+                for target in ('group', 'leader'):
+                    with self.subTest(phase=phase, signal=name, target=target):
+                        first, hold, child = self.start_held_run('%s-%s-%s' % (phase, name, target), phase=phase, group=True)
+                        run = self.last_run()
+                        number = getattr(signal, name)
+                        (os.killpg if target == 'group' else os.kill)(first.pid, number)
+                        out, err = first.communicate(timeout=30)
+                        self.assertEqual(first.returncode, 128 + number, out + err)
+                        self.wait_gone(child, 15)
+                        text = (run / 'status.txt').read_text()
+                        self.assertIn('aborted by SIG', text)
+                        self.assertIn(name, text.split('aborted by ')[1].split(';')[0])
+                        self.assertIn('provider process group was stopped', text)
+                        self.assertIn('check --source', text)
+                        self.assertIn('The run was aborted by SIG', (run / 'report.md').read_text())
+                        self.assertIn('%s provider pid=%d ended' % (phase, child), (run / 'provider.log').read_text())
+                        again = self.run_launcher()
+                        self.assertEqual(again.returncode, 0, 'the lock is free after the run ended: ' + again.stdout + again.stderr)
+
+    def test_a_group_signal_cannot_orphan_the_probe_or_lose_its_timeout(self):
+        # The probe used to start in its own session behind a Python timer in the launcher's group: a group signal killed
+        # the timer and left the probe running with the lock.
+        first, hold, child = self.start_held_run('group-probe', env={'RPI_UPDATE_PROBE_TIMEOUT_SECONDS': '300'}, group=True)
+        os.killpg(first.pid, signal.SIGTERM)
+        first.communicate(timeout=30)
+        self.wait_gone(child, 15)
+        self.assertEqual(self.run_launcher().returncode, 0)
+
+    def test_the_provider_and_the_helpers_it_detaches_never_hold_the_lock(self):
+        report = self.root / 'fds.jsonl'
+        detached = self.root / 'detached.pid'
+        self.env.update({'FAKE_CLI_FD_REPORT': str(report), 'FAKE_CLI_DETACH': str(detached)})
+        first = self.run_launcher()
+        self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+        rows = [json.loads(line) for line in report.read_text().splitlines()]
+        self.assertEqual([row['probe'] for row in rows], [True, False], 'both provider calls were checked')
+        for row in rows:
+            self.assertEqual([number for number, is_lock in row['open'] if is_lock], [], 'the lock descriptor reached the provider: %s' % row)
+            self.assertEqual(row['lock_env'], [], 'the lock markers reached the provider environment')
+        child = int(detached.read_text())
+        self.addCleanup(lambda: os.kill(child, signal.SIGKILL) if self.alive(child) else None)
+        self.assertTrue(self.alive(child), 'the detached helper is still running')
+        for key in ('FAKE_CLI_DETACH', 'FAKE_CLI_FD_REPORT'):
+            del self.env[key]
+        second = self.run_launcher()  # The helper outlives the run but does not pin the lock.
+        self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
+        self.assertTrue(self.alive(child))
 
     def test_killing_the_launcher_and_its_child_frees_the_lock_at_once(self):
         first, hold, child = self.start_held_run()
@@ -403,23 +516,55 @@ class ScheduledUpdateTests(unittest.TestCase):
         self.assertIn('another update run for this project is active', second.stderr)
         self.assertEqual(self.probe_calls(), 1)
 
-    def test_a_path_without_ps_changes_nothing(self):
-        tools = self.root / 'tools-without-ps'
+    def path_without(self, name):
+        """A PATH whose directories hold everything the launcher needs except one command."""
+        tools = self.root / ('tools-without-' + name)
         tools.mkdir()
         git = Path(shutil.which('git'))
         for directory in (Path('/bin'), Path('/usr/bin'), git.parent):
             for entry in directory.iterdir():
-                if entry.name == 'ps' or (directory == git.parent and entry.name != 'git') or (tools / entry.name).exists():
+                if entry.name == name or (directory == git.parent and entry.name != 'git' and name != 'git') \
+                        or (directory == git.parent and name == 'git') or (tools / entry.name).exists():
                     continue
                 (tools / entry.name).symlink_to(entry)
-        self.assertIsNone(shutil.which('ps', path=str(tools)))
-        self.env['PATH'] = str(Path(sys.executable).parent) + os.pathsep + str(tools)
+        self.assertIsNone(shutil.which(name, path=str(tools)))
+        return str(Path(sys.executable).parent) + os.pathsep + str(tools)
+
+    def test_a_path_without_ps_changes_nothing(self):
+        self.env['PATH'] = self.path_without('ps')
         first, hold, _ = self.start_held_run()
         second = self.run_launcher()
         self.assertEqual(second.returncode, 1, second.stdout + second.stderr)
         self.assertIn('another update run for this project is active', second.stderr)
         self.release(first, hold)
         self.assertEqual(self.run_launcher().returncode, 0)
+
+    def test_a_path_without_git_says_git_is_missing(self):
+        self.env['PATH'] = self.path_without('git')
+        result = self.run_launcher()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertTrue(result.stderr.startswith('BLOCKED / WHY: Git is missing'), result.stderr)
+        self.assertNotIn('not the Git root', result.stderr)
+        self.assertEqual(self.calls('cli'), [])
+
+    def test_a_target_outside_any_work_tree_is_not_called_a_wrong_root(self):
+        outside = self.root / 'not-a-repository'
+        outside.mkdir()
+        self.env['RPI_PROJECT_ROOT'] = str(outside)
+        env = {**self.env, 'GIT_CEILING_DIRECTORIES': str(self.root)}
+        result = subprocess.run(['bash', str(ROOT / 'templates/scripts/cc-rpi-update-agent.sh')], env=env, capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn('target is not inside a Git work tree', result.stderr)
+
+    def test_a_symbolic_link_in_the_report_path_is_named_not_called_unignored(self):
+        (self.project / '.rpi/local').mkdir(parents=True)
+        (self.project / 'elsewhere-inside').mkdir()
+        (self.project / '.rpi/local/update-runs').symlink_to(self.project / 'elsewhere-inside', target_is_directory=True)
+        result = self.run_launcher()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn('update-runs is a symbolic link', result.stderr)
+        self.assertNotIn('not ignored', result.stderr)
+        self.assertEqual(self.calls('cli'), [])
 
     def test_an_inherited_held_marker_is_not_trusted(self):
         # A copied environment from some other process must neither skip the lock nor loop.
@@ -455,6 +600,22 @@ class ScheduledUpdateTests(unittest.TestCase):
         self.assertFalse((self.root / 'elsewhere').exists(), 'a link is never followed')
         self.assertEqual(self.calls('cli'), [])
 
+    def test_a_lock_file_without_permissions_names_the_chmod_that_repairs_it(self):
+        if os.geteuid() == 0:
+            self.skipTest('root opens files whatever their mode')
+        self.lock_file.parent.mkdir(parents=True)
+        self.lock_file.write_text('')
+        self.lock_file.chmod(0)
+        self.addCleanup(self.lock_file.chmod, 0o600)
+        result = self.run_launcher()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        why, fix = result.stderr.strip().split(' / FIX: ', 1)
+        self.assertIn('mode does not let this user open it for writing', why)
+        self.assertIn('chmod u+rw', fix)
+        self.assertEqual(self.calls('cli'), [])
+        self.lock_file.chmod(0o600)
+        self.assertEqual(self.run_launcher().returncode, 0, 'the printed repair works')
+
     def test_a_lock_file_removed_during_the_run_stops_it_before_its_next_provider_call(self):
         # Design: the run re-verifies, from its held descriptor, that the lock path still names the same inode before
         # every provider call. Exclusion is restored at that boundary; the one call already in flight is not interrupted.
@@ -482,27 +643,6 @@ class ScheduledUpdateTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertIn('removed or replaced while this run was active', result.stderr)
         self.assertEqual(self.calls('codex'), [])
-
-    def test_a_blocked_run_names_a_process_the_holder_started(self):
-        detached = self.root / 'detached.pid'
-        self.env['FAKE_CLI_DETACH'] = str(detached)
-        first = self.run_launcher()
-        self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
-        child = int(detached.read_text())
-        self.addCleanup(lambda: os.kill(child, signal.SIGKILL) if self.alive(child) else None)
-        del self.env['FAKE_CLI_DETACH']
-        second = self.run_launcher()  # No run is active, but a descendant of the first still holds the inherited lock.
-        self.assertEqual(second.returncode, 1, second.stdout + second.stderr)
-        why, fix = second.stderr.strip().split(' / FIX: ', 1)
-        self.assertIn('another update run for this project is active, or a process it started still holds the lock', why)
-        self.assertIn(str(self.lock_file), why)
-        self.assertIn('lsof', fix)
-        os.kill(child, signal.SIGKILL)
-        deadline = time.time() + 10
-        while self.alive(child):
-            self.assertLess(time.time(), deadline)
-            time.sleep(0.05)
-        self.assertEqual(self.run_launcher().returncode, 0)
 
     def last_run(self):
         runs = sorted((self.project / '.rpi/local/update-runs').glob('run.*'), key=lambda path: path.stat().st_mtime_ns)
@@ -573,7 +713,8 @@ class ScheduledUpdateTests(unittest.TestCase):
                          'RPI_UPDATE_CODEX_SKILL_DIR': str(self.root / 'no-such-skill')})
         result = self.run_launcher()
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        self.assert_reason_kept_in_run('differ from selected source')
+        self.assert_reason_kept_in_run('Codex lifecycle skill resource is missing')
+        self.assertNotIn('differ from selected source', (self.last_run() / 'report.md').read_text())
         # A missing Codex executable.
         self.env['CODEX_BIN'] = str(self.root / 'no-such-codex')
         result = self.run_launcher()
@@ -639,6 +780,37 @@ class ScheduledUpdateTests(unittest.TestCase):
         self.assertEqual(self.calls('cli'), [])
         self.env['RPI_UPDATE_PROBE_TIMEOUT_SECONDS'] = '0'
         self.assertEqual(self.run_launcher().returncode, 0)
+
+    @unittest.skipUnless(shutil.which('sandbox-exec') and sys.platform == 'darwin', 'sandbox-exec (macOS) makes the temporary locations unwritable')
+    def test_the_launcher_needs_no_temporary_file_for_here_documents_or_probe_output(self):
+        # bash 3.2 puts every here-document in a temporary file, and the old launcher used four of them plus mktemp. In a
+        # scheduler where no temporary directory is writable the lock programs came out empty or the run aborted.
+        workdir = self.root / 'unwritable-cwd'
+        workdir.mkdir()
+        profile = self.root / 'deny-temp.sb'
+        profile.write_text('(version 1)\n(allow default)\n(deny file-write* (subpath "/private/tmp") (subpath "/private/var/tmp") '
+                           '(subpath "/private/var/folders"))\n(allow file-write* (subpath "%s"))\n(deny file-write* (subpath "%s"))\n'
+                           % (self.root.resolve(), workdir.resolve()))
+        canary = subprocess.run(['sandbox-exec', '-f', str(profile), '/bin/bash', '-c', 'cat <<< canary'], cwd=workdir, capture_output=True, text=True)
+        if 'cannot create temp file' not in canary.stderr:
+            self.skipTest('the sandbox did not stop bash 3.2 from creating a here-document file')
+        result = subprocess.run(['sandbox-exec', '-f', str(profile), '/bin/bash', str(ROOT / 'templates/scripts/cc-rpi-update-agent.sh')],
+                                cwd=workdir, env=self.env, capture_output=True, text=True, timeout=60)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn('temp file', result.stderr)
+        self.assertEqual(self.probe_calls(), 1)
+        self.assertEqual(len(self.calls('cli')), 2)
+
+    def test_the_guide_describes_what_a_signal_does_and_where_a_block_is_recorded(self):
+        flat = ' '.join((ROOT / 'GUIDE.md').read_text().split())
+        self.assertNotIn('cannot record anything', flat)
+        self.assertNotIn('which the launcher and every child it starts, the provider included, hold', flat)
+        for sentence in ('When the launcher receives SIGINT, SIGTERM or SIGHUP, or is killed, the supervisor stops the provider\'s process group',
+                         'Only SIGKILL of both the launcher and the supervisor leaves a provider running',
+                         'The provider and any helper it starts do not inherit the lock descriptor',
+                         'sandbox_workspace_write.network_access=false',
+                         'goes to standard error only and creates no run directory'):
+            self.assertIn(sentence, flat)
 
     def test_lock_area_must_be_ignored_before_any_provider_call(self):
         (self.project / '.git/info/exclude').write_text('')

@@ -254,20 +254,30 @@ Required unavailable permissions are denied rather than bypassed.
 
 The launcher checks installation state after the native attempt and preserves
 both exit statuses in unique ignored `.rpi/local/update-runs/` reports. It refuses
-unignored output paths, allows one run per project at a time (a kernel `flock`
-on the ignored `.rpi/local/update-runs/launcher.lock`, which the launcher and every
-child it starts, the provider included, hold until they exit; an overlapping run
-exits with `BLOCKED` before it calls a provider, and a killed launcher whose
-provider is still running keeps the lock until that provider exits, as does a
-detached descendant of the provider, so a run can be refused while no run is
-active; `lsof` on the lock file names the holder. Before every provider call the
-run checks that the lock path still names the file it holds and stops otherwise,
-because deleting or renaming it lets a new run lock a new file; only the call
-already in flight can overlap), and runs a
-read-only Claude probe (no tools, no file changes) before any update starts. A quota or authentication signal from the
+unignored output paths and report paths that contain a symbolic link. It allows one
+run per project at a time: a kernel `flock` on the ignored
+`.rpi/local/update-runs/launcher.lock` is held by the launcher and by a supervisor
+process that runs every provider call (probe, update and Codex fallback) in its own
+process group. The provider and any helper it starts do not inherit the lock
+descriptor, so a helper that outlives the provider does not keep the lock. An
+overlapping run exits with `BLOCKED` before it calls a provider; `lsof` on the lock
+file names the holder (the launcher or its supervisor). When the launcher receives
+SIGINT, SIGTERM or SIGHUP, or is killed, the supervisor stops the provider's process
+group (SIGTERM, then SIGKILL after 10 seconds), keeps the lock until that group is
+gone, and writes `status.txt` with `aborted by SIGTERM` (or `aborted: the launcher
+ended` after a kill) and the `check` command to run. An update stopped this way can
+be half applied: inspect `.rpi/local/transactions` and use the printed
+`rollback --journal` command. Only SIGKILL of both the launcher and the supervisor
+leaves a provider running; a run directory without `status.txt` then means the run
+was cut off. Before every provider call the run checks that the lock path still
+names the file it holds and stops otherwise, because deleting or renaming it lets a
+new run lock a new file; only the call already in flight can overlap. The run also
+starts with a read-only Claude probe (no tools, no file changes) before any update
+starts. A quota or authentication signal from the
 probe selects the installed Codex subscription when the `SKILL.md` and lifecycle
 contract of its user-scope `rpi-update` skill match the selected source byte for
-byte; any other probe failure is reported and blocks the update. An update that
+byte; any other probe failure is reported (as `native_exit=not-run probe_exit=N`,
+because no update ran) and blocks the update. An update that
 has started never retries through another provider and is not blindly retried
 after a partial result. It neither pulls source nor updates global user
 skills, native caches, models or schedules. Plugin manager updates remain separate.
@@ -278,17 +288,25 @@ The update provider is always Claude unless the probe reports a quota or
 authentication limit, and then it is Codex; `RPI_HARNESS` only scopes which
 installation (Claude, Codex or both) is updated. The Codex prompt names the
 installed user-scope skill and the project and carries no Claude slash command.
-The probe stops after `RPI_UPDATE_PROBE_TIMEOUT_SECONDS` (default 300; `0` disables
+The Codex fallback runs with `sandbox_workspace_write.network_access=false`: the
+update reads and writes local files and runs local Git and engine commands, and its
+prompt forbids fetching or pulling, so sandboxed commands need no network. The
+probe stops after `RPI_UPDATE_PROBE_TIMEOUT_SECONDS` (default 300; `0` disables
 it): its whole process group is killed and the run ends with a `BLOCKED` message. The
 update itself has no timeout, because stopping a half-applied update is the owner's
-decision. If an update hangs, find its process with `lsof` on
-`.rpi/local/update-runs/launcher.lock`, stop it, inspect `.rpi/local/transactions`,
-roll back an unfinished journal with the printed `rollback --journal` command, and run
-the launcher again; the lock is released when the last process holding it exits.
-Every `BLOCKED` after the run directory exists is also written to that directory's
-`report.md` and `status.txt`, and an abort is recorded as a failure (never exit 0). A
-launcher ended by a signal cannot record anything, so a run directory without
-`status.txt` means the run was cut off.
+decision. If an update hangs, run `lsof` on `.rpi/local/update-runs/launcher.lock`
+and send SIGTERM to the launcher it names (the launcher then stops the provider as
+described above), inspect `.rpi/local/transactions`, roll back an unfinished journal
+with the printed `rollback --journal` command, and run the launcher again; the lock is
+released when the launcher and its supervisor have exited.
+
+Where a block is recorded depends on how far the launcher got. A block before the
+run directory exists (opt-in, source and target validation, missing Git or Python,
+the ignore and symbolic-link checks, a refused or unopenable lock) goes to standard
+error only and creates no run directory, because no run has started; look in the
+scheduler's own log. Every `BLOCKED` after the run directory exists is also written
+to that directory's `report.md` and `status.txt`, and an abort is recorded as a
+failure (never exit 0).
 
 ## Further reading
 

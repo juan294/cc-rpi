@@ -25,13 +25,19 @@
 # Reports use unique task-owned .rpi/local/update-runs directories. Preserve these
 # and lifecycle journals on failure; there is no blind retry of partial mutation.
 # One launcher run per project at a time: after validation the script re-executes itself through
-# Python, which takes a non-blocking flock on .rpi/local/update-runs/launcher.lock and passes the
-# open file to the script and every child it starts (the provider included). The kernel holds the
-# lock until the last of them exits, for any reason, so there is no pid, start time or stale-lock
-# logic. An overlapping run exits without calling a provider. A launcher killed while its provider
-# still runs keeps the lock until that provider exits.
+# Python, which takes a non-blocking flock on .rpi/local/update-runs/launcher.lock and keeps the open
+# file for the script. Only the launcher and its supervisor hold that descriptor. Every provider call (probe,
+# update, Codex fallback) runs through the supervisor, a small Python process in its own session that
+# starts the provider with every other descriptor closed, so neither the provider nor a helper it detaches can
+# pin the lock. The supervisor keeps the lock until the provider's process group is gone. When the launcher
+# receives SIGINT, SIGTERM or SIGHUP, or is killed, the supervisor stops that group (SIGTERM, then SIGKILL)
+# and the run records it in status.txt; only SIGKILL of both the launcher and the supervisor leaves a
+# provider running. The kernel releases the lock at the last exit, so there is no pid, start time or
+# stale-lock logic. An overlapping run exits without calling a provider.
 # The probe stops after RPI_UPDATE_PROBE_TIMEOUT_SECONDS (default 300, 0 disables); the update itself has
 # no timeout. A hung update is stopped by finding its process with lsof on the lock file and killing it.
+# No here-document, here-string or mktemp: bash 3.2 writes those to a temporary file, and scheduler
+# environments may have no writable temporary directory. Intermediate output lives in the run directory.
 set -euo pipefail
 
 # A block after the run directory exists is also written there (report.md, status.txt), so a scheduler that
@@ -51,7 +57,9 @@ case ${RPI_HARNESS:-} in claude|codex|both) ;; *) blocked 'harness scope is miss
 case ${RPI_ROUTE:-} in direct|plugin) ;; *) blocked 'installation route is missing or invalid' 'set RPI_ROUTE=direct or plugin to match installed ownership' ;; esac
 CC_RPI_PATH=$(cd -- "$CC_RPI_PATH" && pwd -P)
 PROJECT_ROOT=$(cd -- "$RPI_PROJECT_ROOT" && pwd -P)
-[[ $(git -C "$PROJECT_ROOT" rev-parse --show-toplevel) == "$PROJECT_ROOT" ]] || blocked 'target is not the Git root' 'bind RPI_PROJECT_ROOT to the actual intended repository root'
+command -v git >/dev/null || blocked 'Git is missing' 'configure Git on the scheduler PATH'
+git_root=$(git -C "$PROJECT_ROOT" rev-parse --show-toplevel 2>/dev/null) || blocked 'target is not inside a Git work tree' 'bind RPI_PROJECT_ROOT to the actual intended repository root'
+[[ $git_root == "$PROJECT_ROOT" ]] || blocked 'target is not the Git root' 'bind RPI_PROJECT_ROOT to the actual intended repository root'
 command -v python3 >/dev/null || blocked 'Python is missing' 'configure Python 3.11+ on the scheduler PATH'
 python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 11))' || blocked 'Python is older than 3.11' 'configure a supported interpreter on PATH'
 CLAUDE_BIN=${CLAUDE_BIN:-$(command -v claude || true)}
@@ -77,18 +85,20 @@ if [[ "$RPI_ROUTE" == plugin ]]; then
 else
   [[ ${RPI_UPDATE_SKILL_DIR:-} == /* ]] || blocked 'direct native skill path is missing' 'set RPI_UPDATE_SKILL_DIR from actual user-scope native discovery'
   for resource in SKILL.md references/lifecycle-contract.md; do
+    [[ -f "$RPI_UPDATE_SKILL_DIR/$resource" ]] || blocked "direct lifecycle skill resource is missing: $RPI_UPDATE_SKILL_DIR/$resource" 'install the user-scope rpi-update skill from the selected source, or set RPI_UPDATE_SKILL_DIR to the directory native discovery reports'
     cmp -s "$RPI_UPDATE_SKILL_DIR/$resource" "$NATIVE_SKILL/$resource" || blocked 'direct lifecycle skill/resources differ from selected source' 'review the separate user-scope update before scheduling; never overwrite it implicitly'
   done
   invocation='/rpi-update'
 fi
 
 REPORT_ROOT="$PROJECT_ROOT/.rpi/local/update-runs"
-python3 - "$PROJECT_ROOT" "$REPORT_ROOT" <<'PY'
-from pathlib import Path
-import sys
-if not Path(sys.argv[2]).resolve().is_relative_to(Path(sys.argv[1])):
-    raise SystemExit('BLOCKED / WHY: report path escapes project / FIX: restore owned .rpi/local directories')
-PY
+# The reports and the lock live in real directories inside the project. A link in the path would send them elsewhere
+# (or make git refuse to say whether they are ignored), so it is named as what it is.
+for owned_dir in "$PROJECT_ROOT/.rpi" "$PROJECT_ROOT/.rpi/local" "$REPORT_ROOT"; do
+  [[ ! -L "$owned_dir" ]] || blocked "$owned_dir is a symbolic link" "replace the link with a real directory inside the project (or remove it) so reports and the launcher lock stay in the project"
+done
+python3 -c 'from pathlib import Path; import sys; sys.exit(0 if Path(sys.argv[2]).resolve().is_relative_to(Path(sys.argv[1])) else 1)' "$PROJECT_ROOT" "$REPORT_ROOT" \
+  || blocked 'report path escapes project' 'restore owned .rpi/local directories'
 RUN_ID=$(python3 -c 'import secrets; print(secrets.token_hex(8))')
 RUN_DIR="$REPORT_ROOT/run.$RUN_ID"
 LOCK_FILE="$REPORT_ROOT/launcher.lock"
@@ -98,35 +108,39 @@ ignored_outputs=$(git -C "$PROJECT_ROOT" check-ignore -- "$RUN_DIR/report.md" "$
 mkdir -p -- "$REPORT_ROOT"
 
 # Single-flight. LOCK_ACQUIRE opens the lock file, takes flock(LOCK_EX | LOCK_NB) and execs this script
-# again with the descriptor inherited. LOCK_VERIFY runs in that second pass and proves the descriptor
+# again with the descriptor kept open. LOCK_VERIFY runs in that second pass and proves the descriptor
 # is the lock file and is still held; an inherited RPI_UPDATE_LOCK_OWNER is trusted only for the process
 # whose pid it names (exec keeps the pid), so a copied environment never skips the lock.
-read -r -d '' LOCK_ACQUIRE <<'PY' || true
+# The programs are single-quoted strings, so they use double quotes inside.
+LOCK_ACQUIRE='
 import errno, fcntl, os, shlex, stat, sys
 path, argv = sys.argv[1], sys.argv[2:]
 def blocked(why, fix):
-    sys.stderr.write('BLOCKED / WHY: %s / FIX: %s\n' % (why, fix))
+    sys.stderr.write("BLOCKED / WHY: %s / FIX: %s\n" % (why, fix))
     sys.exit(1)
 try:
     fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
 except OSError as error:
-    blocked('cannot open the launcher lock %s: %s' % (path, error.strerror),
-            'make its directory writable by this user, or remove whatever else is at that path (it must be a regular file), then run again')
+    if error.errno == errno.EACCES and os.path.isfile(path):
+        blocked("the launcher lock %s exists but its mode does not let this user open it for writing" % path,
+                "run: chmod u+rw %s   (or remove the file; it is recreated), then run again" % shlex.quote(path))
+    blocked("cannot open the launcher lock %s: %s" % (path, error.strerror),
+            "make its directory writable by this user, or remove whatever else is at that path (it must be a regular file), then run again")
 if not stat.S_ISREG(os.fstat(fd).st_mode):
-    blocked('the launcher lock %s is not a regular file' % path, 'remove whatever is at that path, then run again')
+    blocked("the launcher lock %s is not a regular file" % path, "remove whatever is at that path, then run again")
 try:
     fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
 except OSError as error:
     if error.errno in (errno.EWOULDBLOCK, errno.EAGAIN, errno.EACCES):
-        blocked('another update run for this project is active, or a process it started still holds the lock %s' % path,
-                'wait for it to finish, then run again; to see which process holds the lock run: lsof %s' % shlex.quote(path))
-    blocked('cannot lock the launcher lock %s: %s' % (path, error.strerror), 'use a local filesystem that supports flock for .rpi/local')
+        blocked("another update run for this project is active, or is still stopping its provider (it holds the lock %s)" % path,
+                "wait for it to finish, then run again; to see which process holds the lock run: lsof %s" % shlex.quote(path))
+    blocked("cannot lock the launcher lock %s: %s" % (path, error.strerror), "use a local filesystem that supports flock for .rpi/local")
 os.set_inheritable(fd, True)
-os.environ['RPI_UPDATE_LOCK_OWNER'] = str(os.getpid())
-os.environ['RPI_UPDATE_LOCK_FD'] = str(fd)
+os.environ["RPI_UPDATE_LOCK_OWNER"] = str(os.getpid())
+os.environ["RPI_UPDATE_LOCK_FD"] = str(fd)
 os.execv(argv[0], argv)
-PY
-read -r -d '' LOCK_VERIFY <<'PY' || true
+'
+LOCK_VERIFY='
 import fcntl, os, sys
 try:
     fd = int(sys.argv[2])
@@ -136,7 +150,7 @@ try:
     fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)  # Succeeds only when this descriptor holds, or nobody does.
 except (ValueError, OSError):
     sys.exit(1)
-PY
+'
 # Deleting or renaming the ignored lock file (git clean, rm -rf update-runs) would let a new run lock a new
 # inode. Before every provider call the run proves its descriptor still is the file at the lock path and
 # stops otherwise; only the call already in flight when the file disappeared can overlap.
@@ -168,7 +182,14 @@ Route: $RPI_ROUTE
 $BODY"
 cd -- "$PROJECT_ROOT"
 native_status=0
-probe_output=$(mktemp)
+native_label=
+probe_note=
+# The probe's output stays in the run directory (never a temporary file) and is removed before the run ends.
+probe_output="$RUN_DIR/probe-output.tmp"
+PROVIDER_LOG="$RUN_DIR/provider.log"
+STATUS_FILE="$RUN_DIR/status.txt"
+SUPERVISOR_PID=
+aborted_by=
 # Every exit before the final one is a failure: bash 3.2 reports status 0 for an abort under set -u when an
 # EXIT trap is set, so the trap turns a zero status into 1 unless the script reached its end.
 finished=0
@@ -176,37 +197,124 @@ on_exit() {
   local status=$?
   rm -f "$probe_output"
   [[ $finished == 1 || $status -ne 0 ]] || status=1
-  if [[ $status -ne 0 && ! -s "$RUN_DIR/status.txt" ]]; then
-    printf 'native_exit=%s check_exit=not-run aborted\n' "$status" 2>/dev/null > "$RUN_DIR/status.txt" || true
+  if [[ $status -ne 0 && ! -s "$STATUS_FILE" ]]; then
+    if [[ -n $aborted_by ]]; then
+      printf 'native_exit=%s check_exit=not-run aborted by %s; the provider process group was stopped, so an update may be half applied: run python3 %s check --source %s --target %s --harness %s --route %s and inspect %s/.rpi/local/transactions\n' \
+        "$status" "$aborted_by" "$ENGINE" "$CC_RPI_PATH" "$PROJECT_ROOT" "$RPI_HARNESS" "$RPI_ROUTE" "$PROJECT_ROOT" 2>/dev/null > "$STATUS_FILE" || true
+      printf 'The run was aborted by %s before it finished. The provider process group was stopped. No installation check ran; the update can be half applied.\n' \
+        "$aborted_by" 2>/dev/null >> "$REPORT_FILE" || true
+    else
+      printf 'native_exit=%s check_exit=not-run aborted\n' "$status" 2>/dev/null > "$STATUS_FILE" || true
+    fi
   fi
   exit "$status"
 }
+# SIGINT, SIGTERM and SIGHUP end the run in order: the supervisor stops the provider's process group, the status is
+# written, the exit status is 128 plus the signal number. Repeated signals during that wait are ignored.
+on_signal() {
+  trap '' INT TERM HUP
+  aborted_by=$1
+  if [[ -n $SUPERVISOR_PID ]]; then
+    kill -TERM "$SUPERVISOR_PID" 2>/dev/null || true
+    wait "$SUPERVISOR_PID" 2>/dev/null || true
+    SUPERVISOR_PID=
+  fi
+  exit $((128 + $2))
+}
 trap on_exit EXIT
+trap 'on_signal SIGINT 2' INT
+trap 'on_signal SIGTERM 15' TERM
+trap 'on_signal SIGHUP 1' HUP
+
+# The supervisor. It runs one provider call in its own session and process group, with every descriptor except
+# the standard ones closed, so the lock descriptor never reaches the provider or a helper the provider detaches.
+# It holds the lock itself until that group is gone. It stops the group (SIGTERM, then SIGKILL) when the call
+# exceeds its time limit, when it is told to by a signal, or when the launcher that started it has gone away
+# (parent pid changes), and in the last case writes status.txt if the launcher could not.
+SUPERVISE='
+import os, signal, subprocess, sys, time
+label, seconds, log, status, stdin_path = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4], sys.argv[5]
+command = sys.argv[6:]
+parent = os.getppid()
+requested = []
+def note(text):
+    try:
+        with open(log, "a") as handle:
+            handle.write("%s %s\n" % (time.strftime("%Y-%m-%dT%H:%M:%S%z"), text))
+    except OSError:
+        pass
+def ask(number, frame):
+    requested.append(signal.Signals(number).name)
+for number in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+    signal.signal(number, ask)
+environment = {key: value for key, value in os.environ.items() if not key.startswith("RPI_UPDATE_LOCK_")}
+try:
+    stdin = subprocess.DEVNULL if stdin_path == "-" else open(stdin_path, "rb")
+    child = subprocess.Popen(command, stdin=stdin, env=environment, close_fds=True, start_new_session=True)
+except OSError as error:
+    sys.stderr.write("RPI_PROVIDER_NOT_STARTED: %s: %s\n" % (command[0], error.strerror))
+    note("%s provider not started: %s" % (label, error.strerror))
+    sys.exit(127)
+note("%s provider pid=%d started" % (label, child.pid))
+deadline = time.time() + seconds if seconds else None
+reason = None
+while child.poll() is None:
+    if requested:
+        reason = "signal " + requested[0]
+    elif os.getppid() != parent:
+        reason = "launcher-exited"
+    elif deadline is not None and time.time() > deadline:
+        reason = "timeout"
+    if reason:
+        break
+    time.sleep(0.1)
+if reason:
+    grace = 5 if reason == "timeout" else 10
+    for number in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.killpg(child.pid, number)
+        except ProcessLookupError:
+            break
+        try:
+            child.wait(timeout=grace if number == signal.SIGTERM else 5)
+            break
+        except subprocess.TimeoutExpired:
+            continue
+    try:
+        os.killpg(child.pid, signal.SIGKILL)  # Stragglers of the group that outlived its leader.
+    except ProcessLookupError:
+        pass
+    child.wait()
+code = child.returncode if child.returncode >= 0 else 128 - child.returncode
+note("%s provider pid=%d ended exit=%d%s" % (label, child.pid, code, " after being stopped (%s)" % reason if reason else ""))
+if reason == "timeout":
+    sys.stderr.write("RPI_PROBE_TIMEOUT: the probe did not answer within %d seconds and its process group was stopped\n" % seconds)
+    sys.exit(124)
+if reason == "launcher-exited":
+    try:
+        fd = os.open(status, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+        os.write(fd, ("native_exit=%d check_exit=not-run aborted: the launcher ended during the %s call (it was killed); the provider process group was stopped\n" % (code, label)).encode())
+        os.close(fd)
+    except OSError:
+        pass
+sys.exit(code)
+'
+# run_provider <label> <seconds> <stdin file or -> <command...> -- output redirections belong to the caller.
+run_provider() {
+  local label=$1 seconds=$2 stdin_path=$3 supervised_status=0
+  shift 3
+  python3 -c "$SUPERVISE" "$label" "$seconds" "$PROVIDER_LOG" "$STATUS_FILE" "$stdin_path" "$@" &
+  SUPERVISOR_PID=$!
+  wait "$SUPERVISOR_PID" || supervised_status=$?
+  SUPERVISOR_PID=
+  return "$supervised_status"
+}
+
 probe_status=0
 require_lock
 PROBE_TIMEOUT=${RPI_UPDATE_PROBE_TIMEOUT_SECONDS:-300}
 [[ $PROBE_TIMEOUT =~ ^[0-9]+$ ]] || blocked "RPI_UPDATE_PROBE_TIMEOUT_SECONDS must be a whole number of seconds, not $PROBE_TIMEOUT" 'set it to a number such as 300, or 0 for no probe timeout'
-read -r -d '' WITH_TIMEOUT <<'PY' || true
-import os, signal, subprocess, sys
-seconds, command = int(sys.argv[1]), sys.argv[2:]
-child = subprocess.Popen(command, start_new_session=True, close_fds=False)  # Its own process group; it keeps the lock descriptor.
-try:
-    sys.exit(child.wait(timeout=seconds or None))
-except subprocess.TimeoutExpired:
-    for sent in (signal.SIGTERM, signal.SIGKILL):
-        try:
-            os.killpg(child.pid, sent)
-        except ProcessLookupError:
-            break
-        try:
-            child.wait(timeout=5)
-            break
-        except subprocess.TimeoutExpired:
-            continue
-    print('RPI_PROBE_TIMEOUT: the probe did not answer within %d seconds and its process group was stopped' % seconds, file=sys.stderr)
-    sys.exit(124)
-PY
-python3 -c "$WITH_TIMEOUT" "$PROBE_TIMEOUT" env -u ANTHROPIC_API_KEY "$CLAUDE_BIN" -p 'Reply READY only. Do not use tools or change files.' \
+run_provider probe "$PROBE_TIMEOUT" - env -u ANTHROPIC_API_KEY "$CLAUDE_BIN" -p 'Reply READY only. Do not use tools or change files.' \
   --tools '' --strict-mcp-config --permission-mode dontAsk \
   --permission-prompts none --output-format text \
   > "$probe_output" 2>&1 || probe_status=$?
@@ -220,19 +328,22 @@ if [[ $probe_status -ne 0 ]] || grep -qiE 'rate.?limit|usage limit|hit your (wee
     CODEX_SKILL=${RPI_UPDATE_CODEX_SKILL_DIR:-${HOME:-}/.agents/skills/rpi-update}
     [[ "$CODEX_SKILL" == /* ]] || blocked 'Codex skill path is not absolute' 'set RPI_UPDATE_CODEX_SKILL_DIR to the discovered user-scope skill'
     for resource in SKILL.md references/lifecycle-contract.md; do
+      [[ -f "$CODEX_SKILL/$resource" ]] || blocked "Codex lifecycle skill resource is missing: $CODEX_SKILL/$resource" 'install the user-scope rpi-update skill for Codex from the selected source, or set RPI_UPDATE_CODEX_SKILL_DIR to the directory Codex discovery reports'
       cmp -s "$CODEX_SKILL/$resource" "$CC_RPI_PATH/generated/codex/skills/rpi-update/$resource" || blocked 'Codex lifecycle skill/resources differ from selected source' 'review the separate user-scope update before scheduling; never overwrite it implicitly'
     done
     printf 'Claude preflight reported a quota or authentication limit; using Codex subscription fallback. Raw output withheld.\n' > "$RUN_DIR/preflight.txt"
-    require_lock
-    env -u OPENAI_API_KEY -u CODEX_API_KEY "$CODEX_BIN" exec --ephemeral \
-      --sandbox workspace-write -c sandbox_workspace_write.network_access=true \
-      -m "${CODEX_MODEL:-gpt-5.5}" -C "$PROJECT_ROOT" \
-      --output-last-message "$REPORT_FILE" - > /dev/null 2>/dev/null <<PROMPT || native_status=$?
-Read $CODEX_SKILL/SKILL.md and its lifecycle contract fully. Follow the installed
+    CODEX_PROMPT="Read $CODEX_SKILL/SKILL.md and its lifecycle contract fully. Follow the installed
 rpi-update skill for this single project. Do not change the user-scope skill.
 
-$BODY
-PROMPT
+$BODY"
+    printf '%s\n' "$CODEX_PROMPT" > "$RUN_DIR/codex-prompt.txt"
+    require_lock
+    # Network access stays off: the update reads and writes local files and runs local Git and engine commands, and the
+    # prompt forbids fetching or pulling. The model's own connection is not a sandboxed command and does not need it.
+    run_provider codex 0 "$RUN_DIR/codex-prompt.txt" env -u OPENAI_API_KEY -u CODEX_API_KEY "$CODEX_BIN" exec --ephemeral \
+      --sandbox workspace-write -c sandbox_workspace_write.network_access=false \
+      -m "${CODEX_MODEL:-gpt-5.5}" -C "$PROJECT_ROOT" \
+      --output-last-message "$REPORT_FILE" - > /dev/null 2>/dev/null || native_status=$?
     if [[ ! -s "$REPORT_FILE" ]]; then
       { cat "$RUN_DIR/preflight.txt"; printf 'Codex returned no final report (exit %s).\n' "$native_status"; } > "$REPORT_FILE"
       [[ $native_status -ne 0 ]] || native_status=1
@@ -240,17 +351,20 @@ PROMPT
   else
     printf 'Claude preflight failed (exit %s) without a quota or authentication signal. Raw output withheld.\n' "$probe_status" > "$REPORT_FILE"
     native_status=${probe_status:-1}
+    # No update ran: the exit code is the probe's, and the status line says so instead of calling it the update's.
+    native_label=not-run
+    probe_note=" probe_exit=$probe_status"
   fi
 else
   require_lock
-  env -u ANTHROPIC_API_KEY "${native_args[@]}" -p "$PROMPT" --permission-mode dontAsk \
+  run_provider update 0 - env -u ANTHROPIC_API_KEY "${native_args[@]}" -p "$PROMPT" --permission-mode dontAsk \
     --permission-prompts none --output-format text > "$REPORT_FILE" 2>&1 || native_status=$?
 fi
 rm -f "$probe_output"
 check_status=0
 python3 "$ENGINE" check --source "$CC_RPI_PATH" --target "$PROJECT_ROOT" \
   --harness "$RPI_HARNESS" --route "$RPI_ROUTE" > "$RUN_DIR/check.json" 2>&1 || check_status=$?
-printf 'native_exit=%s check_exit=%s report=%s\n' "$native_status" "$check_status" "$REPORT_FILE" | tee "$RUN_DIR/status.txt"
+printf 'native_exit=%s%s check_exit=%s report=%s\n' "${native_label:-$native_status}" "$probe_note" "$check_status" "$REPORT_FILE" | tee "$STATUS_FILE"
 finished=1
 [[ $native_status -eq 0 ]] || exit "$native_status"
 exit "$check_status"
