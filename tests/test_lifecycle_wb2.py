@@ -393,12 +393,35 @@ class RollbackJournalArgumentTests(Wb2Base):
         self.assertNotIn('Traceback', result.stderr)
         self.assertIn('FIX: ', result.stderr)
 
-    def test_a_wrong_name_inside_a_project_offers_the_latest_transaction_and_it_works(self):
+    def rollback_from(self, argument, cwd):
+        return subprocess.run([sys.executable, str(adopters.ENGINE), 'rollback', '--journal', str(argument)], capture_output=True, text=True, cwd=cwd)
+
+    def test_a_typo_never_offers_to_undo_a_completed_transaction(self):
+        # WB2R3-L-3: a healthy install must not be one pasted command away from being undone because of a mistyped path.
         self.apply_ready('install', '--harness', 'claude')
-        result = subprocess.run([sys.executable, str(adopters.ENGINE), 'rollback', '--journal', 'relative.json'], capture_output=True, text=True, cwd=self.project)
-        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        self.assertNotIn('Traceback', result.stderr)
-        self.shell(result.stderr.split('undo the most recent transaction with ', 1)[1].strip())
+        folder = self.project / '.rpi/local/transactions'
+        for argument, cwd in (('relative.json', self.project), ('/nonexistent', self.project), (folder, '/'), (folder / 'nothing-here', '/')):
+            with self.subTest(journal=str(argument)):
+                result = self.rollback_from(argument, cwd)
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                fix = result.stderr.split(' / FIX: ', 1)[1]
+                self.assertNotIn('rollback --journal', fix)
+                self.assertNotIn('undo', fix)
+                self.assertIn('check', fix)
+                self.assertIn('ls -d', fix)
+        # The folder named from elsewhere points at that project's transactions, and the printed listing runs.
+        listing = self.rollback_from(folder, '/').stderr.split('list them with ', 1)[1].split('), or run check', 1)[0]
+        self.assertIn('journal.json', self.shell(listing).stdout)
+        self.assertEqual(json.loads(self.journals()[-1].read_text())['status'], 'complete')
+
+    def test_a_typo_while_a_transaction_is_unfinished_names_that_transaction_and_it_works(self):
+        _, path = self.plan('install', '--harness', 'claude')
+        self.assertNotEqual(self.invoke('apply', '--plan', path, '--fail-after', '3').returncode, 0)
+        for argument in ('relative.json', self.project / '.rpi/local/transactions'):
+            result = self.rollback_from(argument, self.project)
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            self.assertIn('an apply stopped before completing', result.stderr)
+        self.shell(result.stderr.split('undo it exactly with ', 1)[1].rsplit(', then create a new plan', 1)[0])
         self.assertEqual(json.loads(self.journals()[-1].read_text())['status'], 'rolled-back')
 
     def test_a_transaction_directory_points_at_the_journal_inside_it(self):
@@ -422,27 +445,54 @@ class UserScopeAndDiagnosticsTests(Wb2Base):
         return subprocess.run([sys.executable, str(adopters.ENGINE), *map(str, arguments)], capture_output=True, text=True,
                               env={**os.environ, 'CLAUDE_CONFIG_DIR': str(self.workspace / 'user-claude')})
 
-    def user_plan(self, name):
+    # WB2-L-5
+
+    def user_plan_with(self, name, skill_root):
         output = self.plans / name
         result = self.engine('plan', '--source', self.source, '--scope', 'user', '--harness', 'claude', '--route', 'direct', '--action', 'install',
-                             '--state-root', self.workspace / 'ustate', '--claude-skill-root', self.workspace / 'uskills',
+                             '--state-root', self.workspace / 'ustate', '--claude-skill-root', skill_root,
                              '--codex-skill-root', self.workspace / 'uagents', '--output', output)
         return result, json.loads(result.stdout)
 
-    # WB2-L-5
-
     def test_user_scope_direct_install_is_blocked_while_the_plugin_is_enabled(self):
         settings = self.enable_plugin(True)
-        result, summary = self.user_plan('user-dup.json')
+        result, summary = self.user_plan_with('user-dup.json', self.workspace / 'user-claude/skills')  # The directory Claude reads.
         self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
         item = next(c for c in summary['conflicts'] if 'plugin is enabled' in c['reason'])
         self.assertEqual(os.path.realpath(item['destination']), os.path.realpath(settings))
         self.assertIn('"cc-rpi@market": false', item['fix'])
-        self.assertFalse((self.workspace / 'uskills').exists(), 'nothing was installed')
+        self.assertFalse((self.workspace / 'user-claude/skills').exists(), 'nothing was installed')
         self.enable_plugin(False)  # The printed repair.
-        result, summary = self.user_plan('user-ok.json')
+        result, summary = self.user_plan_with('user-ok.json', self.workspace / 'user-claude/skills')
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(summary['status'], 'ready')
+
+    def test_a_custom_user_skill_root_is_not_where_claude_reads_so_the_plugin_does_not_block_it(self):
+        # WB2R3-L-5
+        self.enable_plugin(True)
+        result, summary = self.user_plan_with('user-custom.json', self.workspace / 'custom-skill-root')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(summary['status'], 'ready')
+
+    def test_an_empty_or_unreadable_settings_file_is_worded_for_what_it_is(self):
+        path = self.workspace / 'user-claude/settings.json'
+        path.parent.mkdir(parents=True)
+        path.write_text('')
+        result, summary = self.user_plan_with('user-empty.json', self.workspace / 'user-claude/skills')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('it is empty', summary['notices'][0]['reason'])
+        self.assertNotIn('not valid JSON', summary['notices'][0]['reason'])
+        path.write_text('{}')
+        path.chmod(0o000)
+        self.addCleanup(path.chmod, 0o644)
+        if os.access(path, os.R_OK):
+            self.skipTest('a privileged user can read a mode 000 file')
+        result, summary = self.user_plan_with('user-unreadable.json', self.workspace / 'user-claude/skills')
+        self.assertIn('it cannot be read (Permission denied)', summary['notices'][0]['reason'])
+        self.assertNotIn('not valid JSON', summary['notices'][0]['reason'])
+        # A custom root never reads that file, so there is nothing to warn about there.
+        result, summary = self.user_plan_with('user-custom-unreadable.json', self.workspace / 'custom-skill-root')
+        self.assertNotIn('notices', summary)
 
     # WB2-L-6
 

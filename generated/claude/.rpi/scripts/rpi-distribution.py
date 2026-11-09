@@ -661,6 +661,9 @@ def main():
                 return 2
             except (OSError, ValueError, KeyError, TypeError) as error:
                 # An adopter-side failure (a plan file, a journal, the project): never send the owner to the cc-rpi source manifest.
+                if os.environ.get("RPI_TRACEBACK"):
+                    import traceback
+                    traceback.print_exc()
                 print(f"BLOCKED / WHY: {lifecycle.operation_reason(error)} / FIX: {lifecycle.operation_fix(args, error, sys.modules[__name__])}", file=sys.stderr)
                 return 1
         source = args.source.resolve()

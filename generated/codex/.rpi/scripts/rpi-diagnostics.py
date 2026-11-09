@@ -556,32 +556,41 @@ def topology(root, issues):
     return result
 
 
-def cc_rpi_skill_names(source):
-    """Names of the skills the cc-rpi source exports, or None when the source cannot say (then ownership of a name is unproven)."""
-    if not source:
-        return None
+def cc_rpi_skill_names(source, root=None):
+    """Names of the skills cc-rpi exports: from the supplied source checkout, else from the packaged manifest an installed copy
+    carries in the project (.rpi/distribution.json). None when neither can say (then ownership of a name is unproven)."""
     try:
-        engine = sibling('rpi-distribution')
-        return {c['name'] for c in engine.load_manifest(Path(source).resolve())['components'] if c['kind'] == 'skill'}
+        if source:
+            engine = sibling('rpi-distribution')
+            return {c['name'] for c in engine.load_manifest(Path(source).resolve())['components'] if c['kind'] == 'skill'}
     except (OSError, ValueError, KeyError, TypeError):
-        return None
+        pass
+    try:
+        if root is not None:
+            packaged = json.loads((Path(root) / '.rpi/distribution.json').read_text())
+            return {c['name'] for c in packaged['components'] if c['kind'] == 'skill'} or None
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        pass
+    return None
 
 
 def duplicate_registrations(root, state, issues, source=None):
     """Report the cc-rpi skills registered twice: a direct Claude installation while the plugin is enabled, or a plugin
     route recorded while direct cc-rpi skills are also present.
 
-    A skill the owner wrote (any other name, even under rpi-) is never counted. With no installation recorded, only a
-    directory named like a skill of the supplied cc-rpi source counts, since nothing else proves a direct cc-rpi installation."""
+    A skill the owner wrote (any other name, even under rpi-) is never counted. Only a directory named like a skill of the
+    supplied cc-rpi source, or like one the installation recorded, counts; with neither list available nothing is claimed."""
     lifecycle = sibling('rpi-lifecycle')
     plugins = lifecycle.enabled_cc_rpi_plugins(root)
     selections = (state or {}).get('installations', {}) if isinstance(state, dict) else {}
     route = (selections.get('claude') or {}).get('route') if isinstance(selections.get('claude'), dict) else None
-    names = cc_rpi_skill_names(source)
+    names = cc_rpi_skill_names(source, root)
+    if names is None and isinstance(state, dict):
+        # An installed copy of the engine has no source checkout; the installation's own record names what it installed directly.
+        names = {match[1] for entry in state.get('entries', []) if isinstance(entry, dict)
+                 for match in [re.match(r'\.claude/skills/([^/]+)/', str(entry.get('destination', '')))] if match} or None
     direct_skills = sorted(path.parent.name for path in (root / '.claude/skills').glob('rpi-*/SKILL.md')
-                           if names is None or path.parent.name in names) if (root / '.claude/skills').is_dir() else []
-    if route is None and names is None:
-        direct_skills = []
+                           if names is not None and path.parent.name in names) if (root / '.claude/skills').is_dir() else []
     if plugins and (route == 'direct' or (route is None and direct_skills)):
         issues.append({'id': 'duplicate-registration', 'path': plugins[0][0], 'status': 'the cc-rpi plugin (' + plugins[0][1] +
                        ') is enabled and the cc-rpi skills are also installed directly',

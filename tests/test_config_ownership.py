@@ -94,27 +94,49 @@ class ConfigurationOwnershipTests(unittest.TestCase):
         self.assertEqual(blocked['content'], local)
         detached = reconcile(local, [record()], [], allow_removal=True)
         self.assertFalse(detached['conflicts'])
-        # WB2-L-7: nothing but the owned entry was in the file, so nothing is left of it (no empty ask/permissions skeleton).
-        self.assertIsNone(detached['content'])
+        # Without a record of what the install created (an older installation) nothing is pruned or deleted.
+        self.assertEqual(json.loads(detached['content']), {'permissions': {'ask': []}})
+        # WB2R3-L-2: with the record, the containers the install created go, and so does a file it created that is now empty.
+        made = {'permission:publish': [['permissions'], ['permissions', 'ask']]}
+        recorded = reconcile(local, [record()], [], allow_removal=True, created=made, file_created=True)
+        self.assertIsNone(recorded['content'])
+        owner_file = reconcile(local, [record()], [], allow_removal=True, created=made, file_created=False)
+        self.assertEqual(json.loads(owner_file['content']), {}, 'a file the owner had is never deleted')
 
-    def test_removing_an_owned_entry_prunes_only_the_containers_it_emptied(self):
+    def test_removing_an_owned_entry_prunes_only_the_containers_the_install_created(self):
         owned = record()
-        cases = [(b'{"model":"x","permissions":{"ask":["Bash(git push:*)"]}}', {'model': 'x'}),
-                 (b'{"permissions":{"ask":["Bash(git push:*)","mine"]}}', {'permissions': {'ask': ['mine']}}),
-                 (b'{"permissions":{"ask":["Bash(git push:*)"],"deny":["Read(.env)"]}}', {'permissions': {'deny': ['Read(.env)']}}),
-                 (b'{"permissions":{"ask":["Bash(git push:*)"],"deny":[]}}', {'permissions': {'deny': []}})]
-        for local, expected in cases:
-            with self.subTest(local=local):
-                result = reconcile(local, [owned], [], allow_removal=True)
+        both = {'permission:publish': [['permissions'], ['permissions', 'ask']]}
+        ask_only = {'permission:publish': [['permissions', 'ask']]}
+        cases = [(b'{"model":"x","permissions":{"ask":["Bash(git push:*)"]}}', both, {'model': 'x'}),
+                 (b'{"permissions":{"ask":["Bash(git push:*)","mine"]}}', both, {'permissions': {'ask': ['mine']}}),
+                 (b'{"permissions":{"ask":["Bash(git push:*)"],"deny":["Read(.env)"]}}', both, {'permissions': {'deny': ['Read(.env)']}}),
+                 # The owner's own empty containers are not the install's to remove.
+                 (b'{"permissions":{"ask":["Bash(git push:*)"],"deny":[]}}', both, {'permissions': {'deny': []}}),
+                 (b'{"permissions":{"ask":["Bash(git push:*)"]}}', ask_only, {'permissions': {}}),
+                 (b'{"permissions":{"ask":["Bash(git push:*)"]}}', {}, {'permissions': {'ask': []}})]
+        for local, made, expected in cases:
+            with self.subTest(local=local, made=made):
+                result = reconcile(local, [owned], [], allow_removal=True, created=made)
                 self.assertEqual(json.loads(result['content']), expected)
         scalar = {'id': 'option:flag', 'pointer': ['env', 'deep', 'flag'], 'mode': 'value', 'value': True}
-        self.assertEqual(json.loads(reconcile(b'{"model":"x","env":{"deep":{"flag":true}}}', [scalar], [], allow_removal=True)['content']), {'model': 'x'})
-        self.assertEqual(json.loads(reconcile(b'{"env":{"deep":{"flag":true,"other":1}}}', [scalar], [], allow_removal=True)['content']),
+        made = {'option:flag': [['env'], ['env', 'deep']]}
+        self.assertEqual(json.loads(reconcile(b'{"model":"x","env":{"deep":{"flag":true}}}', [scalar], [], allow_removal=True, created=made)['content']), {'model': 'x'})
+        self.assertEqual(json.loads(reconcile(b'{"env":{"deep":{"flag":true,"other":1}}}', [scalar], [], allow_removal=True, created=made)['content']),
                          {'env': {'deep': {'other': 1}}})
-        self.assertIsNone(reconcile(b'{"env":{"deep":{"flag":true}}}', [scalar], [], allow_removal=True)['content'])
-        # An owner file that was already empty of our entry is left exactly as it was.
+        self.assertIsNone(reconcile(b'{"env":{"deep":{"flag":true}}}', [scalar], [], allow_removal=True, created=made, file_created=True)['content'])
+        # An owner file with nothing to remove is left exactly as it was, whatever was recorded.
         untouched = b'{"permissions":{"ask":[]}}'
-        self.assertEqual(reconcile(untouched, [], [], allow_removal=True)['content'], untouched)
+        self.assertEqual(reconcile(untouched, [], [], allow_removal=True, created=both, file_created=True)['content'], untouched)
+
+    def test_adding_an_owned_entry_reports_the_containers_it_created(self):
+        added = reconcile(b'{"permissions":{"deny":[]}}', [], [record()], allow_capabilities=True)
+        self.assertEqual(added['created'], {'permission:publish': [['permissions', 'ask']]})
+        fresh = reconcile(None, [], [record()], allow_capabilities=True)
+        self.assertEqual(fresh['created'], {'permission:publish': [['permissions'], ['permissions', 'ask']]})
+        existing = reconcile(b'{"permissions":{"ask":["mine"]}}', [], [record()], allow_capabilities=True)
+        self.assertEqual(existing['created'], {})
+        scalar = {'id': 'option:flag', 'pointer': ['env', 'deep', 'flag'], 'mode': 'value', 'value': True}
+        self.assertEqual(reconcile(b'{"env":{}}', [], [scalar], allow_capabilities=True)['created'], {'option:flag': [['env', 'deep']]})
 
     def test_update_does_not_claim_matching_unowned_array_entry(self):
         local = b'{"permissions":{"ask":["old","new"]}}'

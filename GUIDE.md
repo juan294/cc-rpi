@@ -241,7 +241,7 @@ and re-runs it; a rollback that was cut off partway is named by `check` with the
 changed mode is drift that an update repairs. Detach removes only unchanged proven ownership and leaves
 research, plans, decisions, custom files and separate user/plugin installations;
 `check` then reports `detached` with exit 0 and the command that installs again; native
-settings the install created are removed again, and an owner's settings keep only the owner's keys.
+settings the install created are removed again (it records what it created), and an owner's settings are never deleted or emptied further.
 `scripts/install.sh` may be run through a symbolic link.
 
 Schedules require explicit setup and resource authorization. The optional
