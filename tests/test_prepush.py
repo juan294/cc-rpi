@@ -843,6 +843,17 @@ class GateFindingTests(InstalledHookFixture):
                     self.assertIn('runs rpi-prepush.py; left unchanged', result.stdout)
                     self.assertIn('WARNING', result.stdout)
 
+    def test_a_hook_line_that_starts_with_the_bare_gate_name_counts(self):
+        """WB2-S-4: the detection must not need a character before the script name (the old pipeline matched these)."""
+        for link in (False, True):
+            for text in ('rpi-prepush.py', 'rpi-prepush.py "$@"\n', '\trpi-prepush.py "$@" || exit 1\n',
+                         '#!/bin/sh\n  rpi-prepush.py "$@"\n', '#!/bin/sh\n./rpi-prepush.py "$@"\n'):
+                with self.subTest(link=link, text=text):
+                    result = self.foreign(text, link)
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    self.assertIn('runs rpi-prepush.py; left unchanged', result.stdout)
+                    self.assertEqual(self.hook().read_text(), text)
+
     def test_the_refusal_for_a_foreign_hook_says_where_to_add_the_line(self):
         result = self.foreign('#!/bin/sh\nexit 0\n')
         self.assertIn('near the top of that hook, before any exit', result.stderr)
