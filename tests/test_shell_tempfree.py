@@ -20,10 +20,11 @@ ROOT = Path(__file__).resolve().parents[1]
 INVARIANT = ('templates/scripts/check-tree-drift.sh', 'templates/scripts/verify-version.sh',
              'templates/scripts/verify-counts.sh')
 TEMP_FREE = INVARIANT + ('templates/scripts/cc-rpi-update-agent.sh', 'templates/scripts/morning-triage.sh',
-                         'templates/scripts/verify-skills.sh', 'templates/hooks/guard-bash.sh',
+                         'templates/scripts/verify-skills.sh', 'templates/scripts/agents/install-agents.sh', 'templates/hooks/guard-bash.sh',
                          'templates/hooks/verify-edit.sh')
-# A here-document (<<WORD, <<'WORD', <<-WORD) or a here-string (<<<); never the arithmetic shift.
-TEMP_FILE_REDIRECTION = re.compile(r'<<<|<<-?\s*[\\\'"A-Za-z_]')
+# A here-document (<<WORD, <<'WORD', <<-WORD), a here-string (<<<) or a process substitution (< <(cmd)); never the
+# arithmetic shift. The last needs no temporary file on macOS, but it hides a failing producer as an empty loop.
+TEMP_FILE_REDIRECTION = re.compile(r'<<<|<<-?\s*[\\\'"A-Za-z_]|(?<!<)<\(')
 SANDBOX = shutil.which('sandbox-exec')
 
 

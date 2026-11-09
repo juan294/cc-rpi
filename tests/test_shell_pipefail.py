@@ -12,6 +12,7 @@ that does not read all of its input, cmp or diff reading standard input, and sor
 from pathlib import Path
 import re
 import shlex
+import shutil
 import subprocess
 import unittest
 
@@ -21,12 +22,26 @@ SCRIPTS = ('templates/scripts/check-tree-drift.sh', 'templates/scripts/verify-ve
 BIG = 'first-entry\\n' + 'filler-line-padding-to-fill-the-pipe-buffer-000000\\n' * 2500
 
 TERMINATORS = {'|', '||', '&&', ';', ';;', '&', ')', '|&', '(', '\n'}
-WRAPPERS = {'{', '(', '!', 'env', 'command', 'builtin', 'exec', 'time', 'nohup'}
+REDIRECTIONS = {'>', '>>', '<', '>&', '<&', '>|', '&>', '&>>', '<>'}
+# Commands that run another command and pass standard input through: name -> options that take a value.
+TRANSPARENT = {
+    '{': set(), '(': set(), '!': set(), 'builtin': set(), 'command': set(), 'nohup': set(), 'exec': {'-a'},
+    'time': {'-f', '-o', '--format', '--output'}, 'env': {'-u', '-C', '-S', '--unset', '--chdir'},
+    'timeout': {'-s', '-k', '--signal', '--kill-after'},
+    'sudo': {'-u', '-g', '-h', '-p', '-C', '-D', '-R', '-T', '-U', '--user', '--group', '--host', '--prompt', '--chdir'},
+    'xargs': {'-n', '-I', '-P', '-L', '-d', '-s', '-a', '-E', '-J', '--max-args', '--max-procs', '--replace', '--delimiter'},
+    'nice': {'-n', '--adjustment'}, 'ionice': {'-c', '-n', '-p'}, 'stdbuf': {'-i', '-o', '-e'},
+    'gtimeout': {'-s', '-k'}, 'chrt': set(), 'taskset': set(),
+}
 GREP_NAMES = {'grep', 'egrep', 'fgrep', 'rg', 'ugrep', 'ggrep'}
 GREP_LONG = {'--quiet', '--silent', '--files-with-matches', '--max-count'}
 GREP_SHORT = re.compile(r'^-[A-Za-z0-9]*[qlm][A-Za-z0-9]*$')
+# An unquoted variable where grep expects options or its pattern (grep $QF x): it can hold -q.
+GREP_VARIABLE_FLAG = re.compile(r'\|[^|]*?\b(?:ggrep|egrep|fgrep|grep)\s+(?:-\S+\s+)*\$\{?[A-Za-z_]\w*\}?(?=\s|$)')
 SED_QUIT = re.compile(r'(?:^|[;{}\s/$!0-9])[qQ][0-9]*\s*(?:$|[;}])')
 READS_ALL = re.compile(r'sys\.stdin\.read\(\)|json\.loads?\(sys\.stdin|sys\.stdin\.readlines\(|for \w+ in sys\.stdin|\.read\(\)')
+READS_ONE = re.compile(r'stdin\.readline|\binput\(|next\(sys\.stdin|stdin\.read\(\s*\d|\.readline\(')
+STANDARD_INPUT = ('-', '/dev/stdin', '/dev/fd/0')
 
 
 def run_bash(program):
@@ -34,7 +49,7 @@ def run_bash(program):
 
 
 def logical_commands(text):
-    """Yield (first physical line number, command text) with continuations joined and heredoc bodies skipped."""
+    """Return (first physical line number, command text, heredoc body text) for each command, continuations joined."""
     lines = text.splitlines()
     index, produced = 0, []
     while index < len(lines):
@@ -58,11 +73,13 @@ def logical_commands(text):
                     index += 1
                     continue
             index += 1
-        produced.append((number, command))
+        body = []
         for tag in re.findall(r"<<-?\s*['\"]?([A-Za-z_]+)['\"]?", command):
             while index < len(lines) and lines[index].strip() != tag:
+                body.append(lines[index])
                 index += 1
             index += 1
+        produced.append((number, command, '\n'.join(body)))
     return produced
 
 
@@ -80,26 +97,69 @@ def words(command):
         return command.split()
 
 
-def early_exit_readers(command):
+def strip_prefixes(stage):
+    """Drop leading redirections, variable assignments and transparent wrappers (timeout 5, sudo -u x, xargs -n1, ...)."""
+    while stage:
+        if re.fullmatch(r'\d*', stage[0]) and len(stage) > 2 and stage[1] in REDIRECTIONS:
+            stage = stage[3:]
+        elif stage[0] in REDIRECTIONS and len(stage) > 1:
+            stage = stage[2:]
+        elif re.match(r'^[A-Za-z_]\w*=', stage[0]):
+            stage = stage[1:]
+        elif Path(stage[0]).name in TRANSPARENT:
+            name, rest = Path(stage[0]).name, stage[1:]
+            while rest and rest[0].startswith('-') and rest[0] != '-':
+                option, rest = rest[0], rest[1:]
+                if option in TRANSPARENT[name] and rest:
+                    rest = rest[1:]
+            if name in ('timeout', 'gtimeout') and rest:
+                rest = rest[1:]  # The duration.
+            stage = rest
+        else:
+            break
+    return stage
+
+
+def loop_body(tokens, start):
+    """The tokens of a while or until loop that starts at `start`, up to its matching `done`."""
+    depth, body = 0, []
+    for token in tokens[start:]:
+        if token in ('while', 'until', 'for', 'select'):
+            depth += 1
+        elif token == 'done':
+            depth -= 1
+            if depth <= 0:
+                break
+        body.append(token)
+    return body
+
+
+def early_exit_readers(command, heredoc=''):
     """Names of the early-exit readers that sit after a pipe in this command."""
     tokens, found = words(command), []
+    if GREP_VARIABLE_FLAG.search(command):
+        found.append('grep with an unquoted variable where its options go')
     for position, token in enumerate(tokens):
         if token not in ('|', '|&'):
             continue
+        following = tokens[position + 1:]
         stage = []
-        for follower in tokens[position + 1:]:
+        for follower in following:
+            if follower == '(' and not stage:
+                stage.append(follower)  # `| ( read x )`: a subshell is a wrapper, not the end of the stage.
+                continue
             if follower in TERMINATORS:
                 break
             stage.append(follower)
-        while stage and (stage[0] in WRAPPERS or re.match(r'^[A-Za-z_]\w*=', stage[0])):
-            stage = stage[1:]
-        if stage and stage[0] == 'env':
-            stage = [word for word in stage[1:] if not word.startswith('-') and '=' not in word]
+        stage = strip_prefixes(stage)
         if not stage:
             continue
         name, arguments = Path(stage[0]).name, stage[1:]
         if name in ('head', 'read'):
             found.append(name)
+        elif name in ('while', 'until'):
+            if {'break', 'exit', 'return'} & set(loop_body(following, following.index(stage[0]))):
+                found.append('while loop that leaves before the input ends')
         elif name in GREP_NAMES and any(a in GREP_LONG or a.startswith('--max-count=') or GREP_SHORT.match(a) for a in arguments):
             found.append(name + ' quiet/first-match option')
         elif name == 'sed' and any(SED_QUIT.search(a) for a in arguments if not a.startswith('-') or a.startswith('-e')):
@@ -109,9 +169,11 @@ def early_exit_readers(command):
         elif re.match(r'^(python[0-9.]*|perl|ruby|node)$', name) and any(a in ('-c', '-e') for a in arguments) \
                 and not READS_ALL.search(' '.join(arguments)):
             found.append(name + ' inline program that may stop reading')
-        elif name == 'cmp' and '-' in arguments:
+        elif re.match(r'^python[0-9.]*$', name) and '-' in arguments and READS_ONE.search(heredoc):
+            found.append(name + ' program on standard input that reads one line')
+        elif name == 'cmp' and any(a in STANDARD_INPUT for a in arguments):
             found.append('cmp on standard input')
-        elif name == 'diff' and '-' in arguments and any(a in ('-q', '--brief') for a in arguments):
+        elif name == 'diff' and any(a in STANDARD_INPUT for a in arguments) and any(a in ('-q', '--brief') for a in arguments):
             found.append('diff -q on standard input')
         elif name == 'sort' and any(a in ('-c', '-C', '--check') for a in arguments):
             found.append('sort -c')
@@ -155,8 +217,8 @@ class PipefailMembershipTests(unittest.TestCase):
         for path in sorted(list((ROOT / 'templates').rglob('*.sh')) + list((ROOT / 'scripts').rglob('*.sh'))):
             if path.is_symlink() or 'pipefail' not in path.read_text():
                 continue
-            for number, command in logical_commands(path.read_text()):
-                for reader in early_exit_readers(command):
+            for number, command, heredoc in logical_commands(path.read_text()):
+                for reader in early_exit_readers(command, heredoc):
                     offenders.append('%s:%d: %s [%s]' % (path.relative_to(ROOT), number, command.strip()[:100], reader))
         self.assertEqual(offenders, [], 'an early-exit reader after a pipe races its producer under pipefail; use a case test or a file argument')
 
@@ -190,10 +252,30 @@ class PipefailMembershipTests(unittest.TestCase):
             'multi-line leading pipe': "printf '%s\\n' \"$L\"\n  | grep --quiet x",
             'multi-line backslash': "printf '%s\\n' \"$L\" \\\n  | grep -q x",
             'third stage': "cat f | tr a b | head -3",
+            'timeout prefix': "printf '%s\\n' \"$L\" | timeout 5 grep -q x",
+            'timeout with options': "printf '%s\\n' \"$L\" | timeout -k 2 5 grep -q x",
+            'redirect before the command': "printf '%s\\n' \"$L\" | 2>/dev/null grep -q x",
+            'stderr merge before the command': "printf '%s\\n' \"$L\" | 2>&1 grep -q x",
+            'while read then break': "printf '%s\\n' \"$L\" | while read -r x; do break; done",
+            'while with a body that returns': "printf '%s\\n' \"$L\" | while IFS= read -r line; do [ \"$line\" = x ] && break; done",
+            'cmp /dev/stdin': "printf '%s\\n' \"$L\" | cmp -s /dev/stdin file",
+            'diff -q /dev/stdin': "printf '%s\\n' \"$L\" | diff -q /dev/stdin file",
+            'xargs grep -q': "printf '%s\\n' \"$L\" | xargs grep -q x",
+            'xargs -n1 grep -q': "printf '%s\\n' \"$L\" | xargs -n 1 grep -q x",
+            'sudo grep -q': "printf '%s\\n' \"$L\" | sudo -n grep -q x",
+            'sudo -u user grep -q': "printf '%s\\n' \"$L\" | sudo -u root grep -q x",
+            'nice grep -q': "printf '%s\\n' \"$L\" | nice -n 5 grep -q x",
+            'env grep -q': "printf '%s\\n' \"$L\" | env -i LC_ALL=C grep -q x",
+            'exec grep -q': "printf '%s\\n' \"$L\" | exec grep -q x",
+            'command grep -q': "printf '%s\\n' \"$L\" | command grep -q x",
+            'variable flag': "printf '%s\\n' \"$L\" | grep $QF x",
+            'variable flag after options': "printf '%s\\n' \"$L\" | grep -F ${FLAGS} x",
+            'python heredoc reading one line': "printf '%s\\n' \"$L\" | python3 - <<'EOF'\nimport sys\nprint(sys.stdin.readline())\nEOF",
+            'subshell read': "printf '%s\\n' \"$L\" | ( read -r first )",
         }
         for label, source in spellings.items():
             with self.subTest(label):
-                flagged = [reader for _, command in logical_commands(source) for reader in early_exit_readers(command)]
+                flagged = [reader for _, command, heredoc in logical_commands(source) for reader in early_exit_readers(command, heredoc)]
                 self.assertTrue(flagged, label + ' must be flagged')
 
     def test_the_guard_leaves_readers_that_consume_all_their_input_alone(self):
@@ -214,19 +296,30 @@ class PipefailMembershipTests(unittest.TestCase):
             "python3 -c 'print(1)' | wc -l",
             "printf '%s\\n' \"$L\" | python3 -c 'import sys; print(sys.stdin.read())'",
             "grep -q x file",
+            "printf '%s\\n' \"$L\" | timeout 5 grep -c x",
+            "printf '%s\\n' \"$L\" | 2>/dev/null grep -v x",
+            "printf '%s\\n' \"$L\" | while IFS= read -r line; do echo \"$line\"; done",
+            "printf '%s\\n' \"$L\" | xargs -n 1 echo",
+            "printf '%s\\n' \"$L\" | sudo -n tr a b",
+            "printf '%s\\n' \"$L\" | grep -v \"$QF\"",
+            "printf '%s\\n' \"$L\" | grep -F -- \"$pattern\"",
+            "printf '%s\\n' \"$L\" | python3 - <<'EOF'\nimport sys\nprint(len(sys.stdin.read()))\nEOF",
             "[[ $a == b || $c == d ]]",
             "x=$(cmd) || true",
             "cat <<'TXT'\nfoo | head -1\nTXT",
         ]
         for source in harmless:
             with self.subTest(source):
-                flagged = [reader for _, command in logical_commands(source) for reader in early_exit_readers(command)]
+                flagged = [reader for _, command, heredoc in logical_commands(source) for reader in early_exit_readers(command, heredoc)]
                 self.assertEqual(flagged, [])
 
     def test_the_forms_the_guard_forbids_really_do_fail_ten_out_of_ten_with_a_large_producer(self):
         # The reproduction behind the guard: each of these loses a present entry under pipefail with a 150 KB producer.
         forms = ["grep --quiet first-entry", "grep -F first-entry -q", "grep -e first-entry -q",
-                 "sed '/first-entry/q' | grep -q first-entry", "{ read -r first; [ \"$first\" = first-entry ]; }"]
+                 "sed '/first-entry/q' | grep -q first-entry", "{ read -r first; [ \"$first\" = first-entry ]; }",
+                 "2>/dev/null grep -q first-entry", "while read -r first; do break; done"]
+        if shutil.which('timeout'):
+            forms.append("timeout 5 grep -q first-entry")
         for form in forms:
             with self.subTest(form):
                 program = ("set -o pipefail; BIG=$(printf 'first-entry\\n'; for i in $(seq 1 3000); do echo "

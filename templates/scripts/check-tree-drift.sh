@@ -178,19 +178,20 @@ if [[ -n "$DUPES" ]]; then
   FAILED=1
 fi
 
-# The shared files are read as one name per line, so a name with a line break in it would be cut in two and its halves
-# skipped as "not in templates/": an unrecorded shared file would pass. Refuse such names instead of misreading them.
+# The shared files are read as one path per line, so a path with a line break in it, in the file name or in any directory
+# above it (-path, not -name), would be cut in two and its halves skipped as "not in templates/": an unrecorded shared
+# file would pass. Refuse such paths instead of misreading them.
 set --
 for shared_dir in .claude/commands .claude/hooks .claude/scripts .claude/rules .claude/skills; do
   if [[ -d "$shared_dir" ]]; then set -- "$@" "$shared_dir"; fi
 done
 SHARED=""
 if [[ "$#" -gt 0 ]]; then
-  NEWLINE_NAMES="$(find "$@" \( -type f -o -type l \) -name $'*\n*' -print | tr '\n' ' ')"
+  NEWLINE_NAMES="$(find "$@" \( -type f -o -type l \) -path $'*\n*' -print | tr '\n' ' ')"
   if [[ -n "$NEWLINE_NAMES" ]]; then
-    emit_block "A shared file name contains a line break: $NEWLINE_NAMES" \
-      "The drift check reads one file name per line, so it cannot compare such a name against $MANIFEST and an unrecorded shared file could pass unseen." \
-      "  Rename the file so its name has no line break, in both templates/ and .claude/."
+    emit_block "A shared file path contains a line break: $NEWLINE_NAMES" \
+      "The drift check reads one path per line, so it cannot compare such a path against $MANIFEST and an unrecorded shared file could pass unseen." \
+      "  Rename the file or the directory so its path has no line break, in both templates/ and .claude/."
     exit 2
   fi
   SHARED="$(find "$@" \( -type f -o -type l \) | sort)"

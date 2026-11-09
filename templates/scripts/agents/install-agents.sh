@@ -121,10 +121,12 @@ generate_plist() {
     <integer>${minute}</integer>"
   fi
 
-  cat <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
+  # Built in a variable and printed: a here-document is a temporary file under bash 3.2, and where no temporary
+  # directory is writable it would fail and leave an empty plist.
+  local plist
+  plist="<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">
+<plist version=\"1.0\">
 <dict>
   <key>Label</key>
   <string>$(xml_text "$label")</string>
@@ -169,8 +171,8 @@ ${calendar_interval}
     <string>$(xml_text "/opt/homebrew/bin:/usr/local/bin:${HOME}/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin")</string>
   </dict>
 </dict>
-</plist>
-PLIST
+</plist>"
+  printf '%s\n' "$plist"
 }
 
 # Discover all agent scripts with SCHEDULE comments
@@ -187,6 +189,18 @@ discover_agents() {
     fi
   done
 }
+
+# discovered_agents -- one NAME|SCRIPT row per line, collected into DISCOVERED so the loops below walk a variable,
+# not a process substitution (a failing discovery would otherwise be an empty loop, unseen).
+next_agent() {
+  case $DISCOVERED in
+    *$'\n'*) AGENT_ROW=${DISCOVERED%%$'\n'*}; DISCOVERED=${DISCOVERED#*$'\n'} ;;
+    *) AGENT_ROW=$DISCOVERED; DISCOVERED='' ;;
+  esac
+  agent_name=${AGENT_ROW%%|*}
+  script_path=${AGENT_ROW#*|}
+}
+
 
 # ---------------------------------------------------------------------------
 # Commands
@@ -213,7 +227,10 @@ cmd_install() {
   mkdir -p "${PROJECT_DIR}/docs/agents"
 
   local count=0
-  while IFS='|' read -r agent_name script_path; do
+  DISCOVERED=$(discover_agents)
+  while [ -n "$DISCOVERED" ]; do
+    next_agent
+    [ -n "$AGENT_ROW" ] || continue
     local label="${LABEL_PREFIX}.${agent_name}"
     local target="${LAUNCH_AGENTS_DIR}/${label}.plist"
 
@@ -229,7 +246,7 @@ cmd_install() {
     schedule=$(parse_schedule "${script_path}")
     echo "  Installed ${agent_name} (${schedule})"
     count=$((count + 1))
-  done < <(discover_agents)
+  done
 
   if [ "$count" -eq 0 ]; then
     echo "  No agent scripts with SCHEDULE comments found."
@@ -312,7 +329,10 @@ cmd_status() {
   echo ""
   scheduler_inventory
   local found=false
-  while IFS='|' read -r agent_name script_path; do
+  DISCOVERED=$(discover_agents)
+  while [ -n "$DISCOVERED" ]; do
+    next_agent
+    [ -n "$AGENT_ROW" ] || continue
     local label="${LABEL_PREFIX}.${agent_name}"
     local schedule
     schedule=$(parse_schedule "${script_path}")
@@ -324,7 +344,7 @@ cmd_status() {
     fi
     printf "  %-25s %-20s %s\n" "${agent_name}" "${schedule}" "${status}"
     found=true
-  done < <(discover_agents)
+  done
 
   if [ "$found" = false ]; then
     echo "  No agent scripts with SCHEDULE comments found."
@@ -334,11 +354,14 @@ cmd_status() {
 cmd_list() {
   echo "Discoverable agents in ${SCRIPT_DIR}:"
   echo ""
-  while IFS='|' read -r agent_name script_path; do
+  DISCOVERED=$(discover_agents)
+  while [ -n "$DISCOVERED" ]; do
+    next_agent
+    [ -n "$AGENT_ROW" ] || continue
     local schedule
     schedule=$(parse_schedule "${script_path}")
     printf "  %-25s %s\n" "${agent_name}" "${schedule}"
-  done < <(discover_agents)
+  done
 }
 
 # ---------------------------------------------------------------------------

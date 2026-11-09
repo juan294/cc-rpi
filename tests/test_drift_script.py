@@ -142,7 +142,17 @@ class DriftScriptTests(unittest.TestCase):
         # The names were read one per line, so this one was cut in two, both halves were skipped as "not in templates/",
         # and the script exited 0 with an unrecorded shared file.
         self.share('wb2-nl\nfoo.sh')
-        output = self.expect(2, 'BLOCKED: A shared file name contains a line break')
+        output = self.expect(2, 'BLOCKED: A shared file path contains a line break')
+        self.assertIn('FIX:', output)
+
+    def test_an_unrecorded_shared_file_under_a_directory_whose_name_contains_a_line_break_is_blocked(self):
+        # The guard looked at file names only: a line break in a directory name still split the path into two lines
+        # that were both skipped, and the script exited 0.
+        for tree in ('templates/commands', '.claude/commands'):
+            directory = self.fixture / tree / 'wb2-a\nb'
+            directory.mkdir(parents=True)
+            (directory / 'c.md').write_text('x\n')
+        output = self.expect(2, 'BLOCKED: A shared file path contains a line break')
         self.assertIn('FIX:', output)
 
     def test_a_name_with_a_line_break_in_a_listed_row_cannot_hide_other_drift(self):
