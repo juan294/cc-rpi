@@ -26,8 +26,13 @@ class ScheduledUpdateTests(unittest.TestCase):
             exclude.write('\n.rpi/local/\n')
         engine = self.source / 'templates/scripts/rpi-distribution.py'
         engine.parent.mkdir(parents=True)
-        engine.write_text('import json, os, sys\n'
+        engine.write_text('import json, os, sys, time\n'
             'with open(os.environ["FAKE_ENGINE_LOG"],"a") as log: log.write(json.dumps(sys.argv[1:])+"\\n")\n'
+            'hold = os.environ.get("FAKE_ENGINE_HOLD")\n'
+            'if hold and sys.argv[1] == "check":\n'
+            '    open(hold + ".ready", "w").close()\n'
+            '    deadline = time.time() + 40\n'
+            '    while not os.path.exists(hold + ".release") and time.time() < deadline: time.sleep(0.05)\n'
             'raise SystemExit(int(json.loads(os.environ.get("FAKE_ENGINE_CODES","{}")).get(sys.argv[1],0)))\n')
         for relative in ['templates/distribution.json', '.claude-plugin/plugin.json',
                          'generated/claude/skills/rpi-update/SKILL.md',
@@ -67,6 +72,15 @@ class ScheduledUpdateTests(unittest.TestCase):
             '    open(detach, "w").write(str(child.pid))\n'
             'update_hold = os.environ.get("FAKE_CLI_UPDATE_HOLD")\n'
             'if os.environ.get("FAKE_CLI_IGNORE_TERM"): signal.signal(signal.SIGTERM, signal.SIG_IGN)\n'
+            'straggler = os.environ.get("FAKE_CLI_STRAGGLER")\n'
+            'if straggler and not probe:\n'
+            '    import subprocess\n'
+            '    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n'
+            '    open(straggler, "w").write(str(child.pid))\n'
+            'disposition_report = os.environ.get("FAKE_CLI_DISPOSITIONS")\n'
+            'if disposition_report:\n'
+            '    state = {name: ("ignored" if signal.getsignal(getattr(signal, name)) == signal.SIG_IGN else "default" if signal.getsignal(getattr(signal, name)) == signal.SIG_DFL else "handled") for name in ("SIGINT", "SIGHUP", "SIGTERM")}\n'
+            '    with open(disposition_report, "a") as out: out.write(json.dumps({"probe": probe, **state}) + "\\n")\n'
             'fd_report = os.environ.get("FAKE_CLI_FD_REPORT")\n'
             'if fd_report:\n'
             '    lock = os.environ["FAKE_LOCK_FILE"]\n'
@@ -107,25 +121,47 @@ class ScheduledUpdateTests(unittest.TestCase):
         return subprocess.run(['bash', str(ROOT / 'templates/scripts/cc-rpi-update-agent.sh')],
                               env=self.env, capture_output=True, text=True, timeout=10)
 
-    def start_held_run(self, name='first', env=None, phase='probe', group=False):
-        """A launcher run that parks inside its provider call (probe or update) until the test releases it.
+    @staticmethod
+    def dispositions(ignore=()):
+        """Child setup that fixes the signal dispositions a test depends on, whatever the suite itself inherited.
 
-        With group=True the launcher leads its own session and process group, so a test can signal exactly that group."""
+        A suite started with `&` or nohup has SIGINT or SIGHUP ignored, and every child would inherit that."""
+        def apply():
+            for name in ('SIGINT', 'SIGHUP', 'SIGTERM'):
+                signal.signal(getattr(signal, name), signal.SIG_IGN if name in ignore else signal.SIG_DFL)
+        return apply
+
+    def start_held_run(self, name='first', env=None, phase='probe', group=False, ignore=()):
+        """A launcher run that parks inside its provider call (probe or update) or its installation check until the
+        test releases it. With group=True the launcher leads its own session and process group, so a test can signal
+        exactly that group; `ignore` names the signals the launcher inherits as ignored (the rest are default)."""
         hold = self.root / ('hold-' + name)
-        variable = 'FAKE_CLI_HOLD' if phase == 'probe' else 'FAKE_CLI_UPDATE_HOLD'
+        variable = {'probe': 'FAKE_CLI_HOLD', 'update': 'FAKE_CLI_UPDATE_HOLD', 'check': 'FAKE_ENGINE_HOLD'}[phase]
         process = subprocess.Popen(['bash', str(ROOT / 'templates/scripts/cc-rpi-update-agent.sh')],
                                    env={**self.env, **(env or {}), variable: str(hold)}, start_new_session=group,
+                                   preexec_fn=self.dispositions(ignore),
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         self.addCleanup(lambda: (process.kill() if process.poll() is None else None, process.communicate()))
         deadline = time.time() + 15
         while not Path(str(hold) + '.ready').exists():
             if process.poll() is not None:
                 self.fail('held run exited early: ' + str(process.communicate()))
-            self.assertLess(time.time(), deadline, 'held run never reached its provider ' + phase)
+            self.assertLess(time.time(), deadline, 'held run never reached its ' + phase)
             time.sleep(0.05)
+        if phase == 'check':
+            return process, hold, None
         child = int(Path(str(hold) + '.pid').read_text())
         self.addCleanup(lambda: os.kill(child, signal.SIGKILL) if self.alive(child) else None)
         return process, hold, child
+
+    def children_of(self, pid, containing):
+        listing = subprocess.run(['ps', '-axo', 'pid=,ppid=,command='], capture_output=True, text=True).stdout.splitlines()
+        found = []
+        for line in listing:
+            fields = line.split(None, 2)
+            if len(fields) == 3 and int(fields[1]) == pid and containing in fields[2]:
+                found.append(int(fields[0]))
+        return found
 
     @staticmethod
     def alive(pid):
@@ -390,24 +426,32 @@ class ScheduledUpdateTests(unittest.TestCase):
             self.assertLess(time.time(), deadline, 'process %d never exited' % pid)
             time.sleep(0.05)
 
+    TAIL = {'probe': 'no update had started and the installation was not changed',
+            'update': 'an update may be half applied'}
+
     def test_killing_the_launcher_stops_its_provider_and_then_frees_the_lock(self):
         # The provider is never left running without a launcher to report on it. The supervisor notices the launcher
-        # is gone, stops the provider group, writes the status the launcher could not and releases the lock.
-        first, hold, child = self.start_held_run()
-        run = self.last_run()
-        first.kill()
-        first.communicate(timeout=10)
-        self.wait_gone(child)
-        status = run / 'status.txt'
-        deadline = time.time() + 15
-        while not status.exists():
-            self.assertLess(time.time(), deadline, 'the supervisor wrote no status after the launcher was killed')
-            time.sleep(0.05)
-        self.assertIn('aborted: the launcher ended during the probe call (it was killed); the provider process group was stopped', status.read_text())
-        self.assertIn('probe provider pid=%d ended' % child, (run / 'provider.log').read_text())
-        self.assertFalse((run / 'probe-output.tmp').exists(), 'raw probe output is not left behind by a killed launcher')
-        proceed = self.run_launcher()
-        self.assertEqual(proceed.returncode, 0, proceed.stdout + proceed.stderr)
+        # is gone, stops the provider group, writes the status and report the launcher could not, and releases the lock.
+        for phase in ('probe', 'update'):
+            with self.subTest(phase=phase):
+                first, hold, child = self.start_held_run('kill-' + phase, phase=phase)
+                run = self.last_run()
+                first.kill()
+                first.communicate(timeout=10)
+                self.wait_gone(child)
+                status = run / 'status.txt'
+                deadline = time.time() + 15
+                while not status.exists():
+                    self.assertLess(time.time(), deadline, 'the supervisor wrote no status after the launcher was killed')
+                    time.sleep(0.05)
+                text = status.read_text()
+                self.assertIn('aborted: the launcher ended during the %s call (it was killed)' % phase, text)
+                self.assertIn(self.TAIL[phase], text)
+                self.assertIn('The run was cut off: the launcher ended during the %s call' % phase, (run / 'report.md').read_text())
+                self.assertIn('%s provider pid=%d ended' % (phase, child), (run / 'provider.log').read_text())
+                self.assertFalse((run / 'probe-output.tmp').exists(), 'raw probe output is not left behind by a killed launcher')
+                proceed = self.run_launcher()
+                self.assertEqual(proceed.returncode, 0, proceed.stdout + proceed.stderr)
 
     def test_the_lock_stays_held_while_a_provider_that_ignores_sigterm_is_being_stopped(self):
         first, hold, child = self.start_held_run(env={'FAKE_CLI_IGNORE_TERM': '1'})
@@ -429,26 +473,133 @@ class ScheduledUpdateTests(unittest.TestCase):
         self.assertEqual(proceed.returncode, 0, proceed.stdout + proceed.stderr)
 
     def test_a_signal_to_the_launcher_stops_the_provider_and_records_it(self):
+        # Every case sets the signal dispositions its children inherit, so the result does not depend on how the suite
+        # was started (a background start leaves SIGINT ignored, nohup leaves SIGHUP ignored).
         for phase in ('probe', 'update'):
             for name in ('SIGTERM', 'SIGINT', 'SIGHUP'):
                 for target in ('group', 'leader'):
                     with self.subTest(phase=phase, signal=name, target=target):
+                        (self.root / 'engine.jsonl').unlink(missing_ok=True)
                         first, hold, child = self.start_held_run('%s-%s-%s' % (phase, name, target), phase=phase, group=True)
                         run = self.last_run()
                         number = getattr(signal, name)
                         (os.killpg if target == 'group' else os.kill)(first.pid, number)
-                        out, err = first.communicate(timeout=30)
+                        try:
+                            out, err = first.communicate(timeout=30)
+                        finally:
+                            if first.poll() is None:
+                                first.kill()
+                            if self.alive(child):
+                                os.kill(child, signal.SIGKILL)
                         self.assertEqual(first.returncode, 128 + number, out + err)
                         self.wait_gone(child, 15)
                         text = (run / 'status.txt').read_text()
                         self.assertIn('aborted by SIG', text)
                         self.assertIn(name, text.split('aborted by ')[1].split(';')[0])
-                        self.assertIn('provider process group was stopped', text)
-                        self.assertIn('check --source', text)
-                        self.assertIn('The run was aborted by SIG', (run / 'report.md').read_text())
+                        self.assertIn(self.TAIL[phase], text)
+                        if phase == 'update':
+                            self.assertIn('check --source', text)
+                        else:
+                            self.assertNotIn('half applied', text + (run / 'report.md').read_text())
+                        self.assertIn(self.TAIL[phase], (run / 'report.md').read_text())
                         self.assertIn('%s provider pid=%d ended' % (phase, child), (run / 'provider.log').read_text())
+                        self.assertEqual([call[0] for call in self.calls('engine')], ['validate', 'check-generated'], 'no installation check ran')
                         again = self.run_launcher()
                         self.assertEqual(again.returncode, 0, 'the lock is free after the run ended: ' + again.stdout + again.stderr)
+
+    def test_a_signal_during_the_installation_check_says_the_update_had_ended(self):
+        first, hold, _ = self.start_held_run('check', phase='check', group=True)
+        run = self.last_run()
+        os.killpg(first.pid, signal.SIGTERM)
+        first.communicate(timeout=30)
+        self.assertEqual(first.returncode, 128 + signal.SIGTERM)
+        text = (run / 'status.txt').read_text()
+        self.assertIn('the update call had ended but the installation check did not finish', text)
+        self.assertNotIn('half applied', text)
+        self.assertIn('check --source', text)
+
+    def test_a_signal_the_caller_ignored_stays_ignored_by_the_whole_run(self):
+        # nohup ignores SIGHUP and a background start ignores SIGINT. The launcher cannot trap such a signal, so the
+        # supervisor must not install a handler either: it used to stop the provider while the launcher carried on,
+        # ran check and recorded a bare native_exit=143 with no note that anything was cut short.
+        for name in ('SIGHUP', 'SIGINT', 'SIGTERM'):
+            for phase in ('probe', 'update'):
+                with self.subTest(signal=name, phase=phase):
+                    first, hold, child = self.start_held_run('ignored-%s-%s' % (name, phase), phase=phase, group=True, ignore=(name,))
+                    run = self.last_run()
+                    os.killpg(first.pid, getattr(signal, name))
+                    time.sleep(1.0)
+                    self.assertIsNone(first.poll(), 'the launcher ignores the signal')
+                    self.assertTrue(self.alive(child), 'the provider was not stopped')
+                    code, out, err = self.release(first, hold)
+                    self.assertEqual(code, 0, out + err)
+                    text = (run / 'status.txt').read_text()
+                    self.assertIn('native_exit=0 check_exit=0', text)
+                    self.assertNotIn('aborted', text + (run / 'report.md').read_text())
+                    self.assertNotIn('stopped', (run / 'provider.log').read_text())
+                    (self.root / 'engine.jsonl').unlink(missing_ok=True)
+
+    def test_a_signal_the_caller_did_not_ignore_is_still_handled_when_another_one_is_ignored(self):
+        first, hold, child = self.start_held_run('mixed', phase='update', group=True, ignore=('SIGHUP',))
+        run = self.last_run()
+        os.killpg(first.pid, signal.SIGTERM)
+        first.communicate(timeout=30)
+        self.assertEqual(first.returncode, 128 + signal.SIGTERM)
+        self.wait_gone(child, 15)
+        self.assertIn('aborted by SIGTERM', (run / 'status.txt').read_text())
+
+    def test_the_provider_inherits_default_dispositions_except_what_the_caller_ignored(self):
+        report = self.root / 'dispositions.json'
+        self.env['FAKE_CLI_DISPOSITIONS'] = str(report)
+        first, hold, child = self.start_held_run('disp', phase='update', group=True, ignore=('SIGHUP',))
+        self.release(first, hold)
+        rows = [json.loads(line) for line in report.read_text().splitlines()]
+        update = [row for row in rows if not row['probe']][0]
+        self.assertEqual(update['SIGHUP'], 'ignored')
+        self.assertNotEqual(update['SIGINT'], 'ignored', 'Python installs its own SIGINT handler only when the signal arrived as default')
+        self.assertEqual(update['SIGTERM'], 'default')
+
+    def test_killing_the_supervisor_alone_stops_the_provider_and_ends_the_run_as_an_abort(self):
+        # The supervisor used to die alone: the provider ran on under init, the lock was free, the launcher recorded
+        # native_exit=137 and ran check as if an update had exited.
+        for phase in ('probe', 'update'):
+            with self.subTest(phase=phase):
+                (self.root / 'engine.jsonl').unlink(missing_ok=True)
+                first, hold, child = self.start_held_run('sup-' + phase, phase=phase)
+                run = self.last_run()
+                supervisors = self.children_of(first.pid, 'provider.' + phase)
+                self.assertEqual(len(supervisors), 1, supervisors)
+                os.kill(supervisors[0], signal.SIGKILL)
+                out, err = first.communicate(timeout=40)
+                self.wait_gone(child, 20)
+                self.assertEqual(first.returncode, 137, out + err)
+                text = (run / 'status.txt').read_text()
+                self.assertIn('aborted by the loss of its supervisor (it was killed)', text)
+                self.assertIn(self.TAIL[phase], text)
+                self.assertNotIn('native_exit=137 check_exit=0', text)
+                self.assertIn('The run was aborted by the loss of its supervisor', (run / 'report.md').read_text())
+                self.assertEqual([call[0] for call in self.calls('engine')], ['validate', 'check-generated'], 'no installation check ran')
+                self.assertEqual(self.run_launcher().returncode, 0, 'the lock is free')
+
+    def test_a_straggler_in_the_providers_process_group_is_stopped_before_the_lock_is_released(self):
+        straggler = self.root / 'straggler.pid'
+        self.env['FAKE_CLI_STRAGGLER'] = str(straggler)
+        result = self.run_launcher()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        pid = int(straggler.read_text())
+        self.addCleanup(lambda: os.kill(pid, signal.SIGKILL) if self.alive(pid) else None)
+        self.assertFalse(self.alive(pid), 'the straggler was stopped with its group')
+        self.assertIn('processes left in its group were stopped', (self.last_run() / 'provider.log').read_text())
+        del self.env['FAKE_CLI_STRAGGLER']
+        self.assertEqual(self.run_launcher().returncode, 0)
+
+    def test_a_helper_in_its_own_session_survives_the_run(self):
+        detached = self.root / 'own-session.pid'
+        self.env['FAKE_CLI_DETACH'] = str(detached)
+        self.assertEqual(self.run_launcher().returncode, 0)
+        pid = int(detached.read_text())
+        self.addCleanup(lambda: os.kill(pid, signal.SIGKILL) if self.alive(pid) else None)
+        self.assertTrue(self.alive(pid), 'a helper that left the provider group is not the launcher\'s to stop')
 
     def test_a_group_signal_cannot_orphan_the_probe_or_lose_its_timeout(self):
         # The probe used to start in its own session behind a Python timer in the launcher's group: a group signal killed
@@ -524,9 +675,10 @@ class ScheduledUpdateTests(unittest.TestCase):
         git = Path(shutil.which('git'))
         for directory in (Path('/bin'), Path('/usr/bin'), git.parent):
             for entry in directory.iterdir():
-                if entry.name == name or (directory == git.parent and entry.name != 'git' and name != 'git') \
-                        or (directory == git.parent and name == 'git') or (tools / entry.name).exists():
+                if entry.name == name or (tools / entry.name).exists():
                     continue
+                if directory == git.parent and directory not in (Path('/bin'), Path('/usr/bin')) and entry.name != 'git':
+                    continue  # Git's own directory (Homebrew) contributes only git; /bin and /usr/bin contribute everything.
                 (tools / entry.name).symlink_to(entry)
         self.assertIsNone(shutil.which(name, path=str(tools)))
         return str(Path(sys.executable).parent) + os.pathsep + str(tools)
@@ -805,10 +957,15 @@ class ScheduledUpdateTests(unittest.TestCase):
     def test_the_guide_describes_what_a_signal_does_and_where_a_block_is_recorded(self):
         flat = ' '.join((ROOT / 'GUIDE.md').read_text().split())
         self.assertNotIn('cannot record anything', flat)
+        self.assertNotIn('Only SIGKILL of both the launcher and the supervisor leaves a provider running', flat)
         self.assertNotIn('which the launcher and every child it starts, the provider included, hold', flat)
-        for sentence in ('When the launcher receives SIGINT, SIGTERM or SIGHUP, or is killed, the supervisor stops the provider\'s process group',
-                         'Only SIGKILL of both the launcher and the supervisor leaves a provider running',
+        for sentence in ('the supervisor stops the provider\'s process group the same way, keeps the lock until that group is gone',
+                         'Only SIGKILL of the launcher and the supervisor together, or a machine failure, leaves a provider running',
                          'The provider and any helper it starts do not inherit the lock descriptor',
+                         'the supervisor stops whatever it left in the provider\'s own process group',
+                         'stays ignored by the launcher, the supervisor and the provider',
+                         'During the probe nothing was changed and no update had started',
+                         'stops the provider\'s process group from the recorded pid and ends the run as an abort',
                          'sandbox_workspace_write.network_access=false',
                          'goes to standard error only and creates no run directory'):
             self.assertIn(sentence, flat)

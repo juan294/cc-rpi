@@ -259,20 +259,32 @@ run per project at a time: a kernel `flock` on the ignored
 `.rpi/local/update-runs/launcher.lock` is held by the launcher and by a supervisor
 process that runs every provider call (probe, update and Codex fallback) in its own
 process group. The provider and any helper it starts do not inherit the lock
-descriptor, so a helper that outlives the provider does not keep the lock. An
-overlapping run exits with `BLOCKED` before it calls a provider; `lsof` on the lock
-file names the holder (the launcher or its supervisor). When the launcher receives
-SIGINT, SIGTERM or SIGHUP, or is killed, the supervisor stops the provider's process
-group (SIGTERM, then SIGKILL after 10 seconds), keeps the lock until that group is
-gone, and writes `status.txt` with `aborted by SIGTERM` (or `aborted: the launcher
-ended` after a kill) and the `check` command to run. An update stopped this way can
-be half applied: inspect `.rpi/local/transactions` and use the printed
-`rollback --journal` command. Only SIGKILL of both the launcher and the supervisor
-leaves a provider running; a run directory without `status.txt` then means the run
-was cut off. Before every provider call the run checks that the lock path still
-names the file it holds and stops otherwise, because deleting or renaming it lets a
-new run lock a new file; only the call already in flight can overlap. The run also
-starts with a read-only Claude probe (no tools, no file changes) before any update
+descriptor, so a helper that leaves the provider's process group (its own session)
+neither holds the lock nor is stopped. When the provider exits, the supervisor stops
+whatever it left in the provider's own process group (SIGTERM, then SIGKILL after
+10 seconds) before it releases the lock, so no straggler runs on without the lock.
+An overlapping run exits with `BLOCKED` before it calls a provider; `lsof` on the
+lock file names the holder (the launcher or its supervisor). When the launcher
+receives SIGINT, SIGTERM or SIGHUP, or is killed, the supervisor stops the
+provider's process group the same way, keeps the lock until that group is gone, and
+`status.txt` and `report.md` say what happened: `aborted by SIGTERM` (or
+`aborted: the launcher ended` after a kill), worded by phase. During the probe
+nothing was changed and no update had started. During the update or the Codex
+fallback an update can be half applied: inspect `.rpi/local/transactions`, run the
+printed `check` command and use the `rollback --journal` command for an unfinished
+journal. During the final check the update had ended and only the check did not
+finish. When the supervisor itself is killed, the launcher notices that its end
+record is missing, stops the provider's process group from the recorded pid and ends
+the run as an abort (`aborted by the loss of its supervisor`) without running
+`check`. A signal the caller ignored (`nohup` ignores SIGHUP, a background start
+ignores SIGINT) stays ignored by the launcher, the supervisor and the provider, so
+the run carries on. Only SIGKILL of the launcher and the supervisor together, or a
+machine failure, leaves a provider running; a run directory without `status.txt`
+then means the run was cut off. Before every provider call the run checks that the
+lock path still names the file it holds and stops otherwise, because deleting or
+renaming it lets a new run lock a new file; only the call already in flight can
+overlap. The run also starts with a read-only Claude probe (no tools, no file
+changes) before any update
 starts. A quota or authentication signal from the
 probe selects the installed Codex subscription when the `SKILL.md` and lifecycle
 contract of its user-scope `rpi-update` skill match the selected source byte for

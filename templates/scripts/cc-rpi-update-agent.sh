@@ -28,12 +28,17 @@
 # Python, which takes a non-blocking flock on .rpi/local/update-runs/launcher.lock and keeps the open
 # file for the script. Only the launcher and its supervisor hold that descriptor. Every provider call (probe,
 # update, Codex fallback) runs through the supervisor, a small Python process in its own session that
-# starts the provider with every other descriptor closed, so neither the provider nor a helper it detaches can
-# pin the lock. The supervisor keeps the lock until the provider's process group is gone. When the launcher
-# receives SIGINT, SIGTERM or SIGHUP, or is killed, the supervisor stops that group (SIGTERM, then SIGKILL)
-# and the run records it in status.txt; only SIGKILL of both the launcher and the supervisor leaves a
-# provider running. The kernel releases the lock at the last exit, so there is no pid, start time or
-# stale-lock logic. An overlapping run exits without calling a provider.
+# starts the provider with every other descriptor closed, so neither the provider nor a helper it detaches into
+# its own session can pin the lock. The supervisor keeps the lock until the provider's process group is gone: it
+# stops whatever the provider leaves in that group (SIGTERM, then SIGKILL) when the provider exits. When the
+# launcher receives SIGINT, SIGTERM or SIGHUP, or is killed, the supervisor stops that group the same way and the
+# run records it in status.txt and report.md, worded by phase (nothing changed before the update starts). When
+# the supervisor is killed instead, the launcher notices that its end record is missing, stops the provider group
+# from the recorded pid and ends the run as an abort without running check. A signal the caller ignored (nohup
+# ignores SIGHUP, a background start ignores SIGINT) stays ignored by the launcher, the supervisor and the
+# provider. Only SIGKILL of the launcher and the supervisor together, or of the machine, leaves a provider running.
+# The kernel releases the lock at the last exit, so there is no pid, start time or stale-lock logic. An
+# overlapping run exits without calling a provider.
 # The probe stops after RPI_UPDATE_PROBE_TIMEOUT_SECONDS (default 300, 0 disables); the update itself has
 # no timeout. A hung update is stopped by finding its process with lsof on the lock file and killing it.
 # No here-document, here-string or mktemp: bash 3.2 writes those to a temporary file, and scheduler
@@ -113,7 +118,7 @@ mkdir -p -- "$REPORT_ROOT"
 # whose pid it names (exec keeps the pid), so a copied environment never skips the lock.
 # The programs are single-quoted strings, so they use double quotes inside.
 LOCK_ACQUIRE='
-import errno, fcntl, os, shlex, stat, sys
+import errno, fcntl, os, shlex, signal, stat, sys
 path, argv = sys.argv[1], sys.argv[2:]
 def blocked(why, fix):
     sys.stderr.write("BLOCKED / WHY: %s / FIX: %s\n" % (why, fix))
@@ -136,6 +141,8 @@ except OSError as error:
                 "wait for it to finish, then run again; to see which process holds the lock run: lsof %s" % shlex.quote(path))
     blocked("cannot lock the launcher lock %s: %s" % (path, error.strerror), "use a local filesystem that supports flock for .rpi/local")
 os.set_inheritable(fd, True)
+# Signals the caller ignored (nohup ignores SIGHUP, a background start ignores SIGINT) stay ignored for the whole run.
+os.environ["RPI_UPDATE_LOCK_IGNORED"] = ",".join(name for name in ("SIGHUP", "SIGINT", "SIGTERM") if signal.getsignal(getattr(signal, name)) == signal.SIG_IGN)
 os.environ["RPI_UPDATE_LOCK_OWNER"] = str(os.getpid())
 os.environ["RPI_UPDATE_LOCK_FD"] = str(fd)
 os.execv(argv[0], argv)
@@ -160,7 +167,7 @@ require_lock() {
 if [[ $lock_reexecuted == 1 ]]; then
   python3 -c "$LOCK_VERIFY" "$LOCK_FILE" "${RPI_UPDATE_LOCK_FD:-}" || blocked 'this run does not hold the launcher lock' 'run the launcher again'
 else
-  unset RPI_UPDATE_LOCK_OWNER RPI_UPDATE_LOCK_FD
+  unset RPI_UPDATE_LOCK_OWNER RPI_UPDATE_LOCK_FD RPI_UPDATE_LOCK_IGNORED
   SCRIPT_PATH=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/$(basename -- "${BASH_SOURCE[0]}")
   exec python3 -c "$LOCK_ACQUIRE" "$LOCK_FILE" "$BASH" "$SCRIPT_PATH" "$@"
 fi
@@ -189,7 +196,20 @@ probe_output="$RUN_DIR/probe-output.tmp"
 PROVIDER_LOG="$RUN_DIR/provider.log"
 STATUS_FILE="$RUN_DIR/status.txt"
 SUPERVISOR_PID=
+PROVIDER_BASE=
 aborted_by=
+phase=start
+# What an abort means depends on how far the run got: before the update starts nothing was changed.
+abort_tail() {
+  local check_command
+  check_command="python3 $ENGINE check --source $CC_RPI_PATH --target $PROJECT_ROOT --harness $RPI_HARNESS --route $RPI_ROUTE"
+  case $phase in
+    start) printf 'no provider call had started; nothing was changed' ;;
+    probe) printf 'the read-only probe was stopped; no update had started and the installation was not changed' ;;
+    update|codex) printf 'the provider process group was stopped, so an update may be half applied: run %s and inspect %s/.rpi/local/transactions' "$check_command" "$PROJECT_ROOT" ;;
+    *) printf 'the update call had ended but the installation check did not finish: run %s' "$check_command" ;;
+  esac
+}
 # Every exit before the final one is a failure: bash 3.2 reports status 0 for an abort under set -u when an
 # EXIT trap is set, so the trap turns a zero status into 1 unless the script reached its end.
 finished=0
@@ -199,10 +219,8 @@ on_exit() {
   [[ $finished == 1 || $status -ne 0 ]] || status=1
   if [[ $status -ne 0 && ! -s "$STATUS_FILE" ]]; then
     if [[ -n $aborted_by ]]; then
-      printf 'native_exit=%s check_exit=not-run aborted by %s; the provider process group was stopped, so an update may be half applied: run python3 %s check --source %s --target %s --harness %s --route %s and inspect %s/.rpi/local/transactions\n' \
-        "$status" "$aborted_by" "$ENGINE" "$CC_RPI_PATH" "$PROJECT_ROOT" "$RPI_HARNESS" "$RPI_ROUTE" "$PROJECT_ROOT" 2>/dev/null > "$STATUS_FILE" || true
-      printf 'The run was aborted by %s before it finished. The provider process group was stopped. No installation check ran; the update can be half applied.\n' \
-        "$aborted_by" 2>/dev/null >> "$REPORT_FILE" || true
+      printf 'native_exit=%s check_exit=not-run aborted by %s; %s\n' "$status" "$aborted_by" "$(abort_tail)" 2>/dev/null > "$STATUS_FILE" || true
+      printf 'The run was aborted by %s before it finished: %s. No installation check ran.\n' "$aborted_by" "$(abort_tail)" 2>/dev/null >> "$REPORT_FILE" || true
     else
       printf 'native_exit=%s check_exit=not-run aborted\n' "$status" 2>/dev/null > "$STATUS_FILE" || true
     fi
@@ -210,7 +228,8 @@ on_exit() {
   exit "$status"
 }
 # SIGINT, SIGTERM and SIGHUP end the run in order: the supervisor stops the provider's process group, the status is
-# written, the exit status is 128 plus the signal number. Repeated signals during that wait are ignored.
+# written, the exit status is 128 plus the signal number. Repeated signals during that wait are ignored. A signal the
+# caller ignored (nohup, a background start) cannot be trapped by bash and stays ignored.
 on_signal() {
   trap '' INT TERM HUP
   aborted_by=$1
@@ -228,13 +247,18 @@ trap 'on_signal SIGHUP 1' HUP
 
 # The supervisor. It runs one provider call in its own session and process group, with every descriptor except
 # the standard ones closed, so the lock descriptor never reaches the provider or a helper the provider detaches.
-# It holds the lock itself until that group is gone. It stops the group (SIGTERM, then SIGKILL) when the call
-# exceeds its time limit, when it is told to by a signal, or when the launcher that started it has gone away
-# (parent pid changes), and in the last case writes status.txt if the launcher could not.
+# It holds the lock itself until that group is gone: when the provider exits, whatever is left in its group is
+# stopped (SIGTERM, then SIGKILL) before the lock is released, so no straggler runs on without it. It stops the
+# group the same way when the call exceeds its time limit, when it is told to by a signal, or when the launcher that
+# started it has gone away (parent pid changes); in the last case it also writes status.txt and a note in
+# report.md for the launcher that could not. It records the provider's pid in <base>.pid when it starts and writes
+# <base>.end as its last act, so a missing .end tells the launcher the supervisor itself was killed.
+# Signals the caller ignored at entry (RPI_UPDATE_LOCK_IGNORED) stay ignored here and in the provider.
 SUPERVISE='
 import os, signal, subprocess, sys, time
-label, seconds, log, status, stdin_path = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4], sys.argv[5]
-command = sys.argv[6:]
+label, seconds, base, log, status, stdin_path = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6]
+command = sys.argv[7:]
+run_dir = os.path.dirname(status)
 parent = os.getppid()
 requested = []
 def note(text):
@@ -245,17 +269,50 @@ def note(text):
         pass
 def ask(number, frame):
     requested.append(signal.Signals(number).name)
-for number in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
-    signal.signal(number, ask)
+ignored = os.environ.get("RPI_UPDATE_LOCK_IGNORED", "").split(",")
+for name in ("SIGTERM", "SIGINT", "SIGHUP"):
+    signal.signal(getattr(signal, name), signal.SIG_IGN if name in ignored else ask)
 environment = {key: value for key, value in os.environ.items() if not key.startswith("RPI_UPDATE_LOCK_")}
+def finish(code, detail):
+    try:
+        with open(base + ".end", "w") as handle:
+            handle.write("exit=%d %s\n" % (code, detail))
+    except OSError:
+        pass
+    sys.exit(code)
 try:
     stdin = subprocess.DEVNULL if stdin_path == "-" else open(stdin_path, "rb")
     child = subprocess.Popen(command, stdin=stdin, env=environment, close_fds=True, start_new_session=True)
 except OSError as error:
     sys.stderr.write("RPI_PROVIDER_NOT_STARTED: %s: %s\n" % (command[0], error.strerror))
     note("%s provider not started: %s" % (label, error.strerror))
-    sys.exit(127)
+    finish(127, "not-started")
+try:
+    with open(base + ".pid", "w") as handle:
+        handle.write("%d\n" % child.pid)
+except OSError:
+    pass
 note("%s provider pid=%d started" % (label, child.pid))
+def group_alive():
+    try:
+        os.killpg(child.pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+def stop_group(grace):
+    # SIGTERM the whole group, then SIGKILL what is left after the grace period.
+    for number, wait in ((signal.SIGTERM, grace), (signal.SIGKILL, 5)):
+        try:
+            os.killpg(child.pid, number)
+        except ProcessLookupError:
+            return
+        end = time.time() + wait
+        while time.time() < end:
+            if child.poll() is not None and not group_alive():
+                return
+            time.sleep(0.1)
 deadline = time.time() + seconds if seconds else None
 reason = None
 while child.poll() is None:
@@ -268,49 +325,83 @@ while child.poll() is None:
     if reason:
         break
     time.sleep(0.1)
+stragglers = False
 if reason:
-    grace = 5 if reason == "timeout" else 10
-    for number in (signal.SIGTERM, signal.SIGKILL):
-        try:
-            os.killpg(child.pid, number)
-        except ProcessLookupError:
-            break
-        try:
-            child.wait(timeout=grace if number == signal.SIGTERM else 5)
-            break
-        except subprocess.TimeoutExpired:
-            continue
-    try:
-        os.killpg(child.pid, signal.SIGKILL)  # Stragglers of the group that outlived its leader.
-    except ProcessLookupError:
-        pass
-    child.wait()
+    stop_group(5 if reason == "timeout" else 10)
+elif group_alive():
+    stragglers = True
+    stop_group(10)
+child.wait()
 code = child.returncode if child.returncode >= 0 else 128 - child.returncode
-note("%s provider pid=%d ended exit=%d%s" % (label, child.pid, code, " after being stopped (%s)" % reason if reason else ""))
+note("%s provider pid=%d ended exit=%d%s%s" % (label, child.pid, code, " after being stopped (%s)" % reason if reason else "",
+     "; processes left in its group were stopped" if stragglers else ""))
+detail = "reason=%s stragglers=%d" % (reason or "none", 1 if stragglers else 0)
 if reason == "timeout":
     sys.stderr.write("RPI_PROBE_TIMEOUT: the probe did not answer within %d seconds and its process group was stopped\n" % seconds)
-    sys.exit(124)
+    finish(124, detail)
 if reason == "launcher-exited":
     try:
-        os.unlink(os.path.join(os.path.dirname(status), "probe-output.tmp"))  # Raw probe output is never kept.
+        os.unlink(os.path.join(run_dir, "probe-output.tmp"))  # Raw probe output is never kept.
     except OSError:
         pass
+    if label == "probe":
+        tail = "the probe process group was stopped; no update had started and the installation was not changed"
+    else:
+        tail = "the provider process group was stopped, so an update may be half applied: inspect .rpi/local/transactions and run the installation check"
     try:
         fd = os.open(status, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
-        os.write(fd, ("native_exit=%d check_exit=not-run aborted: the launcher ended during the %s call (it was killed); the provider process group was stopped\n" % (code, label)).encode())
+        os.write(fd, ("native_exit=%d check_exit=not-run aborted: the launcher ended during the %s call (it was killed); %s\n" % (code, label, tail)).encode())
         os.close(fd)
     except OSError:
         pass
-sys.exit(code)
+    try:
+        with open(os.path.join(run_dir, "report.md"), "a") as handle:
+            handle.write("The run was cut off: the launcher ended during the %s call (it was killed); %s. No installation check ran.\n" % (label, tail))
+    except OSError:
+        pass
+finish(code, detail)
 '
-# run_provider <label> <seconds> <stdin file or -> <command...> -- output redirections belong to the caller.
+# Stops the process group of a provider whose supervisor was killed (SIGTERM, then SIGKILL after a bounded wait).
+STOP_GROUP='
+import os, signal, sys, time
+try:
+    pid = int(sys.argv[1])
+except (IndexError, ValueError):
+    sys.exit(0)
+if pid < 2:
+    sys.exit(0)
+for number, wait in ((signal.SIGTERM, 10), (signal.SIGKILL, 5)):
+    try:
+        os.killpg(pid, number)
+    except (ProcessLookupError, PermissionError):
+        sys.exit(0)
+    end = time.time() + wait
+    while time.time() < end:
+        try:
+            os.killpg(pid, 0)
+        except ProcessLookupError:
+            sys.exit(0)
+        time.sleep(0.1)
+'
+# run_provider <label> <seconds> <stdin file or -> <command...> -- output redirections belong to the caller. The
+# supervisor leaves <base>.end as its last act. Without it the supervisor itself was killed: the provider it started
+# (pid in <base>.pid) is stopped here and the run ends as an abort, not as an update that exited 137.
 run_provider() {
-  local label=$1 seconds=$2 stdin_path=$3 supervised_status=0
+  local label=$1 seconds=$2 stdin_path=$3 supervised_status=0 provider_pid=
   shift 3
-  python3 -c "$SUPERVISE" "$label" "$seconds" "$PROVIDER_LOG" "$STATUS_FILE" "$stdin_path" "$@" &
+  phase=$label
+  PROVIDER_BASE="$RUN_DIR/provider.$label"
+  rm -f "$PROVIDER_BASE.pid" "$PROVIDER_BASE.end"
+  python3 -c "$SUPERVISE" "$label" "$seconds" "$PROVIDER_BASE" "$PROVIDER_LOG" "$STATUS_FILE" "$stdin_path" "$@" &
   SUPERVISOR_PID=$!
   wait "$SUPERVISOR_PID" || supervised_status=$?
   SUPERVISOR_PID=
+  if [[ ! -e "$PROVIDER_BASE.end" ]]; then
+    [[ ! -s "$PROVIDER_BASE.pid" ]] || provider_pid=$(cat "$PROVIDER_BASE.pid")
+    python3 -c "$STOP_GROUP" "$provider_pid" || true
+    aborted_by='the loss of its supervisor (it was killed)'
+    exit $(( supervised_status > 128 ? supervised_status : 1 ))
+  fi
   return "$supervised_status"
 }
 
@@ -366,6 +457,7 @@ else
 fi
 rm -f "$probe_output"
 check_status=0
+phase=check
 python3 "$ENGINE" check --source "$CC_RPI_PATH" --target "$PROJECT_ROOT" \
   --harness "$RPI_HARNESS" --route "$RPI_ROUTE" > "$RUN_DIR/check.json" 2>&1 || check_status=$?
 printf 'native_exit=%s%s check_exit=%s report=%s\n' "${native_label:-$native_status}" "$probe_note" "$check_status" "$REPORT_FILE" | tee "$STATUS_FILE"
