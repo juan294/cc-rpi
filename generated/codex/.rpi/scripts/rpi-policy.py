@@ -36,11 +36,14 @@ SPLITTING = re.compile(r'[\\\'"$\n]')
 OPEN_BRACE, COMMA, CLOSE_BRACE = '', '', ''
 MAX_BRACE_WORDS = 1024
 MAX_SPELLED_WORD = 512
+MAX_SEQUENCE_DIGITS = 18
 # Wall-clock bound for one hook invocation; a command that needs more is blocked, not passed.
 DEFAULT_BUDGET_SECONDS = 10.0
-MAX_BUDGET_SECONDS = 600.0
+# The Codex hook timeout is 30 s (templates/adapters/codex-hooks.json): the budget, the hard timer and the report must all fit inside it.
+MAX_BUDGET_SECONDS = 20.0
 BUDGET_SECONDS = DEFAULT_BUDGET_SECONDS
 _DEADLINE = None
+_FINAL_DEADLINE = None
 _TICKS = 0
 # git push long options (git push --git-completion-helper, git 2.56); the hook never runs git push to ask.
 PUSH_LONG_OPTIONS = {'--verbose', '--quiet', '--repo', '--all', '--branches', '--mirror', '--delete', '--tags', '--dry-run',
@@ -48,7 +51,7 @@ PUSH_LONG_OPTIONS = {'--verbose', '--quiet', '--repo', '--all', '--branches', '-
                      '--receive-pack', '--exec', '--set-upstream', '--progress', '--prune', '--no-verify', '--follow-tags',
                      '--signed', '--atomic', '--push-option', '--ipv4', '--ipv6', '--verify'}
 PUSH_LONG_OPTIONS |= {'--no-' + name[2:] for name in set(PUSH_LONG_OPTIONS) if not name.startswith('--no-')}
-CODE_CONSUMERS = {'bash', 'sh', 'zsh', 'dash', 'ksh', 'eval', 'source', '.', 'xargs'}
+CODE_CONSUMERS = {'bash', 'sh', 'zsh', 'dash', 'ksh', 'fish', 'csh', 'tcsh', 'eval', 'source', '.', 'xargs', 'gxargs', 'parallel'}
 # Words that start a command list (or modify the next command) without being the command: `- cmd` and `coproc cmd`
 # are zsh and bash forms, `repeat N` is a wrapper below.
 SHELL_KEYWORDS = {'{', '}', '!', 'if', 'then', 'else', 'elif', 'do', 'while', 'until', '-', 'coproc'}
@@ -94,16 +97,30 @@ WRAPPERS = {
                     ('--batch', '--deadline', '--fifo', '--idle', '--other', '--rr', '--reset-on-fork', '--verbose',
                      '--all-tasks', '--max', '--help', '--version'), operands=1),
     'taskset': Wrapper('c', ('--cpu-list',), ('--all-tasks', '--pid', '--help', '--version'), operands=1, operands_unless=('c', '--cpu-list')),
-    'arch': Wrapper('ed'),
+    'arch': Wrapper('ed', exact=('-arch',)),
+    'watch': Wrapper('nq', ('--interval', '--equexit'), ('--differences', '--no-title', '--beep', '--errexit', '--color', '--no-color',
+                                                         '--chgexit', '--exec', '--precise', '--no-wrap', '--help', '--version')),
     'xcrun': Wrapper(exact=('-sdk', '--sdk', '-toolchain', '--toolchain')),
     'xargs': Wrapper('adEILnPsJRS', ('--arg-file', '--delimiter', '--eof', '--max-args', '--max-lines', '--max-chars',
                                      '--max-procs', '--process-slot-var'),
                      ('--null', '--exit', '--interactive', '--no-run-if-empty', '--open-tty', '--verbose', '--show-limits',
                       '--replace', '--help', '--version')),
 }
-SHELLS = ('bash', 'sh', 'zsh', 'dash', 'ksh')
+# Wrappers that also take a -c command string of their own, so they are read in inspect_segment, not stripped by unwrap.
+FLOCK = Wrapper('wE', ('--timeout', '--wait', '--conflict-exit-code'), ('--shared', '--exclusive', '--unlock', '--nonblock', '--no-fork',
+                                                                      '--close', '--help', '--version'), operands=1)
+RUNUSER = Wrapper('ugGsw', ('--user', '--group', '--supp-group', '--shell', '--whitelist-environment'),
+                  ('--login', '--preserve-environment', '--pty', '--help', '--version'))
+PARALLEL = Wrapper('jnNSaIsLlPTRCu', ('--jobs', '--max-args', '--max-replace-args', '--sshlogin', '--arg-file', '--max-lines', '--max-chars',
+                                      '--delimiter', '--colsep', '--results', '--tmux', '--timeout', '--retries', '--load'),
+                   ('--dry-run', '--keep-order', '--group', '--ungroup', '--halt', '--bar', '--progress', '--eta', '--verbose', '--null',
+                    '--help', '--version'))
+# Homebrew's coreutils and findutils install their tools with a g prefix (gtimeout, gnice, genv, gstdbuf, gnohup, gxargs).
+for _name in ('env', 'nice', 'nohup', 'stdbuf', 'timeout', 'xargs', 'time'):
+    WRAPPERS['g' + _name] = WRAPPERS[_name]
+SHELLS = ('bash', 'sh', 'zsh', 'dash', 'ksh', 'fish', 'csh', 'tcsh')
 # su and runuser run their -c string in the target user's shell.
-SHELL_RUNNERS = ('su', 'runuser')
+SHELL_RUNNERS = ('su', 'runuser', 'flock')
 NPX_VALUE_OPTIONS = {'-p', '--package', '-c', '--call', '--filter', '-C', '--dir'}
 # Vercel CLI subcommands; any other first word is a path to deploy.
 VERCEL_SUBCOMMANDS = {'alias', 'aliases', 'api', 'bisect', 'blob', 'build', 'buy', 'cache', 'certs', 'cert', 'deploy',
@@ -120,10 +137,13 @@ PROTECTED = ('main', 'master', 'develop')
 DYNAMIC = '__RPI_DYNAMIC__'
 POLICY_KEYS = {'schema_version', 'integration_branch', 'production_branches', 'remote',
                'require_verification_receipt', 'verification_checks', 'verification_command'}
-# A version tag, as the receipt gate (rpi-prepush.py) defines it; a test keeps the two patterns identical.
-VERSION_TAG = re.compile(r'(?:[A-Za-z][A-Za-z0-9]*[-_])?[vV]?\d+(?:\.\d+)*(?:[-+._]?[A-Za-z0-9][A-Za-z0-9.+_-]*)?')
+# A version tag, as the receipt gate (rpi-prepush.py) defines it; a test keeps the two patterns identical. Three shapes: v1, v1.0,
+# V3.0.0-rc.1 (a v and numbers); 2.0, 1.2.3 (numbers with at least one dot); release-v1, release-1.0.0 (a word and one of those).
+# A bare number or word-number (1, issue-42, fix-123, feature-2, release-1) is a branch name, not a version. Every quantifier is
+# possessive and the suffix cannot start with a digit or a dot, so matching is linear: nothing backtracks.
+VERSION_TAG = re.compile(r'(?:[A-Za-z][A-Za-z0-9]*+[-_])?(?:[vV]\d++(?:\.\d++)*+|\d++(?:\.\d++)++)(?:[-+_A-Za-z][-+._0-9A-Za-z]*+)?')
 # Names a tag glob is tried against: a pattern that can match one of them may rewrite a version tag.
-VERSION_TAG_SAMPLES = ('v1', 'v1.0', 'v1.0.0', '1.0.0', 'V1.0', 'release-1.0')
+VERSION_TAG_SAMPLES = ('v1', 'v1.0', 'v1.0.0', '1.0.0', 'V1.0', 'release-1.0', 'release-v1')
 PUSH_VALUE_OPTIONS = {'-o', '--push-option', '--repo', '--receive-pack', '--exec'}
 # Shell options whose next word is a value. Every other long option (--norc, --posix, --login ...) is a flag.
 SHELL_VALUE_OPTIONS = {'-o', '+o', '-O', '+O', '--rcfile', '--init-file'}
@@ -162,7 +182,13 @@ class Unclassifiable(Exception):
 
 
 class BudgetExceeded(BaseException):
-    """The evaluation outgrew its time budget. Not an Exception: no handler in the parser may swallow it."""
+    """The evaluation outgrew its time budget. Not an Exception: no handler in the parser may swallow it.
+
+    `cause` is 'size' (the command took too long to read) or 'git' (a git lookup did not answer in time)."""
+
+    def __init__(self, cause='size'):
+        super().__init__(cause)
+        self.cause = cause
 
 
 def fail(reason, fix, rule):
@@ -196,7 +222,7 @@ def read_json(data):
 
 
 def budget_seconds():
-    """(seconds, warning): RPI_POLICY_BUDGET_SECONDS when it is a finite number in (0, 600], else the default."""
+    """(seconds, warning): RPI_POLICY_BUDGET_SECONDS when it is a finite number in (0, 20], else the default."""
     raw = os.environ.get('RPI_POLICY_BUDGET_SECONDS')
     if raw is None:
         return DEFAULT_BUDGET_SECONDS, None
@@ -256,8 +282,8 @@ def git(cwd, *arguments):
                 process.communicate(timeout=1)
             except (subprocess.TimeoutExpired, OSError):
                 pass
-            if isinstance(error, subprocess.TimeoutExpired):
-                raise BudgetExceeded() from None
+            if isinstance(error, (subprocess.TimeoutExpired, BudgetExceeded)):
+                raise BudgetExceeded('git') from None
             raise
         _GIT_CACHE[key] = output.strip() if process.returncode == 0 else None
     return _GIT_CACHE[key]
@@ -412,20 +438,6 @@ def glob_matches(pattern, names):
     return any(fnmatch.fnmatchcase(name.lower(), pattern.lower()) for name in names)
 
 
-def source_kind(source, root, current):
-    """'branch' or 'tag' for the local ref a refspec source names (git gives an unqualified destination the same kind), else None."""
-    if source in ('HEAD', '@'):
-        return 'branch' if current else None
-    if not source or root is None or DYNAMIC in source:
-        return None
-    kind, name = ref_kind(source)
-    if source.startswith(('refs/', 'heads/', 'tags/')):
-        return kind
-    if git(root, 'rev-parse', '--verify', '--quiet', 'refs/heads/' + name):
-        return 'branch'
-    return 'tag' if git(root, 'rev-parse', '--verify', '--quiet', 'refs/tags/' + name) else None
-
-
 def check_ref(kind, pattern, protected):
     """Block when a rewrite of the ref `pattern` (a branch or a tag name; * stands for any text) can hit a protected branch or
     a version tag. A name with a wildcard is compared as a glob, without case, as a case-insensitive remote would."""
@@ -438,11 +450,13 @@ def check_ref(kind, pattern, protected):
         fail('Force-pushing or deleting a protected branch (' + label + ') rewrites shared history.', PROTECTED_FIX, 'protected-branch')
 
 
-def check_destination(source, destination, root, current, protected):
-    """Block when a forced or deleting push of `source` to `destination` would rewrite a protected branch or a version tag.
+def check_destination(destination, root, current, protected):
+    """Block when a forced or deleting push to `destination` would rewrite a protected branch or a version tag.
 
-    A destination that cannot be resolved (a variable, a substitution) is a wildcard: it is blocked when any protected
-    branch or version tag could be meant, which is every unresolved name and not "feature-$N"."""
+    A destination that spells a version tag is a tag rewrite whatever its source is: git matches the destination against the
+    remote's refs first, so a branch can move a tag (`feat:v1.0`). Only a qualified refs/heads/ or heads/ name is a branch
+    for sure. A destination that cannot be resolved (a variable, a substitution) is a wildcard: it is blocked when any
+    protected branch or version tag could be meant, which is every unresolved name and not "feature-$N"."""
     if destination in ('HEAD', '@'):
         destination = current
     if not destination:
@@ -450,17 +464,11 @@ def check_destination(source, destination, root, current, protected):
     kind, name = ref_kind(destination)
     pattern = name.replace(DYNAMIC, '*')
     kinds = [kind]
-    if kind == 'branch' and not destination.startswith(('refs/', 'heads/')) and (VERSION_TAG.fullmatch(name) or '*' in pattern):
-        # An unqualified name that spells a version, or may: the kind of its source decides, else a branch of that name
-        # known here (local or remote-tracking); a name that is neither is taken for a tag.
-        sourced = source_kind(source, root, current)
+    if kind == 'branch' and not destination.startswith(('refs/', 'heads/')):
         if '*' in pattern:
-            kinds = ['branch'] + ([] if sourced == 'branch' else ['tag'])
-        elif sourced:
-            kinds = [sourced]
-        else:
-            known = git(root, 'for-each-ref', '--format=%(refname)', 'refs/heads/' + name, 'refs/remotes/*/' + name) if root else None
-            kinds = ['tag' if not known or git(root, 'rev-parse', '--verify', '--quiet', 'refs/tags/' + name) else 'branch']
+            kinds = ['branch', 'tag']  # An unqualified name that may be anything may be a tag.
+        elif VERSION_TAG.fullmatch(pattern):
+            kinds = ['tag']
     for each in kinds:
         check_ref(each, pattern, protected)
 
@@ -523,13 +531,13 @@ def push(args, cwd, overrides=None):
         targets = []  # --tags pushes tags only and --all every branch without force (a forced --all was refused above).
     else:
         targets = configured_targets(root, remote, current, force, delete, overrides)
-    rewriting = [(source, destination) for source, destination, forced, removed in targets if forced or removed]
+    rewriting = [destination for _, destination, forced, removed in targets if forced or removed]
     if not rewriting:
         return
     policy = project_policy(root) if root else {}
     protected = protected_branches(root, policy)
-    for source, destination in rewriting:
-        check_destination(source, destination, root, current, protected)
+    for destination in rewriting:
+        check_destination(destination, root, current, protected)
 
 
 def send_pack(args, cwd):
@@ -557,11 +565,11 @@ def send_pack(args, cwd):
     root = repository(cwd)
     current = git(root, 'symbolic-ref', '--quiet', '--short', 'HEAD') if root else None
     targets = [parse_refspec(spec, force, delete) for spec in values] if values else ([] if everything else [(None, '*', force, False)])
-    rewriting = [(source, destination) for source, destination, forced, removed in targets if forced or removed]
+    rewriting = [destination for _, destination, forced, removed in targets if forced or removed]
     if rewriting:
         protected = protected_branches(root, project_policy(root) if root else {})
-        for source, destination in rewriting:
-            check_destination(source, destination, root, current, protected)
+        for destination in rewriting:
+            check_destination(destination, root, current, protected)
 
 
 def environment_config(assigned):
@@ -836,6 +844,10 @@ def shell_script(args):
             break
         if word[:1] not in ('-', '+') or word in ('-', '+'):
             break
+        if word.startswith('--command='):
+            return word.split('=', 1)[1]  # fish
+        if word == '--command' and index + 1 < len(args):
+            return args[index + 1]
         command = command or bool(re.fullmatch(r'-[A-Za-z]*c[A-Za-z]*', word))
         index += 2 if word in SHELL_VALUE_OPTIONS else 1  # -o and -O take an option name, --rcfile and --init-file a file.
     return args[index] if command and index < len(args) else None
@@ -906,25 +918,33 @@ GRAPHQL_FORCE_UPDATE = re.compile(r'\bupdateRef\b[\s\S]*?\bforce\s*:\s*(?:true\b
 
 
 def graphql_text(args, cwd):
-    """The query text of a gh api graphql call: its -f/-F fields and the files they read with @FILE or --input FILE."""
-    texts = [value for _, value in api_fields(args)]
+    """(query text, opaque) of a gh api graphql call. The text is its -f/-F fields and the files they read with @FILE or
+    --input FILE; the call is opaque when the query itself is not known statically: a query field built from a variable
+    or substitution, a file whose path is dynamic, or standard input."""
+    texts = [(name, value) for name, value in api_fields(args)]
     for index, arg in enumerate(args):
         if arg == '--input' and index + 1 < len(args):
-            texts.append('@' + args[index + 1])
+            texts.append(('input', '@' + args[index + 1]))
         elif arg.startswith('--input='):
-            texts.append('@' + arg.split('=', 1)[1])
-    output = []
-    for text in texts:
-        if text.startswith('@') and len(text) > 1 and text != '@-' and DYNAMIC not in text:
+            texts.append(('input', '@' + arg.split('=', 1)[1]))
+    output, opaque = [], False
+    for name, text in texts:
+        query = name in ('query', 'input')
+        if text.startswith('@') and len(text) > 1:
+            if text == '@-' or DYNAMIC in text:
+                opaque = opaque or query
+                continue
             try:
                 path = Path(text[1:]).expanduser()
                 path = path if path.is_absolute() or cwd is None else Path(cwd) / path
                 with path.open(encoding='utf-8', errors='replace') as stream:
                     text = stream.read(65536)
             except (OSError, RuntimeError):
-                continue  # An unreadable file or standard input is not known (documented).
+                continue  # A file that is not there: gh itself stops.
+        elif query and DYNAMIC in text:
+            opaque = True
         output.append(text)
-    return '\n'.join(output)
+    return '\n'.join(output), opaque
 
 
 def api_destruction(args, cwd):
@@ -935,13 +955,17 @@ def api_destruction(args, cwd):
     forced = any(name == 'force' and (value.strip().lower() in ('true', '1', 't', 'yes') or DYNAMIC in value)
                  for name, value in api_fields(args))
     if 'graphql' in paths:
-        query = graphql_text(args, cwd)
+        query, opaque = graphql_text(args, cwd)
         match = GRAPHQL_DESTRUCTION.search(query)
         mutation = match[1] if match else ('updateRef' if GRAPHQL_FORCE_UPDATE.search(query) else None)
         if mutation:
             fail('This GraphQL mutation (' + mutation + ') deletes a repository or rewrites or deletes refs, and its target cannot be read from the query.',
                  'Use the REST endpoint for a working branch (gh api -X DELETE repos/OWNER/REPO/git/refs/heads/BRANCH); the owner runs the exact mutation otherwise.',
                  'destructive-remote' if mutation == 'deleteRepository' else 'protected-branch')
+        if opaque and not mutation:
+            fail('The query of this gh api graphql call comes from a variable, a substitution or standard input, so a deleteRepository or deleteRef '
+                 'mutation cannot be ruled out.', 'Write the query out with -f query=\'...\' or read it from a file in the project with -F query=@FILE; '
+                 'the owner runs a query that cannot be written out.', 'destructive-remote')
     if not methods & {'DELETE', 'PATCH'}:
         return
     prefix = r'/?(?:api/v3/)?repos/[^/]+/[^/]+'
@@ -1019,6 +1043,8 @@ def brace_sequence(inner):
     if not match:
         return None
     numeric = match[1] is not None
+    if numeric and max(len(match[1]), len(match[2]), len(match[3] or '')) > MAX_SEQUENCE_DIGITS:
+        return [DYNAMIC]  # Too long to count with: one unresolved word (int() itself refuses past 4300 digits).
     first, last = (int(match[1]), int(match[2])) if numeric else (ord(match[4]), ord(match[5]))
     step = abs(int(match[3] or match[6] or 0)) or 1
     count = abs(last - first) // step + 1
@@ -1238,7 +1264,7 @@ def tokenize(command):
             end = backtick_end(command, index)
             body = command[index + 1:end]
         if body is not None:
-            embedded.append(body)
+            embedded.append((len(tokens), body))
             word.append(DYNAMIC)
             started, index = True, end + 1
             continue
@@ -1476,7 +1502,7 @@ def unwrap(words, assigned=None):
         wrapper, words = Path(words[0]).name, words[1:]
         if wrapper == 'command' and words[:1] in (['-v'], ['-V']):
             return []  # Shell lookup describes operands without executing them.
-        if wrapper == 'env':
+        if WRAPPERS[wrapper] is WRAPPERS['env']:  # env and genv
             words = env_split(words)
         words = wrapper_rest(WRAPPERS[wrapper], words)
 
@@ -1578,21 +1604,35 @@ def function_name(segments, position):
     return None
 
 
+def dynamic_call(segments, skipped):
+    """Could the command call a function by a name it does not spell? A command word that is a substitution or an expansion,
+    or text a code consumer (eval, a shell, xargs ...) is given from one, outside the segments in `skipped`."""
+    for index, segment in enumerate(segments):
+        if index in skipped or not segment['words']:
+            continue
+        words = unwrap(without_redirections(segment['words']))
+        if words and (DYNAMIC in words[0] or Path(words[0]).name in CODE_CONSUMERS | {'command', 'builtin'} and
+                      any(DYNAMIC in word for word in words[1:])):
+            return True
+    return False
+
+
 def inspect_command(command, cwd, depth=0, inherited=None):
     # Substitution bodies are part of the raw text, so no policy word anywhere
     # means nothing below can match. Quote, escape and expansion characters can split
     # a command name the shell still resolves, so the search runs on the text without them too.
-    if depth > MAX_NESTING or not policy_word_possible(command):
+    if not policy_word_possible(command):
         return
+    if depth > MAX_NESTING:
+        fail('This command nests shells, eval or substitutions more than ' + str(MAX_NESTING) + ' levels deep and names git, gh or vercel, '
+             'so it cannot be inspected.', 'Write the command without the nesting, or split it into separate commands.', 'policy-error')
     check_budget()
     try:
         tokens, embedded = tokenize(command)
     except Unclassifiable:
         return
-    for inner in embedded:
-        inspect_command(inner, cwd, depth + 1, inherited)
-    segments, current, held = [], [], []
-    for kind, token in tokens:
+    segments, current, held, owner = [], [], [], {}
+    for index, (kind, token) in enumerate(tokens):
         if kind == 'operator':
             if current or held or token in ('(', ')'):  # Parentheses are kept even when empty: they scope a cd.
                 segments.append({'words': current, 'heredocs': held, 'op': token})
@@ -1601,8 +1641,13 @@ def inspect_command(command, cwd, depth=0, inherited=None):
             held.append(token)
         else:
             current.append(token)
+            owner[index] = len(segments)
     if current or held:
         segments.append({'words': current, 'heredocs': held, 'op': ''})
+    # A substitution runs where its word is: after the cd that precedes it, not at the start of the command.
+    substitutions = {}
+    for index, body in embedded:
+        substitutions.setdefault(min(owner.get(index, len(segments) - 1), max(len(segments) - 1, 0)), []).append(body)
     state = {'cwd': cwd, 'previous': None, 'stack': []}
     scopes = []  # The shell state saved at each open parenthesis, restored at its close.
     position = 0
@@ -1611,12 +1656,18 @@ def inspect_command(command, cwd, depth=0, inherited=None):
         segment = segments[position]
         defined = function_name(segments, position)
         if defined is not None:
-            # A function body runs when the function is called: a definition the rest of the command never names is inert.
-            names = len(re.findall(r'(?<![\w.-])' + re.escape(defined) + r'(?![\w.-])', command))
+            # A function body runs when the function is called: a definition that nothing names again is inert, but only
+            # when no command word of the command is dynamic (${X:-f}, $(echo f)) and the name is not spelled indirectly.
+            spelled = re.compile(r'(?<![\w.-])' + re.escape(defined) + r'(?![\w.-])')
+            names = max(len(spelled.findall(command)),
+                        sum(len(spelled.findall(word)) for each in segments for word in each['words']) +
+                        sum(len(spelled.findall(body)) for _, body in embedded))
             end = function_body_end(segments, position) if names <= 1 else None
-            if end is not None:
+            if end is not None and not dynamic_call(segments, set(range(position, end + 1))):
                 position = end + 1
                 continue
+        for body in substitutions.get(position, ()):
+            inspect_command(body, state['cwd'], depth + 1, inherited)
         inspect_segment(segments, position, state, depth, inherited)
         if segment['op'] == '(':
             scopes.append(dict(state, stack=list(state['stack'])))
@@ -1645,6 +1696,23 @@ def inspect_segment(segments, position, state, depth, inherited):
         script = shell_script(args) if name in SHELLS else runner_script(args)
         if script is not None:
             inspect_command(script, cwd, depth + 1, inherited)
+        elif name == 'flock' or name == 'runuser' and any(arg in ('-u', '--user') or arg.startswith('--user=') for arg in args):
+            # flock [OPTIONS] FILE CMD and runuser -u USER [--] CMD run a command, not a string.
+            inspect_command(shell_text(wrapper_rest(FLOCK if name == 'flock' else RUNUSER, args)), cwd, depth + 1, inherited)
+        return
+    if name == 'trap':
+        operands = [arg for arg in args if arg != '--']
+        if len(operands) >= 2 and operands[0] not in ('-l', '-p'):
+            inspect_command(operands[0], cwd, depth + 1, inherited)  # trap 'CODE' SIGNAL ...: the shell runs CODE later
+        return
+    if name == 'parallel':
+        command = []
+        for word in wrapper_rest(PARALLEL, args):
+            if word.startswith(':::'):
+                break
+            command.append(word)
+        # parallel joins its words into one shell command line; {}, {.}, {1} ... stand for its input, which is not known here.
+        inspect_command(re.sub(r'\{[^{}\s]*\}', '"$PARALLEL_INPUT"', ' '.join(command)), cwd, depth + 1, inherited)
         return
     if name == 'eval':
         inspect_command(' '.join(args), cwd, depth + 1, inherited)
@@ -1687,31 +1755,48 @@ def evaluate(event):
         root = Path(cwd).resolve() if Path(cwd).is_dir() else None
     except (OSError, RuntimeError, ValueError):
         root = None
-    global _DEADLINE, BUDGET_SECONDS
+    global _DEADLINE, _FINAL_DEADLINE, BUDGET_SECONDS, _BUILTINS, _TICKS
     BUDGET_SECONDS, warning = budget_seconds()
     if warning:
         print('POLICY NOTE: ' + warning, file=sys.stderr)
-    _DEADLINE = time.monotonic() + BUDGET_SECONDS
-    timer = arm_timer(BUDGET_SECONDS + 0.5)
+    # One invocation owns its caches: a second call in the same process (a test, an embedding) starts clean.
+    _GIT_CACHE.clear()
+    _BUILTINS, _TICKS = None, 0
+    started = time.monotonic()
+    # The report of a block (and its telemetry) must fit inside the budget too, so the judging stops a little earlier.
+    _FINAL_DEADLINE = started + BUDGET_SECONDS
+    _DEADLINE = _FINAL_DEADLINE - min(1.0, BUDGET_SECONDS / 4)
+    restore = arm_timer(BUDGET_SECONDS + 0.1)  # A backstop just behind the loop checks, not a second deadline.
     try:
         inspect_command(command, root)
     finally:
-        if timer:
-            timer.setitimer(timer.ITIMER_REAL, 0)
+        if restore:
+            restore()
+        _GIT_CACHE.clear()
 
 
 def arm_timer(seconds):
-    """A hard wall-clock bound for work the loops cannot check (a long regular-expression match, a slow subprocess)."""
+    """A hard wall-clock bound for work the loops cannot check (a long regular-expression match, a slow subprocess).
+
+    Returns a function that puts back the SIGALRM handler and the timer that were there before, or None when this platform
+    or thread has no SIGALRM (the loop checks still apply)."""
     try:
         import signal
 
         def expired(signum, frame):
             raise BudgetExceeded()
-        signal.signal(signal.SIGALRM, expired)
-        signal.setitimer(signal.ITIMER_REAL, seconds)
-        return signal
+        before = signal.signal(signal.SIGALRM, expired)
+        armed = time.monotonic()
+        previous = signal.setitimer(signal.ITIMER_REAL, seconds)
+
+        def restore():
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            signal.signal(signal.SIGALRM, before if before is not None else signal.SIG_DFL)
+            if previous[0] > 0:  # A timer of the embedding process keeps running for what was left of it.
+                signal.setitimer(signal.ITIMER_REAL, max(previous[0] - (time.monotonic() - armed), 0.001), previous[1])
+        return restore
     except (ImportError, AttributeError, ValueError, OSError):
-        return None  # No SIGALRM on this platform or thread: the loop checks still apply.
+        return None
 
 
 def telemetry(event, harness, decision, rule):
@@ -1744,6 +1829,17 @@ def names_a_policy_word(event):
         return True
 
 
+def budget_block(event, harness, error):
+    if error.cause == 'git':
+        return blocked(event, harness, 'git did not answer within the hook time budget of ' + str(BUDGET_SECONDS).rstrip('0').rstrip('.') +
+                       ' seconds, so the repository state could not be read and the command cannot be shown to avoid a protected-branch rewrite.',
+                       'Check that git responds here (git rev-parse --show-toplevel; a hung network file system or a stuck git process is the usual cause), '
+                       'then run the command again.', 'policy-budget')
+    return blocked(event, harness, 'This command is too large to inspect within the hook time budget of ' +
+                   str(BUDGET_SECONDS).rstrip('0').rstrip('.') + ' seconds, so it cannot be shown to avoid a protected-branch rewrite.',
+                   'Split it into smaller commands.', 'policy-budget')
+
+
 def main(argv):
     for stream in (sys.stderr, sys.stdout):
         try:
@@ -1763,30 +1859,41 @@ def main(argv):
         return 0
     except Blocked as error:
         return blocked(event, harness, str(error), error.fix, error.rule)
-    except BudgetExceeded:
-        return blocked(event, harness, 'This command is too large to inspect within the hook time budget of ' +
-                       str(BUDGET_SECONDS).rstrip('0').rstrip('.') + ' seconds, so it cannot be shown to avoid a protected-branch rewrite.',
-                       'Split it into smaller commands.', 'policy-budget')
+    except BudgetExceeded as error:
+        return budget_block(event, harness, error)
     except Exception as error:
-        global _DEADLINE
-        _DEADLINE = time.monotonic() + 2.0  # Deciding whether the command names git must not be cut short by the spent budget.
-        if not names_a_policy_word(event):
-            print('POLICY UNAVAILABLE: evaluation failed (' + type(error).__name__ + '); the command passes to native permissions.', file=sys.stderr)
-            return 0
-        # The command names git, gh or vercel and could not be read: it cannot be shown to be harmless, so it is not passed.
-        return blocked(event, harness, 'The policy could not evaluate this command (' + type(error).__name__ +
-                       ') and it names git, gh or vercel, so it cannot be shown to avoid a protected-branch rewrite.',
-                       'Split the command into smaller commands, or have the owner run the exact command; then report the command '
-                       'shape to cc-rpi and run python3 .rpi/scripts/rpi-distribution.py check --target . to rule out a damaged installation.',
-                       'policy-error')
+        return failed(event, harness, error)
+
+
+def failed(event, harness, error):
+    """An unexpected error: a command that names git, gh or vercel is blocked, any other passes. Every way out of here is closed."""
+    global _DEADLINE
+    _DEADLINE = time.monotonic() + 2.0  # Deciding whether the command names git must not be cut short by the spent budget.
+    try:
+        named = names_a_policy_word(event)
+    except BudgetExceeded:
+        named = True  # Could not even tell: it cannot be shown to be harmless.
+    if not named:
+        print('POLICY UNAVAILABLE: evaluation failed (' + type(error).__name__ + '); the command passes to native permissions.', file=sys.stderr)
+        return 0
+    # The command names git, gh or vercel and could not be read: it cannot be shown to be harmless, so it is not passed.
+    return blocked(event, harness, 'The policy could not evaluate this command (' + type(error).__name__ +
+                   ') and it names git, gh or vercel, so it cannot be shown to avoid a protected-branch rewrite.',
+                   'Split the command into smaller commands, or have the owner run the exact command; then report the command '
+                   'shape to cc-rpi and run python3 .rpi/scripts/rpi-distribution.py check --target . to rule out a damaged installation.',
+                   'policy-error')
 
 
 def blocked(event, harness, reason, fix, rule):
     global _DEADLINE
-    _DEADLINE = time.monotonic() + 2.0  # Recording the block asks git for the repository root: a short budget of its own.
     print('BLOCKED / WHY: ' + reason + ' / FIX: ' + fix, file=sys.stderr, flush=True)
+    # Recording the block asks git for the repository root: it gets what is left of the budget, never more.
+    left = (_FINAL_DEADLINE - time.monotonic()) if _FINAL_DEADLINE is not None else 1.0
     if isinstance(event, dict) and isinstance(event.get('cwd'), str):
         try:
+            if left < 0.05:
+                raise BudgetExceeded('size')
+            _DEADLINE = time.monotonic() + left
             telemetry(event, harness, 'block', rule)
         except BudgetExceeded:
             print('TELEMETRY UNAVAILABLE: the block was reported but not recorded.', file=sys.stderr)

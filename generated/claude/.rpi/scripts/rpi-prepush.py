@@ -32,8 +32,11 @@ import sys
 sys.dont_write_bytecode = True
 
 ZERO = re.compile(r'0+')
-# A version tag: an optional word prefix (release-), an optional v or V, dotted numbers, an optional suffix (-rc.1, rc1, _x, +build).
-VERSION_TAG = re.compile(r'(?:[A-Za-z][A-Za-z0-9]*[-_])?[vV]?\d+(?:\.\d+)*(?:[-+._]?[A-Za-z0-9][A-Za-z0-9.+_-]*)?')
+# A version tag, as the pre-action hook (rpi-policy.py) defines it; a test keeps the two patterns identical. Three shapes: v1, v1.0,
+# V3.0.0-rc.1 (a v and numbers); 2.0, 1.2.3 (numbers with at least one dot); release-v1, release-1.0.0 (a word and one of those).
+# A bare number or word-number (1, issue-42, fix-123, feature-2, release-1) is a branch name, not a version. Every quantifier is
+# possessive and the suffix cannot start with a digit or a dot, so matching is linear: nothing backtracks.
+VERSION_TAG = re.compile(r'(?:[A-Za-z][A-Za-z0-9]*+[-_])?(?:[vV]\d++(?:\.\d++)*+|\d++(?:\.\d++)++)(?:[-+_A-Za-z][-+._0-9A-Za-z]*+)?')
 PYTHON = re.compile(r'python(?:3(?:\.\d+)?)?')
 POLICY_KEYS = {'schema_version', 'integration_branch', 'production_branches', 'remote',
                'require_verification_receipt', 'verification_checks', 'verification_command'}
@@ -242,18 +245,29 @@ def printable(name):
 
 def hidden_changes(root):
     """Tracked paths whose file on disk differs from the index although git status cannot show it: those flagged
-    skip-worktree or assume-unchanged. A flagged path that is absent (a sparse checkout) or equal to the commit is fine."""
+    skip-worktree or assume-unchanged. A flagged path that is absent (a sparse checkout) or equal to the commit is fine.
+
+    Presence is checked before anything is asked of git, and one listing of the index answers for every present path (a
+    pathspec would read a[1].txt as a glob and also match a1.txt)."""
     flagged = git(root, 'ls-files', '-v', '-z', text=False)
     if not flagged:
         return []
     names = [entry[2:] for entry in flagged.split(b'\0') if entry[:1] == b'S' or entry[:1].islower() and entry[:1].isalpha()]
+    present = [name for name in names if (root / os.fsdecode(name)).is_symlink() or (root / os.fsdecode(name)).is_file()]
+    if not present:
+        return []
+    staged = git(root, 'ls-files', '-s', '-z', text=False) or b''
+    blobs = {}
+    for entry in staged.split(b'\0'):
+        fields, _, name = entry.partition(b'\t')
+        parts = fields.split()
+        if len(parts) == 3 and parts[2] == b'0':
+            blobs[name] = parts[1].decode()
     hidden = []
-    for name in names:
-        path = root / os.fsdecode(name)
-        staged = git(root, 'ls-files', '-s', '-z', '--', os.fsdecode(name), text=False)
-        if not staged or not (path.is_symlink() or path.is_file()):
+    for name in present:
+        path, blob = root / os.fsdecode(name), blobs.get(name)
+        if blob is None:
             continue
-        blob = staged.split(b'\0')[0].split()[1].decode()
         if path.is_symlink():
             matches = git(root, 'cat-file', 'blob', blob, text=False) == os.fsencode(os.readlink(path))
         else:

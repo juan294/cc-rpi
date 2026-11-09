@@ -6,6 +6,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import time
 import unittest
 
 import test_policy
@@ -17,11 +18,13 @@ DOCS = test_policy.ROOT / 'docs/native-policy.md'
 # pushing worktree's own gate and refuses with BLOCKED / WHY / FIX when that checkout has none.
 INSTALL = r'''hooks_common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
 top=$(git rev-parse --show-toplevel 2>/dev/null)
-hooks=$(git config --type=path --get core.hooksPath || echo "$hooks_common/hooks")
+if hooks=$(git config --type=path --get core.hooksPath 2>/dev/null); then hooks_set=1; else hooks="$hooks_common/hooks"; hooks_set=; fi
 case $hooks in /*) ;; *) hooks="$top/$hooks" ;; esac
-gate_line='/^[[:space:]]*#|^[[:space:]]*(echo|printf|:)[[:space:]]/'
 if [ -z "$hooks_common" ]; then
   echo "BLOCKED / WHY: the current directory is not inside a Git repository, so there is no hooks directory to write. / FIX: cd to the repository root of the integration checkout, then run this command again." >&2
+  false
+elif [ "$hooks_set" = 1 ] && [ -z "$(git config --type=path --get core.hooksPath)" ]; then
+  echo "BLOCKED / WHY: core.hooksPath is set to an empty value, which Git reads as the working tree root: a hook written to the hooks directory would not run, and one written to the root would be an untracked file. / FIX: git config --unset core.hooksPath (to use the clone's hooks directory), or point it at a directory (git config core.hooksPath PATH), then run this command again." >&2
   false
 elif [ -z "$top" ]; then
   echo "BLOCKED / WHY: this is a bare repository or the inside of a .git directory: it has no working tree, so there is no integration checkout whose receipt the gate could read, and a relative core.hooksPath has no root to resolve against. / FIX: cd to the repository root of the integration checkout, then run this command again." >&2
@@ -30,21 +33,21 @@ elif [ -e "$hooks" ] && [ ! -d "$hooks" ]; then
   echo "BLOCKED / WHY: the hooks path $hooks (core.hooksPath, or the clone's hooks directory) exists and is not a directory. / FIX: point core.hooksPath at a directory (git config core.hooksPath PATH) or move that file away, then run this command again." >&2
   false
 elif [ -L "$hooks/pre-push" ]; then
-  if [ -f "$hooks/pre-push" ] && awk "$gate_line { next } /^[[:space:]]*exit([[:space:]]|;|\$)/ { stopped = 1 } /rpi-prepush\\.py/ && !stopped { found = 1 } END { exit !found }" "$hooks/pre-push"; then
+  if [ -f "$hooks/pre-push" ] && awk '/^[[:space:]]*#/ || /^[[:space:]]*(echo|printf|:)[[:space:]]/ { next } /^[[:space:]]*exit([[:space:]]|;|$)/ { stopped = 1 } /rpi-prepush\.py/ && stopped == 0 { found = 1 } END { exit found ? 0 : 1 }' "$hooks/pre-push"; then
     echo "$hooks/pre-push is a symbolic link to a hook that runs rpi-prepush.py; left unchanged. WARNING: if an earlier line can end the hook, or the hook drops the gate's exit status, the gate cannot refuse; check one refusal."
   else
     echo "BLOCKED / WHY: $hooks/pre-push is a symbolic link, and this command never writes through a link. / FIX: add this line to the hook the link points to, or replace the link with a regular file that contains it, before any command that reads standard input (replace python3.13 with any Python 3.11 or newer on PATH), then push again: python3.13 \"\$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py\" \"\$@\" || exit 1" >&2
     false
   fi
 elif [ -e "$hooks/pre-push" ] && ! grep -q 'cc-rpi receipt gate wrapper' "$hooks/pre-push"; then
-  if awk "$gate_line { next } /^[[:space:]]*exit([[:space:]]|;|\$)/ { stopped = 1 } /rpi-prepush\\.py/ && !stopped { found = 1 } END { exit !found }" "$hooks/pre-push"; then
+  if awk '/^[[:space:]]*#/ || /^[[:space:]]*(echo|printf|:)[[:space:]]/ { next } /^[[:space:]]*exit([[:space:]]|;|$)/ { stopped = 1 } /rpi-prepush\.py/ && stopped == 0 { found = 1 } END { exit found ? 0 : 1 }' "$hooks/pre-push"; then
     echo "$hooks/pre-push runs rpi-prepush.py; left unchanged. WARNING: if an earlier line can end the hook, or the hook drops the gate's exit status, the gate cannot refuse; check one refusal."
   else
     echo "BLOCKED / WHY: $hooks/pre-push already exists and does not run rpi-prepush.py (a comment, an echo or a line after an exit does not count), and this command never overwrites an existing hook. / FIX: add this line near the top of that hook, before any exit and before any command that reads standard input (replace python3.13 with any Python 3.11 or newer on PATH), then push again: python3.13 \"\$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py\" \"\$@\" || exit 1" >&2
     false
   fi
 else
-  find "$hooks" -maxdepth 1 -type f -name '.pre-push.[0-9]*' -exec sh -c 'for stale; do kill -0 "${stale##*.}" 2>/dev/null || rm -f "$stale"; done' sh {} + 2>/dev/null
+  find "$hooks" -maxdepth 1 -type f -name '.pre-push.[0-9]*' -exec sh -c 'for stale; do pid=${stale##*/.pre-push.}; case $pid in *[!0-9]*) continue ;; esac; kill -0 "$pid" 2>/dev/null && continue; command -v ps >/dev/null 2>&1 && ! ps -p "$pid" >/dev/null 2>&1 && rm -f "$stale"; done' sh {} + 2>/dev/null
   tmp="$hooks/.pre-push.$$"
   if mkdir -p "$hooks" 2>/dev/null && cat 2>/dev/null > "$tmp" <<'EOF'
 #!/bin/sh
@@ -948,6 +951,92 @@ class GateFindingTests(InstalledHookFixture):
         self.evidence()
         self.assert_passes(self.line('refs/heads/Develop'), self.line('refs/heads/developer'))
         self.assert_passes(self.line('refs/heads/feature/Develop'))
+
+
+
+class RoundThreeGateTests(InstalledHookFixture):
+    """Round 3 review: items 6, 7, 8, 11 and 12 of the policy review."""
+
+    def test_the_documented_block_has_nothing_for_history_expansion_to_eat(self):
+        """Pasted into an interactive shell, an exclamation mark followed by a word is an event: `!stopped` in a double-quoted awk
+        program stopped the block half way. Only the shebang line and a negated bracket class (inside single quotes) remain."""
+        import re
+        without_allowed = INSTALL.replace('#!/bin/sh', '').replace('[!0-9]', '')
+        self.assertEqual(re.findall(r'.{0,25}!(?![\s=]).{0,10}', without_allowed), [])
+        self.assertNotIn('$gate_line', INSTALL)
+
+    def test_the_block_runs_to_the_end_in_bash_and_zsh(self):
+        """A smoke run with the history option set; a non-interactive shell does not expand events, so the static test above is the guard."""
+        for shell in ('bash', 'zsh'):
+            if not shutil.which(shell):
+                continue
+            with self.subTest(shell=shell):
+                project = self.workspace / ('hist-' + shell)
+                project.mkdir()
+                subprocess.run([self.environment['RPI_REAL_GIT'], '-C', str(project), 'init', '-q'], check=True)
+                option = ['-H'] if shell == 'bash' else ['-o', 'BANG_HIST']
+                result = subprocess.run([shell, *option, '-c', INSTALL], cwd=project, env=self.environment, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertNotIn('event not found', result.stderr)
+                self.assertTrue((project / '.git/hooks/pre-push').is_file())
+
+    def test_a_glob_looking_path_is_compared_literally(self):
+        (self.project / 'a[1].txt').write_text('bracket\n')
+        (self.project / 'a1.txt').write_text('one\n')
+        self.commit('Two names a glob would mix up')
+        self.git('update-index', '--skip-worktree', 'a[1].txt', 'a1.txt')
+        self.evidence()
+        self.assert_passes(self.line('refs/heads/develop'))
+        (self.project / 'a1.txt').write_text('changed locally\n')
+        result = self.assert_refused(self.line('refs/heads/develop'), reason='1 path differs')
+        self.assertIn('a1.txt', result.stderr.split('/ FIX:')[0])
+        self.assertNotIn('a[1].txt', result.stderr.split('/ FIX:')[0])
+
+    def test_absent_flagged_paths_cost_no_git_calls_each(self):
+        for number in range(300):
+            (self.project / ('s%03d.txt' % number)).write_text('x\n')
+        self.commit('Many files')
+        names = ['s%03d.txt' % number for number in range(300)]
+        self.git('update-index', '--skip-worktree', *names)
+        for name in names:
+            (self.project / name).unlink()
+        log = self.workspace / 'sparse-git.log'
+        wrapper = self.fakebin / 'git'
+        wrapper.write_text(wrapper.read_text().replace("name=Path(sys.argv[0]).name\n", "name=Path(sys.argv[0]).name\nopen(os.environ['RPI_GIT_LOG'],'a').write(' '.join(sys.argv[1:])+'\\n')\n"))
+        self.environment = {**self.environment, 'RPI_GIT_LOG': str(log), 'PATH': str(self.fakebin) + os.pathsep + self.environment['PATH']}
+        self.evidence()
+        started = time.monotonic()
+        result = self.gate(self.line('refs/heads/develop'))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertLess(len(log.read_text().splitlines()), 40, 'one listing answers for all paths')
+        self.assertLess(time.monotonic() - started, 5)
+
+    def test_only_pid_named_temporary_files_are_stale(self):
+        self.install()
+        hooks = self.hook().parent
+        keep = [hooks / name for name in ('.pre-push.1.bak', '.pre-push.2026-11-09', '.pre-push.backup', '.pre-push.', '.pre-push.12x')]
+        gone = hooks / '.pre-push.2147483646'
+        alive_other_owner = hooks / '.pre-push.1'  # process 1 exists and belongs to root: kill -0 answers "not permitted"
+        for path in keep + [gone, alive_other_owner]:
+            path.write_text('x\n')
+        result = self.enable()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertFalse(gone.exists())
+        for path in keep + [alive_other_owner]:
+            self.assertTrue(path.exists(), path.name)
+
+    def test_an_empty_hooks_path_is_refused_not_written_to_the_root(self):
+        self.git('config', 'core.hooksPath', '')
+        before = sorted(path.name for path in self.project.iterdir())
+        result = self.enable()
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(result.stderr.startswith('BLOCKED / WHY: core.hooksPath is set to an empty value'), result.stderr)
+        self.assertIn('/ FIX: git config --unset core.hooksPath', result.stderr)
+        self.assertEqual(sorted(path.name for path in self.project.iterdir()), before)
+        self.assertFalse((self.project / 'pre-push').exists())
+        self.git('config', '--unset', 'core.hooksPath')
+        self.assertEqual(self.enable().returncode, 0)
+        self.assertTrue(self.hook().is_file())
 
 
 if __name__ == '__main__':

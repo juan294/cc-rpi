@@ -1006,11 +1006,13 @@ GATE_DOC = 'https://github.com/juan294/cc-rpi/blob/main/docs/native-policy.md#op
 # Verbatim from docs/native-policy.md (a test keeps them identical); adopters do not have that file.
 PRE_PUSH_ENABLE = r'''hooks_common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
 top=$(git rev-parse --show-toplevel 2>/dev/null)
-hooks=$(git config --type=path --get core.hooksPath || echo "$hooks_common/hooks")
+if hooks=$(git config --type=path --get core.hooksPath 2>/dev/null); then hooks_set=1; else hooks="$hooks_common/hooks"; hooks_set=; fi
 case $hooks in /*) ;; *) hooks="$top/$hooks" ;; esac
-gate_line='/^[[:space:]]*#|^[[:space:]]*(echo|printf|:)[[:space:]]/'
 if [ -z "$hooks_common" ]; then
   echo "BLOCKED / WHY: the current directory is not inside a Git repository, so there is no hooks directory to write. / FIX: cd to the repository root of the integration checkout, then run this command again." >&2
+  false
+elif [ "$hooks_set" = 1 ] && [ -z "$(git config --type=path --get core.hooksPath)" ]; then
+  echo "BLOCKED / WHY: core.hooksPath is set to an empty value, which Git reads as the working tree root: a hook written to the hooks directory would not run, and one written to the root would be an untracked file. / FIX: git config --unset core.hooksPath (to use the clone's hooks directory), or point it at a directory (git config core.hooksPath PATH), then run this command again." >&2
   false
 elif [ -z "$top" ]; then
   echo "BLOCKED / WHY: this is a bare repository or the inside of a .git directory: it has no working tree, so there is no integration checkout whose receipt the gate could read, and a relative core.hooksPath has no root to resolve against. / FIX: cd to the repository root of the integration checkout, then run this command again." >&2
@@ -1019,21 +1021,21 @@ elif [ -e "$hooks" ] && [ ! -d "$hooks" ]; then
   echo "BLOCKED / WHY: the hooks path $hooks (core.hooksPath, or the clone's hooks directory) exists and is not a directory. / FIX: point core.hooksPath at a directory (git config core.hooksPath PATH) or move that file away, then run this command again." >&2
   false
 elif [ -L "$hooks/pre-push" ]; then
-  if [ -f "$hooks/pre-push" ] && awk "$gate_line { next } /^[[:space:]]*exit([[:space:]]|;|\$)/ { stopped = 1 } /rpi-prepush\\.py/ && !stopped { found = 1 } END { exit !found }" "$hooks/pre-push"; then
+  if [ -f "$hooks/pre-push" ] && awk '/^[[:space:]]*#/ || /^[[:space:]]*(echo|printf|:)[[:space:]]/ { next } /^[[:space:]]*exit([[:space:]]|;|$)/ { stopped = 1 } /rpi-prepush\.py/ && stopped == 0 { found = 1 } END { exit found ? 0 : 1 }' "$hooks/pre-push"; then
     echo "$hooks/pre-push is a symbolic link to a hook that runs rpi-prepush.py; left unchanged. WARNING: if an earlier line can end the hook, or the hook drops the gate's exit status, the gate cannot refuse; check one refusal."
   else
     echo "BLOCKED / WHY: $hooks/pre-push is a symbolic link, and this command never writes through a link. / FIX: add this line to the hook the link points to, or replace the link with a regular file that contains it, before any command that reads standard input (replace python3.13 with any Python 3.11 or newer on PATH), then push again: python3.13 \"\$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py\" \"\$@\" || exit 1" >&2
     false
   fi
 elif [ -e "$hooks/pre-push" ] && ! grep -q 'cc-rpi receipt gate wrapper' "$hooks/pre-push"; then
-  if awk "$gate_line { next } /^[[:space:]]*exit([[:space:]]|;|\$)/ { stopped = 1 } /rpi-prepush\\.py/ && !stopped { found = 1 } END { exit !found }" "$hooks/pre-push"; then
+  if awk '/^[[:space:]]*#/ || /^[[:space:]]*(echo|printf|:)[[:space:]]/ { next } /^[[:space:]]*exit([[:space:]]|;|$)/ { stopped = 1 } /rpi-prepush\.py/ && stopped == 0 { found = 1 } END { exit found ? 0 : 1 }' "$hooks/pre-push"; then
     echo "$hooks/pre-push runs rpi-prepush.py; left unchanged. WARNING: if an earlier line can end the hook, or the hook drops the gate's exit status, the gate cannot refuse; check one refusal."
   else
     echo "BLOCKED / WHY: $hooks/pre-push already exists and does not run rpi-prepush.py (a comment, an echo or a line after an exit does not count), and this command never overwrites an existing hook. / FIX: add this line near the top of that hook, before any exit and before any command that reads standard input (replace python3.13 with any Python 3.11 or newer on PATH), then push again: python3.13 \"\$(git rev-parse --show-toplevel)/.rpi/scripts/rpi-prepush.py\" \"\$@\" || exit 1" >&2
     false
   fi
 else
-  find "$hooks" -maxdepth 1 -type f -name '.pre-push.[0-9]*' -exec sh -c 'for stale; do kill -0 "${stale##*.}" 2>/dev/null || rm -f "$stale"; done' sh {} + 2>/dev/null
+  find "$hooks" -maxdepth 1 -type f -name '.pre-push.[0-9]*' -exec sh -c 'for stale; do pid=${stale##*/.pre-push.}; case $pid in *[!0-9]*) continue ;; esac; kill -0 "$pid" 2>/dev/null && continue; command -v ps >/dev/null 2>&1 && ! ps -p "$pid" >/dev/null 2>&1 && rm -f "$stale"; done' sh {} + 2>/dev/null
   tmp="$hooks/.pre-push.$$"
   if mkdir -p "$hooks" 2>/dev/null && cat 2>/dev/null > "$tmp" <<'EOF'
 #!/bin/sh

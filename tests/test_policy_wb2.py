@@ -421,7 +421,7 @@ class BudgetTests(Wb2Fixture):
                     self.assertNotIn('Traceback', result.stderr)
                 self.assertEqual(self.invoke('git push -f origin main', environment=environment).returncode, 2)
                 self.assertEqual(self.invoke('echo hi', environment=environment).returncode, 0)
-        for value in ('5', '0.5', '600', '1e1'):
+        for value in ('5', '0.5', '20', '1e1'):
             result = self.invoke('git status', environment={**self.environment, 'RPI_POLICY_BUDGET_SECONDS': value})
             self.assertEqual((result.returncode, result.stderr), (0, ''), value)
 
@@ -648,16 +648,17 @@ class VersionTagTests(Wb2Fixture):
                           'git push origin --delete nightly', 'git push -f origin refs/tags/latest', 'git push -f origin refs/tags/nightly',
                           "git push -f origin 'refs/tags/nightly-*:refs/tags/nightly-*'", 'git push origin :refs/tags/stable', 'git push -f origin tags/beta'])
 
-    def test_the_local_state_tells_a_branch_from_a_tag(self):
+    def test_a_destination_that_names_a_version_is_a_tag_whatever_exists_locally(self):
+        """Round 3 (items 1, 2, 16): git matches the destination against the remote's refs first, so local branches and tags
+        do not decide; a name that is not a version (issue-42, release-1) is a branch."""
         self.git('branch', 'v2-wip')
         self.git('branch', 'release-1.0')
-        self.allowed_all(['git push -f origin v2-wip', 'git push -f origin release-1.0', 'git push origin --delete v2-wip',
-                          'git push -f origin HEAD:v3-wip'])
-        self.blocked_all(['git push -f origin v2-wip:refs/tags/v2-wip', 'git push -f origin refs/tags/v2-wip'], 'version tag')
-        self.git('tag', 'v7.0')
-        self.blocked_all(['git push -f origin v7.0', 'git push origin :v7.0'], 'version tag')
-        self.git('update-ref', 'refs/remotes/origin/v8.0', 'HEAD')
-        self.allowed_all(['git push origin --delete v8.0'])
+        self.git('branch', 'issue-42')
+        self.blocked_all(['git push -f origin v2-wip', 'git push -f origin release-1.0', 'git push origin --delete v2-wip',
+                          'git push -f origin HEAD:v3-wip', 'git push -f origin v2-wip:refs/tags/v2-wip', 'git push -f origin refs/tags/v2-wip'],
+                         'version tag')
+        self.allowed_all(['git push -f origin issue-42', 'git push origin --delete issue-42', 'git push -f origin refs/heads/v2-wip',
+                          'git push origin :refs/heads/release-1.0'])
 
     def test_the_tag_pattern_is_the_receipt_gates(self):
         import test_prepush
@@ -719,7 +720,7 @@ class GitHubForgeTests(Wb2Fixture):
                           "gh api graphql -fquery='mutation { deleteRef(input:{refId:\"x\"}) { clientMutationId } }'"], 'GraphQL mutation')
         self.allowed_all(["gh api graphql -f query='query { viewer { login } }'", "gh api graphql -f query='mutation { addStar(input:{starrableId:\"x\"}) { clientMutationId } }'",
                           "gh api graphql -f query='mutation { updateRef(input:{refId:\"x\", oid:\"y\", force: false}) { ref { name } } }'",
-                          'gh api graphql -F query=@missing.graphql', 'gh api graphql --input -'])
+                          'gh api graphql -F query=@missing.graphql'])
         (self.project / 'danger.graphql').write_text('mutation { deleteRef(input:{refId:"x"}) { clientMutationId } }')
         (self.project / 'safe.graphql').write_text('query { viewer { login } }')
         self.blocked_all(['gh api graphql -F query=@danger.graphql', 'gh api graphql --input danger.graphql', 'gh api graphql --input=danger.graphql'],
@@ -775,10 +776,10 @@ class RealGitTests(unittest.TestCase):
             self.run_git('add', 'f')
             self.run_git('commit', '-qm', name)
         self.run_git('tag', 'v1.0')
-        self.run_git('branch', 'v9-wip')
+        self.run_git('branch', 'fix-9')
         for name in ('origin', 'fork'):
-            self.run_git('push', '-q', name, 'main', 'v1.0', 'v9-wip')
-        self.run_git('branch', '-q', '-D', 'v9-wip')
+            self.run_git('push', '-q', name, 'main', 'v1.0', 'fix-9')
+        self.run_git('branch', '-q', '-D', 'fix-9')
         self.run_git('reset', '-q', '--hard', 'HEAD~1')  # local main is A+C, remote main is B: pushing main needs force
         (self.work / 'f').write_text('C')
         self.run_git('commit', '-qam', 'C')
@@ -899,8 +900,9 @@ class RealGitTests(unittest.TestCase):
                     ('git push origin --delete v1.0', [], 'both'), ('git push -f --tags origin', [], 'both'), ('git push --tags origin', [], 'neither'),
                     ('git push -f origin refs/tags/v1.0', [], 'both'), ('git push origin +refs/tags/v1.0:refs/tags/v1.0', [], 'both'),
                     ('git push -f origin tags/v1.0', [], 'both'), ('git push -f origin v1.0:v1.0', [], 'both'),
-                    ('git push -f origin HEAD:refs/heads/v9-wip', [], 'neither'), ('git push origin --delete v9-wip', [], 'neither'),
-                    ('git branch v9-wip && git push -f origin v9-wip', [], 'neither')])
+                    ('git push -f origin HEAD:refs/heads/fix-9', [], 'neither'), ('git push origin --delete fix-9', [], 'neither'),
+                    ('git branch fix-9 && git push -f origin fix-9', [], 'neither'),
+                    ('git push -f origin HEAD:v1.0', [], 'both'), ('git branch v1.0 && git push origin :v1.0', [], 'both')])
 
     def test_a_name_that_differs_only_in_case_is_blocked_whatever_the_file_system_does(self):
         """Whether Main reaches main depends on the remote's file system and git version (this git refuses the collision on a
