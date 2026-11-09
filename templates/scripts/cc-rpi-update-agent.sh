@@ -292,6 +292,10 @@ if reason == "timeout":
     sys.exit(124)
 if reason == "launcher-exited":
     try:
+        os.unlink(os.path.join(os.path.dirname(status), "probe-output.tmp"))  # Raw probe output is never kept.
+    except OSError:
+        pass
+    try:
         fd = os.open(status, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
         os.write(fd, ("native_exit=%d check_exit=not-run aborted: the launcher ended during the %s call (it was killed); the provider process group was stopped\n" % (code, label)).encode())
         os.close(fd)

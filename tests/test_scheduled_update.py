@@ -405,6 +405,7 @@ class ScheduledUpdateTests(unittest.TestCase):
             time.sleep(0.05)
         self.assertIn('aborted: the launcher ended during the probe call (it was killed); the provider process group was stopped', status.read_text())
         self.assertIn('probe provider pid=%d ended' % child, (run / 'provider.log').read_text())
+        self.assertFalse((run / 'probe-output.tmp').exists(), 'raw probe output is not left behind by a killed launcher')
         proceed = self.run_launcher()
         self.assertEqual(proceed.returncode, 0, proceed.stdout + proceed.stderr)
 
