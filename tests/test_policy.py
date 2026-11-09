@@ -402,15 +402,18 @@ class PolicyTests(PolicyFixture):
                 self.assertIn('/ FIX:', result.stderr)
         self.assertEqual(self.invoke(event={'tool_name': 'Read', 'tool_input': {'file_path': 'README.md'}}).returncode, 0)
 
-    def test_missing_cwd_and_missing_git_pass_through(self):
-        # A removed worktree or absent Git must not block every shell command.
+    def test_missing_cwd_and_missing_git_do_not_disable_the_denylist(self):
+        # A removed worktree leaves the repository unknown, not unprotected: the default protected names still apply
+        # (WB2-P-11). Absent Git passes, because no repository state can be read.
         event = dict(self.event('git push -f origin develop'), cwd='/nonexistent-policy-fixture')
-        self.assertEqual(self.invoke(event=event).returncode, 0)
+        self.assertEqual(self.invoke(event=event).returncode, 2)
+        self.assertEqual(self.invoke(event=dict(event, tool_input={'command': 'git status'})).returncode, 0)
         environment = {**self.environment, 'PATH': str(self.workspace / 'empty-path')}
         self.assertEqual(self.invoke('git push origin develop', environment=environment).returncode, 0)
         self.assertEqual(self.invoke('printf local', environment=environment).returncode, 0)
 
-    def test_unexpected_evaluation_errors_fail_open_with_a_warning(self):
+    def test_unexpected_evaluation_errors_in_a_command_that_names_git_fail_closed(self):
+        # WB2-P-4: the documented block, not a pass (it used to pass with a warning).
         runtime = self.workspace / 'runtime'
         runtime.mkdir()
         broken = runtime / 'rpi-policy.py'
@@ -418,8 +421,10 @@ class PolicyTests(PolicyFixture):
         result = subprocess.run([sys.executable, str(broken), '--harness', 'claude'],
                                 input=json.dumps(self.event('git push origin develop')),
                                 text=True, capture_output=True, env=self.environment, cwd=self.project)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('POLICY UNAVAILABLE', result.stderr)
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn('BLOCKED / WHY:', result.stderr)
+        self.assertIn('/ FIX:', result.stderr)
+        self.assertIn('RuntimeError', result.stderr)
 
     def test_wrapper_runtime_failures_warn_without_blocking(self):
         wrapper = ROOT / 'templates/hooks/guard-bash.sh'

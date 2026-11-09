@@ -13,22 +13,36 @@ and explicit skill invocation never prove consent, and the hook never grants it.
 | --- | --- |
 | Force-push (`--force`, `-f`, `--force-with-lease`, `+ref`) or deletion (`--delete`, `-d`, `:ref`) of a protected branch | `protected-branch` |
 | The same with a target the parser cannot resolve (for example `"$BRANCH"`, a substitution or a glob such as `refs/heads/*`) | `protected-branch` |
-| `gh api` with method DELETE on a repository or on a protected branch ref (`repos/O/R/git/refs/heads/main`) | `destructive-remote`, `protected-branch` |
-| `git push --mirror`, `--prune`, or `--all`/`--branches` combined with force or deletion | `destructive-push` |
+| `gh api` with method DELETE on a repository or on a protected branch ref (`repos/O/R/git/refs/heads/main`), and method PATCH of a protected branch ref with `force=true` (`-F force=true`, `--field`, `--raw-field`) or with a body read from `--input` | `destructive-remote`, `protected-branch` |
+| `gh api graphql` with a `deleteRepository` or `deleteRef` mutation, or an `updateRef` mutation with `force: true` or a variable (the query may come from `-f`, `-F`, `-F query=@FILE` or `--input FILE`; standard input and an unreadable file are not seen) | `destructive-remote`, `protected-branch` |
+| Deleting or force-moving a version tag: `git push --delete`/`-d`/`:refs/tags/v1`/`+refs/tags/v1`/`-f origin v1.0`, `git push --force --tags`, `gh api -X DELETE .../git/refs/tags/v1`, `gh api -X PATCH .../git/refs/tags/v1 -F force=true`, `gh release delete v1 --cleanup-tag`. A version tag is a tag the receipt gate below calls one. An unqualified name that spells a version is a tag unless its source is a branch or a branch of that name is known locally (a local branch or a remote-tracking branch) | `protected-tag` |
+| `git push --mirror`, `--prune`, `--all`/`--branches` combined with force or deletion, and a plain `git push` to a remote with `remote.<name>.mirror` set | `destructive-push` |
+| A command that names git, gh or vercel (in any spelling the parser resolves) and cannot be evaluated: an unexpected error, a recursion, or the time budget | `policy-error`, `policy-budget` |
 | Vercel Preview creation: bare `vercel`/`vc`, `vercel deploy`, or a path deploy (any first word that is not a Vercel subcommand) without `--prod`/`--target production`, including npx/pnpm/yarn wrappers and pinned `vercel@version` packages | `preview` |
-| `gh repo delete` | `destructive-remote` |
+| `gh repo delete` (`--help` and `-h` print help and pass), also through a `gh` alias | `destructive-remote` |
+
+Blocking version-tag deletion and forced tag moves (the `protected-tag` rule) is an owner policy extension of the
+v2.1.0 line: a published release tag is the one ref consumers pin. The receipt gate below keeps its behavior: it
+validates what a push publishes and a deletion publishes nothing, so a tag deletion still passes the gate (and the
+hook blocks it).
 
 Protected branches are `main`, `master` and `develop`, plus the project's
 `integration_branch` and `production_branches` from `.rpi/policy.json` when they
 are declared, each written as a bare name or as `refs/heads/NAME` (both mean the
-same branch). Force-pushing or deleting a working branch is allowed. This hook
+same branch), compared without case: on a case-insensitive remote `Main` is `main`, so `refs/heads/Main` is protected too.
+Force-pushing or deleting a working branch is allowed. This hook
 also lets any `--dry-run`/`-n` push through; the optional receipt gate below does
 not (Git runs the pre-push hook for a dry run and does not tell it, so the gate
 evaluates a dry-run push of the integration branch or a version tag like a real
 one). A push that names no refspec is resolved from Git's
-configuration: `remote.<name>.push`, and `push.default` `upstream`, `matching`
-or the current branch, with the `git -c` settings of the same command line
-applied.
+configuration, with the `git -c` settings of the same command line applied: the remote is `branch.<name>.pushRemote`,
+then `remote.pushDefault`, then `branch.<name>.remote`, then `origin`; its `remote.<name>.push` refspecs apply, and a
+remote with `remote.<name>.mirror` set mirrors every ref. Without refspecs `push.default` decides: `upstream` (or
+`tracking`), `matching`, `nothing` (nothing is pushed) or the current branch. A detached HEAD pushes nothing unless a
+refspec is configured. A refspec glob such as `refs/heads/feature/*:refs/heads/feature/*` is blocked only when it can
+match a protected branch (`refs/heads/*` can, `refs/heads/feature/*` cannot); `git push --force --tags` pushes no
+branch and is blocked only for the tag rule. A destination built from a variable is a wildcard in the same way:
+`"$BRANCH"` can be anything and is blocked, `"feature-$N"` cannot be `main` and passes.
 
 Everything else passes through: ordinary `git push` of any branch or tag,
 `gh pr create/merge/update-branch`, `gh workflow run`, `gh run rerun`, other `gh api` calls,
@@ -42,21 +56,41 @@ Shell text is parsed and never executed. Chains, pipes, subshells, command and
 process substitutions, `bash`/`sh`/`zsh -c` (including forms such as `-ec`,
 `-e -c`, `-c -e` and `-o pipefail -c`; options before and after `-c` are skipped
 to the first non-option word, which is the script; `-o`, `-O`, `--rcfile` and
-`--init-file` take a value and every other long option is a flag), `eval`, `env` (including `-S`)/`command`/`builtin`/
-`sudo`/`doas`/`timeout`/`nice`/`nohup`/`stdbuf`/`caffeinate`/`xargs` wrappers
-with literal arguments, redirections such as `2>&1`, `git -C`, literal `cd`/`pushd`
-and loop bodies are inspected for the blocked forms above. `git -c` is applied
-for exactly three kinds of setting on the same command line: `alias.<name>` (a
+`--init-file` take a value and every other long option is a flag), `eval`, `su -c` and `runuser -c`, and the wrappers
+`env`, `command`, `builtin`, `exec`, `sudo`, `doas`, `time`, `timeout`, `nice`, `nohup`, `stdbuf`, `caffeinate`, `xargs`,
+`ionice`, `chrt`, `taskset`, `setsid`, `busybox`, `unbuffer`, `arch`, `xcrun` and the zsh forms `noglob`, `nocorrect`,
+`repeat N`, `coproc`, a leading `-` and `=git` with literal arguments, redirections such as `2>&1`, `git -C`, literal
+`cd`/`pushd`/`popd` and loop bodies are inspected for the blocked forms above. A wrapper's options are read like the
+tool reads them: each short option that takes a value (`sudo -u root`, `/usr/bin/time -o FILE`, `env -C DIR`) or long
+option (`sudo --user root`, `nice --adjustment 5`, abbreviations included) consumes its value, a cluster such as `-nu`
+ends in its value option, and the operands before the command (the `timeout` duration, the `chrt` priority, the
+`taskset` mask unless `-c` or `--cpu-list` is given) are skipped. `env -S` and `env --split-string` (also attached,
+`-S'...'`, or in a cluster such as `-iS` and `-vS`) are split with env's rules: blanks separate words, single and double
+quotes group, `\_`, `\c` and the usual escapes work, `${NAME}` is a variable; a string env itself could not parse is
+a block when it names git, gh or vercel. A directory change is kept only where the shell keeps it: not after a `cd`
+that is a pipeline stage, runs in the background (`&`) or sits in a subshell `( ... )`, and `cd -` returns to the
+previous directory. `git -c` is applied
+for these kinds of setting on the same command line: `alias.<name>` (a
 plain alias expands to its command and the expansion is read again, so an alias
 that begins with global options such as `-c`, `-C` or `-p` is handled, and chains of aliases are followed until
 none matches, with a loop treated as not a push; a `!` alias is inspected as shell text and passes its `-c`
 settings on to the git commands in it, as Git does to child processes, so chains of shell aliases are followed
 too; the chain and the nesting are capped at 100, beyond which the command is unclassifiable and passes; an
 alias named like a Git builtin such as `push` or `status` is ignored, as Git
-ignores it, using `git --list-cmds=builtins` and a static list as fallback),
-`remote.<name>.push` (added to the configured push specs) and `push.default` /
-`branch.<name>.remote` / `branch.<name>.merge` (which replace the repository
-value). Any other `-c` setting is ignored. The same settings are read, with the same rules, from
+ignores it, using `git --list-cmds=builtins` and a static list as fallback; an alias from the repository or user
+configuration files is read the same way), `remote.<name>.push` (added to the configured push specs),
+`remote.<name>.mirror`, `remote.pushDefault`, `branch.<name>.pushRemote`, `push.default`, `branch.<name>.remote` /
+`branch.<name>.merge` (which replace the repository value) and `help.autocorrect` (when it is enabled, an unknown
+command whose weighted edit distance to `push` is under Git's floor of 7 is read as a push, as Git would run it).
+A value of a configuration variable that Git runs as a command (`core.sshCommand`, `core.pager`, `core.editor`,
+`core.fsmonitor`, `core.askPass`, `diff.external`, `credential.helper` after `!`, `*.cmd`, `*.textconv`, `*.clean`,
+`*.smudge` and similar) is inspected as shell text. Any other `-c` setting is ignored. Git's own options before the
+command are skipped as Git reads them: `-C`, `-c`, `--git-dir`, `--work-tree`, `--namespace`, `--super-prefix`,
+`--config-env` and `--attr-source` take a value (the long ones also as `--name=value`) and every other option is a flag;
+a test runs the installed Git against that table. Subcommands that run shell text are inspected as well: `git submodule
+foreach`, `git rebase -x`/`--exec`, `git bisect run`, `git filter-branch --*-filter` and `--setup`, `git difftool -x`
+and `--extcmd`, and `git for-each-repo --config=KEY ...` (as the git command it runs); `git send-pack` and
+`git http-push` are pushes (without refs and with `--force` they push every matching branch). The same settings are read, with the same rules, from
 environment variables assigned inline in the same command (`GIT_CONFIG_COUNT` with `GIT_CONFIG_KEY_<n>` and
 `GIT_CONFIG_VALUE_<n>`, `GIT_CONFIG_PARAMETERS`, also through `env`) and from `--config-env=NAME=VAR` when `VAR`
 is assigned inline in that command. `gh api` DELETE is recognised as
@@ -66,10 +100,15 @@ relative or absolute path or an `https://HOST/` or `https://HOST/api/v3/` URL; a
 fragment is ignored and percent-encoding (`heads%2Fmain`), repeated slashes, `.` and `..` segments
 and a trailing slash are normalised before the repository and branch-ref patterns are matched; a path
 under `refs/heads` that still climbs out with `..` after normalisation is blocked as unclassifiable. After `cd "$DIR"` or `popd` the
-repository is unknown, so only the default protected branches apply. Each command
-segment is evaluated on its own: a segment the policy cannot evaluate prints
-`POLICY UNAVAILABLE` and never hides a later destructive segment.
-Literal `echo`, `printf`, `cat`, `grep` and `rg` arguments are text.
+repository is unknown, so only the default protected branches apply. A working directory that no longer exists leaves the
+repository unknown in the same way. Literal `echo`, `printf`, `cat`, `grep` and `rg` arguments are text.
+
+`gh` aliases are followed. `gh alias set NAME EXPANSION` (also `--shell`/`-s`, `--clobber`) is judged as the command
+the expansion stands for, so defining an alias that deletes a repository is blocked, and `gh NAME ...` expands an
+alias of the `aliases:` section of `config.yml` in `GH_CONFIG_DIR`, `$XDG_CONFIG_HOME/gh` or `~/.config/gh` (read without
+a YAML parser; a `!` expansion is shell text). A `gh api` endpoint that is wholly a variable (`"$ENDPOINT"`) is
+unclassifiable and passes; a branch or tag name inside a ref endpoint (`refs/heads/$BR`) is a wildcard, as for a push
+target. Branch-protection and ruleset changes through `gh api` are not covered.
 
 The tokenizer resolves the spellings the shell itself resolves before it looks for a command:
 
@@ -83,7 +122,15 @@ The tokenizer resolves the spellings the shell itself resolves before it looks f
   `--mir`, `--al`). A prefix that is ambiguous is applied as every option it could mean, so `--forc` counts as a force.
   The option list is fixed in the script and a test compares it with the installed Git. `gh` options (cobra) are not
   abbreviated by their parser, and `gh` and `vercel` options are matched exactly as written.
-- `function NAME { ... }` runs its body like a command list.
+- `$"..."` locale strings are double-quoted strings; `{x..y}` and `{x..y..step}` sequences of integers and single letters
+  are expanded like lists (a numeric sequence over the cap is one unresolved word), so `ma{i..i}n` is `main` and
+  `g{i..i}t` is `git`; `{main..main}` is not a sequence (bash keeps it literal) and stays a literal name. A command word is
+  looked for in the brace expansions of each short word of the command text, so a brace-spelled command name is found
+  in any command, and the long data words of a command (minified JSON) cost nothing.
+- A redirection of the form `{fd}>file`, `{fd}<file` or `{fd}>&2` is a redirection, not a command word.
+- `function NAME { ... }`, `NAME() { ... }` and `NAME() ( ... )` run their body like a command list when the rest of the
+  command names the function again (a call, `export -f NAME`, `xargs ... NAME`, a use inside `$(...)`); a definition that
+  nothing uses is inert and passes.
 
 Here-documents are read where the shell reads them: a `<<` that is inside a comment, a quote or a string is not an
 operator, and a body ends at its terminator line. A body is text, never parsed as commands, unless its consumer is
@@ -96,28 +143,34 @@ A body that an interpreter or a script later executes is not seen (see the uncla
 One hook invocation is bounded. Git answers (branch lists, configuration, builtins) are cached for the invocation, so a
 long command pays for each distinct lookup once. Alias chains and nesting are limited to 100 (a chain of exactly 100
 expansions is still followed; the 101st makes the command unclassifiable), brace expansion to 1024 words, and the
-whole evaluation to 10 seconds (`RPI_POLICY_BUDGET_SECONDS` changes it). A command that needs more than the time
-or brace budget is blocked, not passed, with a message that says to split it.
+whole evaluation to 10 seconds (`RPI_POLICY_BUDGET_SECONDS` changes it; a value that is not a number above 0 and at
+most 600 is ignored with a `POLICY NOTE` line and the default applies). The bound is checked inside every loop whose
+cost grows with the command, each `git` lookup has the remaining time as its timeout, and a hard timer (`SIGALRM`) ends
+work the loops cannot check. A command that needs more than the time or brace budget is blocked, not passed, with a
+message that says to split it. Nesting is followed without recursion, so no command reaches the interpreter's limit.
 
 Anything the parser cannot read, including unterminated quotes, unknown wrappers,
-package scripts, Git aliases defined in configuration files (only `git -c`
-aliases are read), a chain of more than 100 alias expansions and shells or shell aliases nested more than 100 levels deep, passes to native permissions.
+package scripts, a chain of more than 100 alias expansions and shells or shell aliases nested more than 100 levels deep, passes to native permissions.
 These forms are known to be unclassifiable and are not blocked, even when they
 rewrite a protected branch: arguments supplied at run time, such as
 `echo main | xargs git push -f origin`; scripts piped or fed to a shell, such as
 `echo 'git push -f origin main' | bash` and `bash <<< '...'`; and commands run
 through `ssh host '...'` or `find . -exec git push -f origin main ';'`. Variables
 exported by an earlier command (`export GIT_CONFIG_COUNT=1 ...` followed by a later
-`git` call, or a `--config-env` variable set elsewhere) are not known to the parser.
-A shell function or alias that is defined elsewhere, and a Git alias from `.gitconfig`, are never expanded. A missing working directory or missing Git passes silently. The
+`git` call, or a `--config-env` variable set elsewhere) are not known to the parser, and neither is a configuration
+written earlier in the same command (`git config alias.pf "push -f"; git pf`). A shell function or alias that is defined
+elsewhere is never expanded. Missing Git passes silently. The
 wrapper prefers `python3.14` through `python3.11` over an older default `python3`
 (macOS ships 3.9). With no supported runtime, or a missing policy script, it
 prints `RPI POLICY SKIPPED`. The opt-in receipt gate is a separate Git hook and
 does not depend on this wrapper. An
-unexpected evaluation error prints `POLICY UNAVAILABLE`; both exit 0. This hook
-is not a complete shell security boundary. A defect in it must not block ordinary
-work. Only a malformed native event or an unknown adapter argument, which
-indicate a broken installation, fail closed for every command. An invalid
+unexpected evaluation error (a recursion, a defect) in a command that names git, gh or vercel in any spelling the
+parser resolves blocks with `BLOCKED / WHY / FIX` (rule `policy-error`) and a fix that points to the installation
+check; in a command that names none of them it prints `POLICY UNAVAILABLE` and passes. This hook
+is not a complete shell security boundary. A malformed native event or an unknown adapter argument, which
+indicate a broken installation, fail closed for every command. The hook reads its input as UTF-8 bytes and writes
+escaped text, so a locale or `PYTHONIOENCODING` that cannot print non-ASCII text never turns a command into a
+"malformed event". An invalid
 `.rpi/policy.json` blocks only the commands that read it: force-pushes and
 deleting pushes, and `gh api` DELETE of a branch ref.
 
@@ -297,7 +350,7 @@ publishes the verified HEAD (`git push <remote> HEAD:refs/heads/<branch>`) or
 checks out the pushed commit, verifies it and pushes it. A bulk push such as `--all`, `--tags`
 or a glob is checked line by line, so it passes only when every gated ref points
 at the verified commit. Deleting the integration branch is refused. Working
-branches, other tags and tag deletions pass. The receipt must cover every
+branches, other tags and tag deletions pass the gate (the pre-action hook above blocks deleting or force-moving a version tag). The receipt must cover every
 declared `verification_checks` name/argv pair, the exact candidate identity and
 the runtime identity. The runtime binds the resolved interpreter, so `python3`
 and `python3.13` naming one binary match; when only the interpreter differs,
