@@ -236,9 +236,13 @@ plans are distinct. Preserve `.rpi/manifest.json`, nonsecret baselines and durab
 journals; use the recorded rollback path for interrupted transactions and retain
 concurrent user edits. A rollback that a newer edit blocks prints one command line
 that saves the edit under `.rpi/local/saved-edits/`, restores the recorded content
-and re-runs it. Detach removes only unchanged proven ownership and leaves
+and re-runs it; a rollback that was cut off partway is named by `check` with the
+`rollback --journal` command that finishes it. Installed files are 0644 or 0755 and a
+changed mode is drift that an update repairs. Detach removes only unchanged proven ownership and leaves
 research, plans, decisions, custom files and separate user/plugin installations;
-`check` then reports `detached` with exit 0 and the command that installs again.
+`check` then reports `detached` with exit 0 and the command that installs again; native
+settings the install created are removed again, and an owner's settings keep only the owner's keys.
+`scripts/install.sh` may be run through a symbolic link.
 
 Schedules require explicit setup and resource authorization. The optional
 `templates/scripts/cc-rpi-update-agent.sh` launcher requires `RPI_UPDATE_ENABLED=1`,
