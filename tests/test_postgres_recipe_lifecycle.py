@@ -52,6 +52,14 @@ def output(items):
     elif fmt == '{{json .}}':
         for item in items: print(json.dumps(item))
     else: print(json.dumps(items))
+if state.get('removal_countdown') is not None and args and args[0] == 'ps':
+    state['removal_countdown'] -= 1
+    if state['removal_countdown'] <= 0:
+        state['removal_countdown'] = None
+        removed = state['containers'].pop(cid, None)
+        if removed:
+            for mount in removed.get('Mounts', []): state['volumes'].pop(mount.get('Name'), None)
+    save(state)
 if args[:2] == ['context','show']: print('fixture-local')
 elif args[:2] == ['context','inspect']:
     output([{'Name':'fixture-local','Endpoints':{'docker':{'Host':'unix:///tmp/recipe-fixture.sock'}}}])
@@ -156,6 +164,10 @@ elif args and args[0]=='stop':
         state=read()
     target=args[-1];items=selected(state['containers'].values(),target)
     if not items: fail('Error: No such container: '+target)
+    if state['mode']=='slow_removal':
+        state['removal_countdown']=2;save(state);print(target);sys.exit(0)
+    if state['mode']=='stop_keeps':
+        print(target);sys.exit(0)
     for item in items:
         state['containers'].pop(item['Id'])
         for mount in item.get('Mounts',[]):
@@ -630,6 +642,140 @@ class PostgresRecipeLifecycleTests(unittest.TestCase):
         self.assertEqual(report['cleanup']['status'], 'disposed')
         self.assertEqual(report['invocation']['signal'], signal.SIGTERM)
         self.assertEqual(report['invocation']['exit_code'], 128 + signal.SIGTERM)
+
+    # --- WB2-P-1 to WB2-P-6 -------------------------------------------------------------------------------------
+    def test_only_the_container_carries_the_task_labels_and_the_receipt_names_the_anonymous_volumes(self):
+        self.assertEqual(self.recipe().returncode, 0)
+        launch = next(c for c in self.calls() if c['args'][0] == 'run')
+        labels = [launch['args'][i + 1] for i, arg in enumerate(launch['args']) if arg == '--label']
+        self.assertEqual(len(labels), 3, 'nonce, repository and workdir labels go on the container')
+        self.assertTrue(all(label.startswith('com.cc-rpi.postgres-recipe.') for label in labels))
+        # `docker run` offers no label for an anonymous volume, so the volume names live in the receipt.
+        self.assertNotIn('volume', [a for a in launch['args'] if a in ('--volume', '-v', '--mount')])
+        _, receipt = self.receipt()
+        self.assertEqual([item['name'] for item in receipt['volumes']], [VOLUME])
+
+    def test_the_review_steps_do_not_look_for_volume_labels_that_anonymous_volumes_never_get(self):
+        text = (ROOT / 'docs/development/resource-lifecycle.md').read_text()
+        flat = ' '.join(text.split())
+        self.assertTrue('volume ls --filter "label=' not in text, 'a label filter cannot find anonymous volumes')
+        self.assertTrue('every resource carries' not in flat, 'only the container carries the labels')
+        for needle in ('Only the container carries these labels', 'anonymous volumes inherit no label', 'volume inspect VOLUME_NAME'):
+            self.assertTrue(needle in flat, 'missing: ' + needle)
+
+    def test_the_owner_liveness_check_prints_nothing_for_a_missing_process_on_macos_too(self):
+        text = (ROOT / 'docs/development/resource-lifecycle.md').read_text()
+        for needle in ('ps -p OWNER_PID -o pid=', 'ps -p CHILD_PID -o pid='):
+            self.assertTrue(needle in text, 'missing: ' + needle)
+        self.assertTrue(re.search(r'ps -p (OWNER|CHILD)_PID\s+#', text) is None, 'a bare ps -p prints a header on macOS')
+        # The same check as the doc gives, run on a pid that cannot exist: no output, nonzero status, on this OS.
+        gone = subprocess.run(['ps', '-p', '999999', '-o', 'pid='], capture_output=True, text=True)
+        self.assertEqual((gone.stdout.strip(), gone.returncode), ('', 1))
+
+    def test_an_orphan_receipt_points_at_the_owner_review_instead_of_a_finish_that_cannot_succeed(self):
+        self.configure('no_cid');process = self.recipe()
+        report = self.result(process)
+        self.assertNotEqual(report['cleanup']['status'], 'disposed')
+        self.assertTrue(report['next_action'].startswith('--finish cannot clear this receipt'), report['next_action'])
+        self.assertIn('docs/development/resource-lifecycle.md', report['next_action'])
+        self.assertIn('Owner review of a retained orphan', report['next_action'])
+        self.assertIn(report['receipt_path'], report['next_action'])
+        path, _ = self.receipt()
+        again = self.invoke('--finish', str(path))
+        self.assertNotEqual(again.returncode, 0, 'the finish this used to advertise really cannot succeed')
+
+    def test_a_retained_but_reconciled_receipt_still_advertises_the_finish_command(self):
+        self.configure('dual_failure');report = self.result(self.recipe())
+        path, _ = self.receipt()
+        self.assertIn('--finish', report['next_action'])
+        self.assertIn(str(path), report['next_action'])
+        self.assertFalse(report['next_action'].startswith('--finish cannot'))
+
+    def test_finish_on_a_failed_sql_receipt_does_not_rewrite_the_recorded_invocation(self):
+        self.configure('dual_failure');first = self.recipe()
+        self.assertEqual(first.returncode, 17)
+        path, before = self.receipt()
+        self.assertEqual(before['invocation']['exit_code'], 17)
+        self.configure('success')
+        result = self.invoke('--finish', str(path))
+        self.assertEqual(result.returncode, 0, 'finish reports its own disposal result: ' + result.stderr)
+        _, after = self.receipt()
+        self.assertEqual(after['invocation'], before['invocation'], 'the original invocation is history')
+        self.assertEqual(after['workload'], before['workload'])
+        self.assertEqual(after['finish']['cleanup'], 'disposed')
+        self.assertEqual(after['finish']['exit_code'], 0)
+        report = self.result(result)
+        self.assertEqual(report['invocation']['exit_code'], 17)
+        self.assertEqual(report['finish']['cleanup'], 'disposed')
+        self.assertEqual(report['workload']['exit_code'], 17)
+        self.assertIn('NOTE: --finish only disposes resources', result.stderr)
+        self.assertIn('failed (exit 17)', result.stderr)
+
+    def test_a_refusal_is_blocked_why_fix_with_a_runnable_fix(self):
+        missing = self.home / '.local/state/cc-rpi/postgres-recipes' / ('0' * 32 + '.json')
+        result = self.invoke('--finish', str(missing))
+        self.assertEqual(result.returncode, 1)
+        self.assertTrue(result.stderr.startswith('BLOCKED: Recipe refused: '), result.stderr)
+        self.assertRegex(result.stderr, r'\n\nWHY: .+\n\nFIX:\n  .+')
+        self.assertIn('receipt_path or next_action', result.stderr)
+        foreign = self.directory / 'foreign.json'
+        foreign.write_text('{}')
+        result = self.invoke('--finish', str(foreign))
+        self.assertIn('FIX:\n  pass the path printed as receipt_path or next_action', result.stderr)
+
+    def test_a_locked_receipt_refusal_says_to_wait(self):
+        self.configure('cleanup_failure');self.recipe();path, _ = self.receipt()
+        with path.with_suffix('.lock').open('a+') as guard:
+            fcntl.flock(guard, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            result = self.invoke('--finish', str(path))
+            fcntl.flock(guard, fcntl.LOCK_UN)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('BLOCKED: Recipe refused: Receipt is locked by another owner', result.stderr)
+        self.assertIn('FIX:\n  wait for that run to end', result.stderr)
+
+    def test_receipts_follow_home_and_an_unset_home_is_refused_before_any_docker_call(self):
+        for label, env in (('unset', {k: v for k, v in self.env.items() if k != 'HOME'}), ('relative', {**self.env, 'HOME': 'relative/home'}),
+                           ('empty', {**self.env, 'HOME': ''}), ('missing', {**self.env, 'HOME': str(self.directory / 'no-such-home')})):
+            with self.subTest(home=label):
+                result = subprocess.run([sys.executable, str(RECIPE), '--image', 'postgres:fixture'], cwd=ROOT, env=env, text=True, capture_output=True, timeout=15)
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertTrue(result.stderr.startswith('BLOCKED: Recipe refused: HOME is not set to an existing absolute directory'), result.stderr)
+                self.assertIn('FIX:\n  export HOME=', result.stderr)
+                self.assertEqual(self.calls(), [], 'no Docker call was made')
+        # With HOME set, the receipts are exactly where the doc says, not in the passwd-database home.
+        self.assertEqual(self.recipe().returncode, 0)
+        self.assertEqual(len(list((self.home / '.local/state/cc-rpi/postgres-recipes').glob('*.json'))), 1)
+
+    def test_a_container_the_daemon_removes_a_moment_after_stop_is_still_proven_gone(self):
+        # --rm removal is asynchronous: the first inventory after `docker stop` can still list the container.
+        self.configure('slow_removal');process = self.recipe()
+        self.assertEqual(process.returncode, 0, process.stderr)
+        report = self.result(process)
+        self.assertEqual(report['cleanup']['status'], 'disposed')
+        self.assertNotIn(CONTAINER, self.state()['containers'])
+        inventories = [c for c in self.calls() if c['args'][:2] == ['ps', '-a'] and '--filter' not in c['args']]
+        self.assertGreaterEqual(len(inventories), 3, 'the proof was retried until the container was seen gone')
+
+    def test_a_container_that_never_disappears_is_retained_after_a_bounded_wait(self):
+        self.configure('stop_keeps');self.env['RPI_RECIPE_DISPOSAL_SECONDS'] = '1'
+        started = time.monotonic();process = self.recipe()
+        self.assertNotEqual(process.returncode, 0)
+        self.assertLess(time.monotonic() - started, 12)
+        report = self.result(process)
+        self.assertEqual(report['cleanup']['status'], 'retained')
+        self.assertIn('remains after 1 seconds', report['cleanup']['reason'])
+        self.assertIn(CONTAINER, self.state()['containers'])
+        self.assertIn('--finish', report['next_action'])
+        del self.env['RPI_RECIPE_DISPOSAL_SECONDS']
+        self.configure('success')
+        path, _ = self.receipt()
+        self.assertEqual(self.invoke('--finish', str(path)).returncode, 0, 'the retained receipt is still finishable')
+
+    def test_an_invalid_disposal_wait_is_retained_with_the_variable_named(self):
+        self.env['RPI_RECIPE_DISPOSAL_SECONDS'] = 'soon'
+        process = self.recipe()
+        self.assertNotEqual(process.returncode, 0)
+        self.assertIn('RPI_RECIPE_DISPOSAL_SECONDS must be a whole number', self.result(process)['cleanup']['reason'])
 
 
 if __name__ == '__main__':

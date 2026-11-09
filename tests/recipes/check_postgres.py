@@ -26,6 +26,8 @@ ID = re.compile(r'[a-f0-9]{64}\Z')
 NONCE = re.compile(r'[a-f0-9]{32}\Z')
 LABEL = 'com.cc-rpi.postgres-recipe.'
 SETTLEMENT_SECONDS = 30
+DISPOSAL_SECONDS = 20
+DOC = 'docs/development/resource-lifecycle.md'
 
 
 class Refusal(RuntimeError):
@@ -42,6 +44,15 @@ class WorkloadFailure(RuntimeError):
 def require(condition, reason):
     if not condition:
         raise Refusal(reason)
+
+
+def disposal_seconds():
+    """How long to wait for the daemon's asynchronous --rm removal; RPI_RECIPE_DISPOSAL_SECONDS overrides the default."""
+    value = os.environ.get('RPI_RECIPE_DISPOSAL_SECONDS')
+    if value is None:
+        return DISPOSAL_SECONDS
+    require(value.isdigit() and int(value) <= 600, 'RPI_RECIPE_DISPOSAL_SECONDS must be a whole number of seconds from 0 to 600, not %r' % value)
+    return int(value)
 
 
 def now():
@@ -80,7 +91,10 @@ def group_alive(pgid):
 
 
 def private_root():
-    root = Path.home().resolve()
+    home = os.environ.get('HOME', '')
+    require(home and os.path.isabs(home) and os.path.isdir(home),
+            'HOME is not set to an existing absolute directory; receipts live under $HOME/.local/state/cc-rpi/postgres-recipes')
+    root = Path(home).resolve()
     for component in ('.local', 'state', 'cc-rpi', 'postgres-recipes'):
         root = root / component
         root.mkdir(exist_ok=True, mode=0o700)
@@ -398,6 +412,26 @@ class Task:
         require(self.receipt['command'] is None, 'Unsettled or orphan command intent requires preservation')
         require(self.receipt['allocation'] == 'reconciled', 'Allocation identity remains unresolved')
 
+    def await_absence(self, endpoint, cid):
+        """Prove, from fresh inventories, that the container and its anonymous volumes are gone.
+
+        `docker stop` returns when the container has exited; the daemon then removes it (--rm) and its anonymous volumes
+        asynchronously. A single inventory straight after the stop can still list the container, so the proof is retried
+        for a bounded time. Every attempt re-checks the daemon identity; an inventory that fails is uncertainty, not
+        absence, and the last inventory decides: nothing is called gone without having been seen gone."""
+        limit = disposal_seconds()
+        deadline = time.monotonic() + limit
+        while True:
+            self.same_daemon()
+            ids = docker_read(endpoint, 'ps', '-a', '-q', '--no-trunc').splitlines()
+            require(all(ID.fullmatch(value) for value in ids), 'Incomplete post-stop inventory')
+            volumes = docker_read(endpoint, 'volume', 'ls', '-q').splitlines()
+            if cid not in ids and all(item['name'] not in volumes for item in self.receipt['volumes']):
+                return
+            if time.monotonic() >= deadline:
+                raise Refusal('Recorded container or anonymous volume remains after %d seconds' % limit)
+            time.sleep(0.25)
+
     def cleanup(self, current_owner=False):
         try:
             self.verify()
@@ -424,12 +458,7 @@ class Task:
                 self.cancel_deadline = None
                 status = self.command(['stop', cid], 'cleanup', visible=False)
                 require(status == 0, 'Owned container stop failed')
-            self.same_daemon()
-            ids = docker_read(endpoint, 'ps', '-a', '-q', '--no-trunc').splitlines()
-            require(all(ID.fullmatch(value) for value in ids), 'Incomplete post-stop inventory')
-            volumes = docker_read(endpoint, 'volume', 'ls', '-q').splitlines()
-            require(cid not in ids and all(item['name'] not in volumes for item in self.receipt['volumes']),
-                    'Recorded container or anonymous volume remains')
+            self.await_absence(endpoint, cid)
             self.receipt.update(cleanup={'status': 'disposed'}, state='finished')
         except (Refusal, WorkloadFailure, OSError, ValueError, KeyError, TypeError) as error:
             self.receipt.update(cleanup={'status': 'retained', 'reason': str(error)}, state='retained')
@@ -438,6 +467,20 @@ class Task:
         except (OSError, Refusal):
             if self.receipt['cleanup']['status'] != 'disposed':
                 self.receipt.update(cleanup={'status': 'retained', 'reason': self.publication_error}, state='retained')
+
+    def finish_can_succeed(self):
+        """--finish only disposes a reconciled allocation with no unsettled command; nothing else clears an orphan."""
+        return self.receipt.get('command') is None and self.receipt.get('allocation') == 'reconciled'
+
+    def next_action(self):
+        if self.receipt['cleanup']['status'] == 'disposed' and not self.publication_error:
+            return None
+        if self.finish_can_succeed():
+            return shlex.join([sys.executable, str(Path(__file__).resolve()), '--finish', str(self.path)])
+        # An unsettled command or an unreconciled allocation can never pass --finish's guards: repeating it only
+        # refuses again. The owner reviews the retained receipt and the daemon's resources by hand.
+        return ('--finish cannot clear this receipt (an unsettled command or unresolved allocation is recorded); '
+                'review it as the owner: ' + DOC + ', section "Owner review of a retained orphan", receipt ' + str(self.path))
 
     def report(self):
         value = self.receipt
@@ -449,8 +492,35 @@ class Task:
                           'updated_at': value['updated_at'], 'resources': {
                               'container': value['container'], 'volumes': value['volumes'],
                               'image_id': value['image_id']},
-                          'next_action': None if value['cleanup']['status'] == 'disposed' and not self.publication_error else
-                          shlex.join([sys.executable, str(Path(__file__).resolve()), '--finish', str(self.path)])}))
+                          'finish': value.get('finish'),
+                          'next_action': self.next_action()}))
+
+    def finish(self):
+        """Retry disposal for a recorded task. The original invocation and workload results are history: they are
+        never rewritten here, and the outcome of this retry is recorded separately under `finish`."""
+        try:
+            self.save()
+        except (OSError, Refusal):
+            pass  # save latched the error; cleanup must now preserve resources.
+        self.cleanup(current_owner=False)
+        disposed = self.receipt['cleanup']['status'] == 'disposed'
+        code = 0 if disposed and not self.publication_error else 1
+        self.receipt['finish'] = {'at': now(), 'exit_code': code, 'cleanup': self.receipt['cleanup']['status']}
+        if self.interrupted:
+            code = code or 128 + self.interrupted
+            self.receipt['finish'].update(exit_code=code, signal=self.interrupted)
+        if self.publication_error is None:
+            try:
+                self.save()
+            except (OSError, Refusal):
+                code = code or 1
+                self.receipt['finish'].update(exit_code=code, evidence_error=self.publication_error)
+        self.report()
+        original = self.receipt.get('workload', {})
+        if original.get('status') in ('failed', 'interrupted'):
+            print('NOTE: --finish only disposes resources. The original workload result is unchanged: %s (exit %s). '
+                  'Its exit status is not this command\'s.' % (original.get('status'), original.get('exit_code')), file=sys.stderr)
+        return code
 
     def finalize(self, code, current_owner=False):
         try:
@@ -589,6 +659,44 @@ def execute(image_reference, root):
         return code
 
 
+# (text found in the refusal, why it matters, runnable fix) -- the first match wins.
+EXPLANATIONS = (
+    ('HOME is not set', 'Receipts and their locks are private to the owner and live under $HOME, so without it there is no place to prove ownership.',
+     'export HOME=/absolute/path/of/the/owner/home    # then run the same command again'),
+    ('Receipt is locked by another owner', 'Another --image or --finish run holds this receipt; a second writer could race its cleanup.',
+     'wait for that run to end, then run the same command again'),
+    ('Receipt must be an exact task file', 'Only a receipt this recipe wrote in the private receipt directory can authorize disposal.',
+     'pass the path printed as receipt_path or next_action (an absolute path under $HOME/.local/state/cc-rpi/postgres-recipes/)'),
+    ('Unsupported receipt schema', 'The file is not a receipt of this recipe, so its resource names cannot be trusted.',
+     'run --finish from the checkout that wrote the receipt, with the unedited receipt; never edit a receipt'),
+    ('Receipt source mismatch', 'The receipt names a different checkout, so it is not this checkout\'s task.',
+     'run --finish from the checkout recorded in the receipt\'s source.root'),
+    ('Recorded task owner is still live', 'The run that owns this task is still running; stopping its container would break it.',
+     'wait for that run to finish (or stop it with SIGTERM), then run --finish again'),
+    ('Unsettled or orphan command intent', 'A command was launched and never recorded as settled, so the daemon may hold a resource this task cannot see.',
+     'review it as the owner: ' + DOC + ', section "Owner review of a retained orphan"; --finish cannot clear it'),
+    ('Local inspection', 'The recipe could not read the local Docker daemon, and absence is never assumed.',
+     'start the local Docker daemon, check "docker context show" names a local Unix socket, then run the same command again'),
+    ('Only an explicit local Unix Docker endpoint', 'The recipe never talks to a remote or non-Unix Docker endpoint.',
+     'unset DOCKER_HOST or point it (or DOCKER_CONTEXT) at a local unix:/// socket, then run again'),
+    ('No such file or directory', 'The receipt named on the command line is not there, so there is nothing to dispose of.',
+     'pass the exact absolute path printed as receipt_path or next_action'),
+    ('Unsafe', 'Receipts prove ownership only when they are private to this user.',
+     'make $HOME/.local/state/cc-rpi/postgres-recipes and its parents owned by you and not writable by group or others (chmod go-w), keep receipt files at mode 600, then run again'),
+)
+
+
+def explain(reason):
+    """Print a refusal in the repository's BLOCKED / WHY / FIX form; a refusal never changes a resource."""
+    why, fix = ('The recipe could not prove ownership or absence, so it changed nothing.',
+                'read ' + DOC + ' ("Completion and recovery"), correct the condition named above, then run the same command again')
+    for text, reason_why, reason_fix in EXPLANATIONS:
+        if text in reason:
+            why, fix = reason_why, reason_fix
+            break
+    print('BLOCKED: Recipe refused: %s\n\nWHY: %s\n\nFIX:\n  %s' % (reason, why, fix), file=sys.stderr)
+
+
 def main():
     os.umask(0o077)
     parser = argparse.ArgumentParser(description=__doc__)
@@ -605,9 +713,9 @@ def main():
         with receipt_lock(path) as verify:
             task = Task(path, validate_receipt(path, root), verify)
             with task.signals():
-                return task.finalize(0)
+                return task.finish()
     except (Refusal, OSError, ValueError, KeyError, TypeError) as error:
-        print('Recipe refused: ' + str(error), file=sys.stderr)
+        explain(str(error))
         return 1
 
 

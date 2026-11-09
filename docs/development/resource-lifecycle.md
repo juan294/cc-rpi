@@ -27,8 +27,11 @@ reset or adopted.
 
 ## Ownership and evidence
 
-Receipts live under `$HOME/.local/state/cc-rpi/postgres-recipes/`. The directory
-is private; receipts and task output logs are mode `0600`. A persistent sibling
+Receipts live under `$HOME/.local/state/cc-rpi/postgres-recipes/`. The recipe
+reads `HOME` from the environment and refuses to run when it is unset, empty,
+relative or not an existing directory (it does not fall back to the account
+database's home directory). The directory is private; receipts and task output
+logs are mode `0600`. A persistent sibling
 `.lock` file protects each receipt with an exclusive, nonblocking OS lock. Do not
 remove the lock file to recover a task. Lock release after process death does not
 clear an unresolved command intent.
@@ -56,7 +59,11 @@ resources and the exact next finish command when retained. SQL or startup failur
 keeps its original nonzero exit status even if cleanup also fails. A cleanup-only
 failure makes the invocation fail. `--rm` removes the owned container and its
 anonymous data; the script verifies both are absent and does not independently
-remove a leftover volume.
+remove a leftover volume. The daemon removes a `--rm` container asynchronously
+after `docker stop` returns, so the absence proof is repeated with fresh
+inventories (daemon identity re-checked each time) for up to 20 seconds
+(`RPI_RECIPE_DISPOSAL_SECONDS`, a whole number from 0 to 600, overrides the bound).
+A container still listed at the end is retained, never assumed gone.
 
 The public projection includes the recorded `source_commit`. Its `invocation`
 result reports interruption and receipt-publication errors separately from SQL:
@@ -90,6 +97,21 @@ Use the exact command printed in `next_action` to retry disposal. Its form is:
 python3 tests/recipes/check_postgres.py --finish /absolute/private/task-receipt.json
 ```
 
+`next_action` names that command only when `--finish` can succeed: the allocation
+is reconciled and no command is recorded as unsettled. A receipt with an unsettled
+command or an unresolved allocation can never pass the finish guards, so its
+`next_action` says so and points at the owner review below instead of repeating a
+command that only refuses again.
+
+`--finish` never rewrites history. The receipt's `invocation` and `workload`
+results stay as the original run recorded them (a failed SQL run keeps its exit
+status); the retry's own outcome is added under `finish`. The exit status of
+`--finish` reports the disposal only: 0 when the resources are verified absent,
+1 when they are retained. When the original workload failed, `--finish` also
+prints a `NOTE` on standard error that its exit status is not the workload's.
+A refusal is printed as `BLOCKED: Recipe refused: <reason>`, then `WHY:` and
+`FIX:` with a command to run; a refusal never changes a resource.
+
 Finish validates the private receipt path, schema, source checkout, owner
 liveness, lock, command settlement, actual daemon and resource identities before
 acting. It never starts a container, runs readiness commands, or executes SQL.
@@ -116,26 +138,32 @@ Only the owner of the task decides. Run these from the repository root; every co
    NAME=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["name"])' "$RECEIPT")
    ```
 
-2. Confirm the recorded owner and command child are gone (no output means gone; a live process means wait for it):
+2. Confirm the recorded owner and command child are gone. `-o pid=` suppresses the header, so on macOS and Linux
+   no output (and exit status 1) means the process is gone; a printed pid means it is alive and you wait for it:
 
    ```sh
    python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); print(r["owner"]["pid"], (r["command"] or {}).get("child"))' "$RECEIPT"
-   ps -p OWNER_PID            # the first number printed above
-   ps -p CHILD_PID            # only when a child pid was printed
+   ps -p OWNER_PID -o pid=    # the first number printed above
+   ps -p CHILD_PID -o pid=    # only when a child pid was printed
    ```
 
-3. Find what the daemon holds under this task's identity. The container name is `$NAME` and every resource carries
+3. Find what the daemon holds under this task's identity. The container name is `$NAME` and the container carries
    the label `com.cc-rpi.postgres-recipe.nonce=$NONCE`; list by both and compare with the receipt's `container.id`
-   (full IDs only, never abbreviations):
+   (full IDs only, never abbreviations). Only the container carries these labels: `docker run` has no label for the
+   anonymous volumes it creates, so anonymous volumes inherit no label and a `volume ls --filter label=` finds
+   nothing. Identify a volume by name instead, from the receipt's `volumes[].name` when it has any, otherwise from
+   the container's `.Mounts` (step 4):
 
    ```sh
    docker --host "$ENDPOINT" container ls -a --no-trunc --filter "name=^/$NAME\$" --filter "label=com.cc-rpi.postgres-recipe.nonce=$NONCE"
-   docker --host "$ENDPOINT" volume ls --filter "label=com.cc-rpi.postgres-recipe.nonce=$NONCE"
+   python3 -c 'import json,sys; [print(v["name"]) for v in json.load(open(sys.argv[1]))["volumes"]]' "$RECEIPT"
+   docker --host "$ENDPOINT" volume inspect VOLUME_NAME    # one recorded name; "No such volume" means it is gone
    ```
 
 4. Confirm project identity before touching anything. The container must carry `nonce=$NONCE`, `repository=cc-rpi` and
    `workdir=` this checkout's absolute path, use the receipt's `image_id`, and expose only the receipt's anonymous
-   volumes. Anything else is not this task's resource: stop here and leave it:
+   volumes (their names are the ones to inspect in step 3). Anything else is not this task's resource: stop here and
+   leave it:
 
    ```sh
    CID=FULL_CONTAINER_ID   # from step 3
@@ -149,8 +177,10 @@ Only the owner of the task decides. Run these from the repository root; every co
    ```sh
    docker --host "$ENDPOINT" container stop "$CID"
    docker --host "$ENDPOINT" container ls -a --no-trunc --filter "name=^/$NAME\$"
-   docker --host "$ENDPOINT" volume ls --filter "label=com.cc-rpi.postgres-recipe.nonce=$NONCE"
+   docker --host "$ENDPOINT" volume inspect VOLUME_NAME    # each name from step 3; "No such volume" is the proof
    ```
+   The daemon removes a `--rm` container a moment after `stop` returns; repeat the listing once after a few seconds
+   before concluding anything.
 
 6. Record the disposition. The recipe has no command that clears an orphan intent, on purpose, and editing the receipt
    is not supported. Keep the receipt and write a retained-resource handoff in the task notes: receipt path, owner,
