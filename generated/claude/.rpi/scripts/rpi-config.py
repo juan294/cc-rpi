@@ -94,6 +94,24 @@ def local_indent(local):
     return '\t' if unit.startswith(b'\t') else len(unit)
 
 
+def prune_emptied(document, pointer, pruned):
+    """After an owned entry is removed, drop the empty array and the empty objects that held it, from the leaf upward.
+
+    The containers an install created exist only for the owned entries; leaving them behind adds keys to the owner's
+    settings that were never there. A container that still has any other content stays untouched."""
+    for depth in range(len(pointer), 0, -1):
+        parent, key = leaf(document, pointer[:depth])
+        if parent is None or key not in parent:
+            if depth == len(pointer):
+                continue  # A removed scalar is already gone; its parents may be empty now.
+            break
+        if parent[key] not in ([], {}):
+            break
+        del parent[key]
+        pruned = True
+    return pruned
+
+
 def conflict(identity, reason, old=None, new=None):
     """Carry the public template values so the repair can name them."""
     item = {'id': identity, 'reason': reason}
@@ -129,6 +147,7 @@ def reconcile(local, previous_records, desired_records, allow_capabilities=False
         raise ValueError('native settings must be a JSON object')
     original = copy.deepcopy(document)
     entries, conflicts, retained = [], [], []
+    pruned = False
     for identity in sorted(set(previous) | set(desired)):
         old, new = previous.get(identity), desired.get(identity)
         record = new or old
@@ -156,6 +175,7 @@ def reconcile(local, previous_records, desired_records, allow_capabilities=False
                 del parent[key][old_indices[0]]
             else:
                 del parent[key]
+            pruned = prune_emptied(document, old['pointer'], pruned)
             continue
         if not old and new_present:
             retained.append({'id': identity, 'value': new['value'], 'reason': 'matching existing entry is project-owned'})
@@ -201,5 +221,7 @@ def reconcile(local, previous_records, desired_records, allow_capabilities=False
         entries.append(copy.deepcopy(new))
     if conflicts:
         return {'content': local, 'entries': copy.deepcopy(previous_records), 'conflicts': conflicts, 'retained': retained}
+    if pruned and document == {} and local is not None:
+        return {'content': None, 'entries': entries, 'conflicts': [], 'retained': retained}  # Only owned entries were in the file: nothing is left of it.
     content = local if same(document, original) else (json.dumps(document, indent=local_indent(local), ensure_ascii=False, allow_nan=False) + '\n').encode()
     return {'content': content, 'entries': entries, 'conflicts': [], 'retained': retained}

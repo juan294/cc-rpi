@@ -172,6 +172,20 @@ class DistributionTests(unittest.TestCase):
         self.assertEqual(distribution.applicable_rules(manifest, "test_a.py", task="testing"), ["rule:testing"])
         self.assertIn(b".rpi/rules/testing.md", self.render()["codex/AGENTS.md"])
 
+    def test_the_inventory_receipt_is_0644_whatever_the_umask(self):
+        import os
+        tree = self.render()
+        for mask in (0o077, 0o022, 0o002):
+            with self.subTest(umask=oct(mask)):
+                output = self.root / ("receipt-%o" % mask)
+                previous = os.umask(mask)
+                try:
+                    distribution.write_tree(tree, output)
+                    distribution.write_tree(tree, output)  # An update of an existing output keeps the rule.
+                finally:
+                    os.umask(previous)
+                self.assertEqual((output / "distribution-inventory.json").stat().st_mode & 0o777, 0o644)
+
     def test_render_preserves_modified_owned_and_unowned_outputs_before_writes(self):
         output = self.root / "generated"
         distribution.write_tree({"first.txt": b"original", "second.txt": b"second"}, output)

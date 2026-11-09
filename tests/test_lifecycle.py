@@ -295,8 +295,8 @@ class TransactionTests(unittest.TestCase):
         self.assertIn('--allow-capabilities config:policy', reasons[0])
         self.assertNotIn('native diff', reasons[0])
         self.apply_ready('update', '--allow-capabilities', 'config:policy')
-        settings = json.loads((self.project / '.claude/settings.json').read_text())
-        self.assertNotIn('Bash(git push:*)', settings['permissions']['ask'])
+        # WB2-L-7: the entry is gone and so is the settings file the install created for it (no empty ask/deny/hooks skeleton).
+        self.assertFalse((self.project / '.claude/settings.json').exists())
 
     def test_locally_edited_owned_entry_conflict_names_its_repair(self):
         ask = {'id': 'ask-push', 'pointer': ['permissions', 'ask'], 'mode': 'entry', 'value': 'Bash(git push:*)'}
@@ -346,7 +346,7 @@ class TransactionTests(unittest.TestCase):
         settings_path, settings, _, desired = self.edited_hook_update()
         self.assertEqual(self.assert_healthy_after(settings_path, settings, desired), [desired])
         self.apply_ready('detach')
-        self.assertEqual(json.loads(settings_path.read_text())['hooks']['PreToolUse'], [])
+        self.assertFalse(settings_path.exists(), 'detach leaves no empty hooks skeleton in a settings file the install created')
 
     def test_restoring_previous_value_reaches_healthy_update(self):
         settings_path, settings, previous, desired = self.edited_hook_update()

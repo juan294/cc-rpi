@@ -674,9 +674,13 @@ class LifecycleDecisionTests(unittest.TestCase):
         # Hand-merging the upstream change plus the owner tweak still conflicts;
         # restoring the recorded previous version is the printed exact repair.
         destination.write_text(installed.decode().replace('Required', 'Owner Upstream-required'))
-        restored = subprocess.run(shlex.split(conflict['restore_command']), capture_output=True, text=True)
+        edited = destination.read_bytes()
+        restored = subprocess.run(conflict['restore_command'], shell=True, capture_output=True, text=True)
         self.assertEqual(restored.returncode, 0, restored.stderr)
         self.assertEqual(destination.read_bytes(), installed)
+        # WB2-L-9: the repair keeps the owner's version before it replaces the file.
+        saved = list((self.project / '.rpi/local/saved-edits/plan/project/.agents/skills/rpi-plan/references').glob('playbook.md.*'))
+        self.assertEqual([path.read_bytes() for path in saved], [edited])
         self.apply_ready('update')
         self.assertEqual(destination.read_bytes(), source.read_bytes())
 

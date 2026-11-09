@@ -2,7 +2,16 @@
 # Thin compatibility entry point. The shared engine owns inventory and writes.
 set -euo pipefail
 
-rpi_source=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+# Resolve symbolic links to this script (a link in PATH or ~/bin is common) without readlink -f, which macOS bash 3.2 lacks.
+rpi_self=${BASH_SOURCE[0]}
+rpi_hops=0
+while [[ -L "$rpi_self" ]]; do
+  ((rpi_hops += 1)) && [[ $rpi_hops -le 40 ]] || { printf 'BLOCKED / WHY: too many symbolic links resolving %s / FIX: run the real script directly: bash PATH_TO_CC_RPI/scripts/install.sh\n' "$rpi_self" >&2; exit 1; }
+  rpi_link_dir=$(cd -P -- "$(dirname -- "$rpi_self")" && pwd)
+  rpi_self=$(readlink -- "$rpi_self")
+  [[ "$rpi_self" == /* ]] || rpi_self="$rpi_link_dir/$rpi_self"
+done
+rpi_source=$(cd -P -- "$(dirname -- "$rpi_self")/.." && pwd)
 rpi_engine="$rpi_source/templates/scripts/rpi-distribution.py"
 rpi_script="$rpi_source/scripts/install.sh"
 rpi_original=("$@")

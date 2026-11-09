@@ -94,7 +94,27 @@ class ConfigurationOwnershipTests(unittest.TestCase):
         self.assertEqual(blocked['content'], local)
         detached = reconcile(local, [record()], [], allow_removal=True)
         self.assertFalse(detached['conflicts'])
-        self.assertEqual(json.loads(detached['content'])['permissions']['ask'], [])
+        # WB2-L-7: nothing but the owned entry was in the file, so nothing is left of it (no empty ask/permissions skeleton).
+        self.assertIsNone(detached['content'])
+
+    def test_removing_an_owned_entry_prunes_only_the_containers_it_emptied(self):
+        owned = record()
+        cases = [(b'{"model":"x","permissions":{"ask":["Bash(git push:*)"]}}', {'model': 'x'}),
+                 (b'{"permissions":{"ask":["Bash(git push:*)","mine"]}}', {'permissions': {'ask': ['mine']}}),
+                 (b'{"permissions":{"ask":["Bash(git push:*)"],"deny":["Read(.env)"]}}', {'permissions': {'deny': ['Read(.env)']}}),
+                 (b'{"permissions":{"ask":["Bash(git push:*)"],"deny":[]}}', {'permissions': {'deny': []}})]
+        for local, expected in cases:
+            with self.subTest(local=local):
+                result = reconcile(local, [owned], [], allow_removal=True)
+                self.assertEqual(json.loads(result['content']), expected)
+        scalar = {'id': 'option:flag', 'pointer': ['env', 'deep', 'flag'], 'mode': 'value', 'value': True}
+        self.assertEqual(json.loads(reconcile(b'{"model":"x","env":{"deep":{"flag":true}}}', [scalar], [], allow_removal=True)['content']), {'model': 'x'})
+        self.assertEqual(json.loads(reconcile(b'{"env":{"deep":{"flag":true,"other":1}}}', [scalar], [], allow_removal=True)['content']),
+                         {'env': {'deep': {'other': 1}}})
+        self.assertIsNone(reconcile(b'{"env":{"deep":{"flag":true}}}', [scalar], [], allow_removal=True)['content'])
+        # An owner file that was already empty of our entry is left exactly as it was.
+        untouched = b'{"permissions":{"ask":[]}}'
+        self.assertEqual(reconcile(untouched, [], [], allow_removal=True)['content'], untouched)
 
     def test_update_does_not_claim_matching_unowned_array_entry(self):
         local = b'{"permissions":{"ask":["old","new"]}}'
