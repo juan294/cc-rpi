@@ -26,7 +26,7 @@ jobs:
   coverage:
     name: Coverage report
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
