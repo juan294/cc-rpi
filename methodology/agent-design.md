@@ -537,7 +537,9 @@ READY, CONDITIONAL, or NOT READY. `rpi-remediate` preserves every finding ID
 and resolves confirmed actionable findings through review, repair, simplification
 and verification. Severity/time horizon order the work, not automatic deferral.
 False positives need evidence; a genuine new architectural decision receives an
-explicit local disposition and owner review. External issues require authorization.
+explicit local disposition and owner review. An S3 or S4 finding (below the
+release-blocking S1/S2 level) may become an owner-approved accepted known issue,
+recorded with its severity and reason and fixed in a later release. External issues require authorization.
 
 See the canonical [rpi-pre-launch skill](../templates/skills/rpi-pre-launch/SKILL.md) for the full audit contract.
 

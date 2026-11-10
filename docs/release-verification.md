@@ -37,11 +37,26 @@ Missing, failed, stale or substituted required evidence blocks acceptance.
 Loopback report tests verify signing, rejection and retry behavior with synthetic
 credentials; they never contact Portfolio during preflight.
 
-Wave B uses two independent fresh-context charters on an immutable candidate:
-ownership/recovery and policy/verification/reporting. Each attempts all eight
-maneuvers, adapting locale/device to shell, encoding or execution context. Reports
-include concrete observations, all findings, high-risk gaps and cleanup evidence.
-Any failure must be repaired and its invalidated evidence rerun before release.
+This profile selects Wave B because cc-rpi's scripts run unattended or change
+files on adopters' machines. A release that changes only documentation,
+templates or prose skips it; Wave A still applies. Wave B uses two independent
+fresh-context charters on an immutable candidate: ownership/recovery and
+policy/verification/reporting. Each attempts all eight maneuvers, adapting
+locale/device to shell, encoding or execution context. Reports include concrete
+observations, all findings with an S1-S4 severity, high-risk gaps and cleanup
+evidence.
+
+Wave B runs one round per candidate. Only S1 findings (data loss, a security
+boundary breach or a broken core workflow) and S2 findings (a normal-use defect
+with no workaround, including a guardrail that falsely blocks ordinary work)
+block the release. Each repaired S1/S2 finding is verified with targeted checks,
+and the local gate is rerun for the changed candidate; a repair does not start a
+new full charter round. S3 and S4 findings are recorded in the release notes as
+owner-approved accepted known issues, with severity and reason, and fixed in a
+later release. The pre-action policy hook is a best-effort shell-text guardrail
+and the opt-in receipt gate guards against mistakes; neither is a security
+boundary. A new spelling or path that slips past either one is S3 at most and
+never blocks a release.
 
 The selected C-H work is proportional to this product: the distribution manifest
 and finding ledger map capabilities; nine adopter/harness combinations exercise
@@ -60,7 +75,7 @@ complete integrated candidate.
 
 Before pushing, inspect GitHub workflows/webhooks and connected deployment
 projects read-only. A discovered Vercel Preview trigger blocks publication.
-Record the exact integrated SHA and accepted local/native/charter evidence, push
+Record the exact integrated SHA and accepted local, native and any selected charter evidence, push
 completed `main` once, and require both expected push workflows to succeed for
 that SHA. Then create and push only the requested annotated version tag at that commit and publish
 the reviewed notes with `gh release create --verify-tag --notes-file`.

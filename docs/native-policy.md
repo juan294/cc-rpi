@@ -1,187 +1,42 @@
 # Native policy boundary
 
-The shared pre-action hook is a small supplemental denylist, not an approval
-system. Exit 2 with nonempty `BLOCKED / WHY / FIX` stderr blocks one of the few
-positively identified destructive operations listed below. Every other command
-exits 0 without a native allow decision, so the client's own permission rules,
-permission mode and user decide it. Repository settings, verification reports
-and explicit skill invocation never prove consent, and the hook never grants it.
+The shared pre-action hook is a small, best-effort guardrail. It is not an approval system and it is not a security boundary. Exit 2 with `BLOCKED / WHY / FIX` on stderr blocks one of the few clearly destructive operations listed below. Every other command exits 0 without a native allow decision, so the client's own permission rules, permission mode and user decide it. Repository settings, verification reports and explicit skill invocation never prove consent, and the hook never grants it. The real boundaries are the client's native permissions and the forge's branch protection.
 
 ## What is blocked
 
 | Operation | Rule |
 | --- | --- |
-| Force-push (`--force`, `-f`, `--force-with-lease`, `+ref`) or deletion (`--delete`, `-d`, `:ref`) of a protected branch | `protected-branch` |
-| The same with a target the parser cannot resolve (for example `"$BRANCH"`, a substitution or a glob such as `refs/heads/*`) | `protected-branch` |
-| `gh api` with method DELETE on a repository or on a protected branch ref (`repos/O/R/git/refs/heads/main`), and method PATCH of a protected branch ref with `force=true` (`-F force=true`, `--field`, `--raw-field`) or with a body read from `--input` | `destructive-remote`, `protected-branch` |
-| `gh api graphql` with a `deleteRepository` or `deleteRef` mutation, or an `updateRef` mutation with `force: true` or a variable (the query may come from `-f`, `-F`, `-F query=@FILE` or `--input FILE`). A query that is not known statically (a `query` field built from a variable or substitution, `@-`, `--input -`, a file whose path is dynamic) is blocked as well, because a `deleteRef` cannot be ruled out; a file that does not exist is left to gh | `destructive-remote`, `protected-branch` |
-| Deleting or force-moving a version tag: `git push --delete`/`-d`/`:refs/tags/v1`/`+refs/tags/v1`/`-f origin v1.0`, `git push --force --tags`, `gh api -X DELETE .../git/refs/tags/v1`, `gh api -X PATCH .../git/refs/tags/v1 -F force=true`, `gh release delete v1 --cleanup-tag`. A version tag is a tag the receipt gate below calls one. A destination that spells a version (`v1.0`, `2.0`, `release-v1`) is a tag whatever its source is, because git matches the destination against the remote's refs first and a branch source can move a tag (`feat:v1.0`); only `refs/heads/NAME` and `heads/NAME` are branches for sure. Names that are not versions (`issue-42`, `fix-123`, `feature-2`, `release-1`) are branches | `protected-tag` |
-| `git push --mirror`, `--prune`, `--all`/`--branches` combined with force or deletion, and a plain `git push` to a remote with `remote.<name>.mirror` set | `destructive-push` |
-| A command that names git, gh or vercel (in any spelling the parser resolves) and cannot be evaluated: an unexpected error, a recursion, or the time budget | `policy-error`, `policy-budget` |
-| Vercel Preview creation: bare `vercel`/`vc`, `vercel deploy`, or a path deploy (any first word that is not a Vercel subcommand) without `--prod`/`--target production`, including npx/pnpm/yarn wrappers and pinned `vercel@version` packages | `preview` |
-| `gh repo delete` (`--help` and `-h` print help and pass), also through a `gh` alias | `destructive-remote` |
+| Force-push (`--force`, `-f`, `--force-with-lease`, `+ref`) or deletion (`--delete`, `-d`, `:ref`) of a protected branch, including a push without a refspec from a protected branch and a forced or deleting refspec glob that can match one (`refs/heads/*`) | `protected-branch` |
+| The same with a destination known only at run time, such as `"$BRANCH"` (`"feature-$N"` cannot be `main` and passes; `"$(git branch --show-current)"` resolves to the current branch) | `protected-branch` |
+| Deleting or force-moving a version tag: `git push --delete`/`-d`/`:refs/tags/v1`/`+refs/tags/v1`/`-f origin v1.0`, `git push --force --tags`, `gh api -X DELETE .../git/refs/tags/v1`, a forced `gh api -X PATCH` of a tag ref, `gh release delete v1 --cleanup-tag`. A version tag uses the receipt gate's pattern; a destination that spells a version (`v1.0`, `2.0`, `release-v1`) is a tag unless written `refs/heads/NAME` | `protected-tag` |
+| `git push --mirror`, `--prune`, and `--all`/`--branches` with force or deletion | `destructive-push` |
+| Vercel Preview creation: bare `vercel`/`vc`, `vercel deploy`, or a path deploy without `--prod`/`--target production`, including `npx`, `bunx`, `pnpm dlx/exec` and `yarn dlx/exec` and pinned `vercel@version` packages | `preview` |
+| `gh repo delete` (`--help` passes), `gh api` DELETE of a repository or of a protected branch ref, a forced PATCH of a protected branch ref, and a `gh api graphql` call that names `deleteRepository` or `deleteRef` | `destructive-remote`, `protected-branch` |
 
-Blocking version-tag deletion and forced tag moves (the `protected-tag` rule) is an owner policy extension of the
-v2.1.0 line: a published release tag is the one ref consumers pin. The receipt gate below keeps its behavior: it
-validates what a push publishes and a deletion publishes nothing, so a tag deletion still passes the gate (and the
-hook blocks it).
+Protected branches are `main`, `master` and `develop`, plus the project's `integration_branch` and `production_branches` from `.rpi/policy.json`, each written as a bare name or as `refs/heads/NAME`, compared without case. Force-pushing or deleting a working branch is allowed, and a `--dry-run`/`-n` push passes.
 
-Protected branches are `main`, `master` and `develop`, plus the project's
-`integration_branch` and `production_branches` from `.rpi/policy.json` when they
-are declared, each written as a bare name or as `refs/heads/NAME` (both mean the
-same branch), compared without case: on a case-insensitive remote `Main` is `main`, so `refs/heads/Main` is protected too.
-Force-pushing or deleting a working branch is allowed. This hook
-also lets any `--dry-run`/`-n` push through; the optional receipt gate below does
-not (Git runs the pre-push hook for a dry run and does not tell it, so the gate
-evaluates a dry-run push of the integration branch or a version tag like a real
-one). A push that names no refspec is resolved from Git's
-configuration, with the `git -c` settings of the same command line applied: the remote is `branch.<name>.pushRemote`,
-then `remote.pushDefault`, then `branch.<name>.remote`, then `origin`; its `remote.<name>.push` refspecs apply, and a
-remote with `remote.<name>.mirror` set mirrors every ref. Without refspecs `push.default` decides: `upstream` (or
-`tracking`), `matching`, `nothing` (nothing is pushed) or the current branch. A detached HEAD pushes nothing unless a
-refspec is configured. A refspec glob such as `refs/heads/feature/*:refs/heads/feature/*` is blocked only when it can
-match a protected branch (`refs/heads/*` can, `refs/heads/feature/*` cannot); `git push --force --tags` pushes no
-branch and is blocked only for the tag rule. A destination built from a variable is a wildcard in the same way:
-`"$BRANCH"` can be anything and is blocked, `"feature-$N"` cannot be `main` and passes.
+Everything else passes: ordinary `git push` of any branch or tag, `gh pr create/merge/update-branch`, `gh workflow run`, `gh run rerun`, other `gh api` calls, releases, issues, Vercel production deploys and other Vercel subcommands. Those outward-facing actions belong to the project's native permission rules and the user. `git pull` is never blocked.
 
-Everything else passes through: ordinary `git push` of any branch or tag,
-`gh pr create/merge/update-branch`, `gh workflow run`, `gh run rerun`, other `gh api` calls,
-releases, issues, Vercel production deploys and other Vercel subcommands. Those
-are outward-facing actions, so the project's native permission rules and the
-user govern them. `git pull` is never blocked.
+## How commands are read
 
-## Pass-through by design
+Shell text is read and never executed. The hook splits a command line at `;`, `&&`, `||`, `|`, `&`, parentheses and newlines, and also inspects `$(...)` and backtick substitutions, `bash`/`sh`/`zsh`/`dash`/`ksh`/`fish -c` scripts (with options before or after `-c`), `eval`, `su -c`, `runuser -c` and `env -S`. It skips variable assignments, shell keywords and the common wrappers `env`, `command`, `builtin`, `exec`, `sudo`, `doas`, `time`, `timeout`, `nice`, `nohup`, `stdbuf`, `caffeinate`, `watch`, `xargs` and `setsid`. It follows `cd`, `pushd` and `git -C` to find the repository, and it reads `git push`, `gh` and `vercel` arguments as written. Quotes and escapes are removed as the shell removes them. Comments, redirections and here-document bodies are dropped. Literal text (`echo`, `printf`, `grep`, a commit message) never triggers a block.
 
-Shell text is parsed and never executed. Chains, pipes, subshells, command and
-process substitutions, `bash`/`sh`/`zsh -c` (including forms such as `-ec`,
-`-e -c`, `-c -e` and `-o pipefail -c`; options before and after `-c` are skipped
-to the first non-option word, which is the script; `-o`, `-O`, `--rcfile` and
-`--init-file` take a value and every other long option is a flag; `fish`, `csh` and `tcsh` too, and fish's
-`--command`), `eval`, `su -c`, `runuser -c` and `runuser -u USER [--] CMD`, `flock FILE CMD` and `flock ... -c CMD`,
-`trap 'CODE' SIGNAL`, `parallel CMD ::: ARGS` (its `{}` placeholders are unknown input), and the wrappers
-`env`, `command`, `builtin`, `exec`, `sudo`, `doas`, `time`, `timeout`, `nice`, `nohup`, `stdbuf`, `caffeinate`, `xargs`,
-`ionice`, `chrt`, `taskset`, `setsid`, `busybox`, `unbuffer`, `watch`, `arch` (also `-arch arm64`), `xcrun`, the
-Homebrew g-prefixed `genv`, `gtimeout`, `gnice`, `gstdbuf`, `gnohup`, `gxargs` and `gtime`, and the zsh forms `noglob`,
-`nocorrect`, `repeat N`, `coproc`, a leading `-` and `=git` with literal arguments, redirections such as `2>&1`, `git -C`, literal
-`cd`/`pushd`/`popd` and loop bodies are inspected for the blocked forms above. A wrapper's options are read like the
-tool reads them: each short option that takes a value (`sudo -u root`, `/usr/bin/time -o FILE`, `env -C DIR`) or long
-option (`sudo --user root`, `nice --adjustment 5`, abbreviations included) consumes its value, a cluster such as `-nu`
-ends in its value option, and the operands before the command (the `timeout` duration, the `chrt` priority, the
-`taskset` mask unless `-c` or `--cpu-list` is given) are skipped. `env -S` and `env --split-string` (also attached,
-`-S'...'`, or in a cluster such as `-iS` and `-vS`) are split with env's rules: blanks separate words, single and double
-quotes group, `\_`, `\c` and the usual escapes work, `${NAME}` is a variable; a string env itself could not parse is
-a block when it names git, gh or vercel. A directory change is kept only where the shell keeps it: not after a `cd`
-that is a pipeline stage, runs in the background (`&`) or sits in a subshell `( ... )`, and `cd -` returns to the
-previous directory. A command or process substitution runs where its word is: after the `cd` that precedes it, not at the start of the command line. `git -c` is applied
-for these kinds of setting on the same command line: `alias.<name>` (a
-plain alias expands to its command and the expansion is read again, so an alias
-that begins with global options such as `-c`, `-C` or `-p` is handled, and chains of aliases are followed until
-none matches, with a loop treated as not a push; a `!` alias is inspected as shell text and passes its `-c`
-settings on to the git commands in it, as Git does to child processes, so chains of shell aliases are followed
-too; the chain and the nesting are capped at 100, beyond which the command is unclassifiable and passes; an
-alias named like a Git builtin such as `push` or `status` is ignored, as Git
-ignores it, using `git --list-cmds=builtins` and a static list as fallback; an alias from the repository or user
-configuration files is read the same way), `remote.<name>.push` (added to the configured push specs),
-`remote.<name>.mirror`, `remote.pushDefault`, `branch.<name>.pushRemote`, `push.default`, `branch.<name>.remote` /
-`branch.<name>.merge` (which replace the repository value) and `help.autocorrect` (when it is enabled, an unknown
-command whose weighted edit distance to `push` is under Git's floor of 7 is read as a push, as Git would run it).
-A value of a configuration variable that Git runs as a command (`core.sshCommand`, `core.pager`, `core.editor`,
-`core.fsmonitor`, `core.askPass`, `diff.external`, `credential.helper` after `!`, `*.cmd`, `*.textconv`, `*.clean`,
-`*.smudge` and similar) is inspected as shell text. Any other `-c` setting is ignored. Git's own options before the
-command are skipped as Git reads them: `-C`, `-c`, `--git-dir`, `--work-tree`, `--namespace`, `--super-prefix`,
-`--config-env` and `--attr-source` take a value (the long ones also as `--name=value`) and every other option is a flag;
-a test runs the installed Git against that table. Subcommands that run shell text are inspected as well: `git submodule
-foreach`, `git rebase -x`/`--exec`, `git bisect run`, `git filter-branch --*-filter` and `--setup`, `git difftool -x`
-and `--extcmd`, and `git for-each-repo --config=KEY ...` (as the git command it runs); `git send-pack` and
-`git http-push` are pushes (without refs and with `--force` they push every matching branch). The same settings are read, with the same rules, from
-environment variables assigned inline in the same command (`GIT_CONFIG_COUNT` with `GIT_CONFIG_KEY_<n>` and
-`GIT_CONFIG_VALUE_<n>`, `GIT_CONFIG_PARAMETERS`, also through `env`) and from `--config-env=NAME=VAR` when `VAR`
-is assigned inline in that command. `gh api` DELETE is recognised as
-`-X DELETE`, `-XDELETE`, `-X=DELETE`, `--method DELETE` and `--method=DELETE` in any case, and with `-X`
-inside a cluster of `gh api`'s boolean `-i` flag (`-iX DELETE`, `-iXDELETE`). The endpoint may be a
-relative or absolute path or an `https://HOST/` or `https://HOST/api/v3/` URL; a query string or
-fragment is ignored and percent-encoding (`heads%2Fmain`), repeated slashes, `.` and `..` segments
-and a trailing slash are normalised before the repository and branch-ref patterns are matched; a path
-under `refs/heads` that still climbs out with `..` after normalisation is blocked as unclassifiable. After `cd "$DIR"` or `popd` the
-repository is unknown, so only the default protected branches apply. A working directory that no longer exists leaves the
-repository unknown in the same way. Literal `echo`, `printf`, `cat`, `grep` and `rg` arguments are text.
+## Accepted limits
 
-`gh` aliases are followed. `gh alias set NAME EXPANSION` (also `--shell`/`-s`, `--clobber`) is judged as the command
-the expansion stands for, so defining an alias that deletes a repository is blocked, and `gh NAME ...` expands an
-alias of the `aliases:` section of `config.yml` in `GH_CONFIG_DIR`, `$XDG_CONFIG_HOME/gh` or `~/.config/gh` (read without
-a YAML parser; a `!` expansion is shell text). A `gh api` endpoint that is wholly a variable (`"$ENDPOINT"`) is
-unclassifiable and passes; a branch or tag name inside a ref endpoint (`refs/heads/$BR`) is a wildcard, as for a push
-target. Branch-protection and ruleset changes through `gh api` are not covered.
+The hook is deliberately simple. These forms are not recognised, and that is accepted, not a defect to chase:
 
-The tokenizer resolves the spellings the shell itself resolves before it looks for a command:
+- Git and gh aliases, `git -c` and environment configuration (`alias.*`, `remote.*.push`, `push.default`, `remote.*.mirror`, `GIT_CONFIG_*`), and configured push destinations. A push without a refspec is judged against the current branch.
+- Abbreviated `git push` options (`--forc`), brace expansion, and quote splits of a command name (`g\it`).
+- Arguments supplied at run time (`echo main | xargs git push -f origin`), scripts piped or fed to a shell (`cat <<'EOF' | bash`), scripts in files, and commands run through `ssh`, `docker`, `find -exec` or similar launchers.
+- Variables exported by an earlier command, shell functions and aliases defined elsewhere, and `..` tricks in `gh api` paths.
 
-- Quote, escape and line-continuation splits of a command name (`g\it`, `gi"t"`, `ver\cel`) and `$'...'`
-  words, which are decoded (`$'git'`, `$'\x69'`, octal and `\u` escapes), anywhere in the command line.
-- Static brace lists such as `{main,x}`, `ma{in,}`, `{,+}main` and `{git,push}`, nested or repeated, are expanded
-  when unquoted. A command that expands to more than 1024 words per word is blocked, because it cannot be inspected.
-- A redirection glued to a word (`main>/dev/null`, `main>&2`, `main</dev/null`, `main>>log`) is not part of the word.
-- A branch may be written `NAME`, `heads/NAME` or `refs/heads/NAME`, as Git resolves a short ref.
-- `git push` options may be abbreviated to any prefix of a long option, as Git accepts (`--dele`, `--force-w`,
-  `--mir`, `--al`). A prefix that is ambiguous is applied as every option it could mean, so `--forc` counts as a force.
-  The option list is fixed in the script and a test compares it with the installed Git. `gh` options (cobra) are not
-  abbreviated by their parser, and `gh` and `vercel` options are matched exactly as written.
-- `$"..."` locale strings are double-quoted strings; `{x..y}` and `{x..y..step}` sequences of integers and single letters
-  are expanded like lists (a numeric sequence over the cap is one unresolved word), so `ma{i..i}n` is `main` and
-  `g{i..i}t` is `git`; `{main..main}` is not a sequence (bash keeps it literal) and stays a literal name. A command word is
-  looked for in the brace expansions of each short word of the command text, so a brace-spelled command name is found
-  in any command, and the long data words of a command (minified JSON) cost nothing.
-- A redirection of the form `{fd}>file`, `{fd}<file` or `{fd}>&2` is a redirection, not a command word.
-- `function NAME { ... }`, `NAME() { ... }` and `NAME() ( ... )` run their body like a command list when the rest of the
-  command names the function again (a call, `export -f NAME`, `xargs ... NAME`, a use inside `$(...)`, a name spelled
-  with quotes or `$'\x66'`); a definition that nothing uses is inert and passes, unless a command word is dynamic
-  (`${X:-f}`, `$(echo f)`, `"$X"`) or a shell, `eval` or `xargs` is given dynamic text, because then any function may be called.
+A new spelling that slips past the hook is at most an S3 finding and never blocks a release; see the [release playbook](../templates/e2e-pro-playbook-template.md).
 
-Here-documents are read where the shell reads them: a `<<` that is inside a comment, a quote or a string is not an
-operator, and a body ends at its terminator line. A body is text, never parsed as commands, unless its consumer is
-a shell (`bash`, `sh`, `zsh`, `dash`, `ksh`), `eval`, `source`, `.` or `xargs`, or its pipeline ends in one of
-them (`cat <<'EOF' | bash`); then it is inspected like script text. Bodies fed to anything else (`cat`, `tee`,
-`git commit -F -`, `gh pr create --body-file -`, an interpreter such as `ruby`) are text. The command substitutions in
-the body of an unquoted here-document (`$(...)` and backticks) are always inspected, because the shell runs them.
-A body that an interpreter or a script later executes is not seen (see the unclassifiable forms below).
+## Failure behavior
 
-One hook invocation is bounded. Git answers (branch lists, configuration, builtins) are cached for the invocation, so a
-long command pays for each distinct lookup once. Alias chains and nesting are limited to 100 (a chain of exactly 100
-expansions is still followed; the 101st makes the command unclassifiable), brace expansion to 1024 words, and the
-whole evaluation to 10 seconds (`RPI_POLICY_BUDGET_SECONDS` changes it; a value that is not a number above 0 and at
-most 20 is ignored with a `POLICY NOTE` line and the default applies: the Codex hook timeout is 30 seconds and the
-budget, the report and the telemetry all fit inside it). The judging stops a quarter of a second to one second before the
-budget so that the block report and its telemetry end inside it too. The bound is checked inside every loop whose
-cost grows with the command, each `git` lookup has the remaining time as its timeout, and a hard timer (`SIGALRM`) ends
-work the loops cannot check; the hook puts back the `SIGALRM` handler and timer it found and clears its caches. A command
-that needs more than the time or brace budget is blocked, not passed, with a message that says to split it; a `git`
-that does not answer in time is blocked with a message that says so and names `git rev-parse --show-toplevel` as the
-check. A command that names git, gh or vercel and nests shells, `eval` or substitutions more than 100 levels deep is
-blocked (`policy-error`, with a fix that says to write it without the nesting); without a policy word it costs nothing. Nesting is followed without recursion, so no command reaches the interpreter's limit.
+The hook never blocks work because it failed. Shell text it cannot read (an unclosed quote, for example) passes. A malformed native event, an unknown adapter argument or an unexpected error passes with a `POLICY UNAVAILABLE` warning; an error in one command of a chain does not hide a later destructive command. A `.rpi/policy.json` that cannot be used prints a `POLICY NOTE` and only the default branches stay protected. Missing Git leaves the repository unknown, so the default branches stay protected and nothing else is looked up. The wrapper prefers `python3.14` through `python3.11` over an older default `python3` (macOS ships 3.9); with no supported runtime, a missing policy script or a bad registration it prints `RPI POLICY SKIPPED` and passes. The opt-in receipt gate is a separate Git hook and does not depend on this wrapper.
 
-Anything the parser cannot read, including unterminated quotes, unknown wrappers,
-package scripts and a chain of more than 100 alias expansions pass to native permissions.
-These forms are known to be unclassifiable and are not blocked, even when they
-rewrite a protected branch: arguments supplied at run time, such as
-`echo main | xargs git push -f origin`; scripts piped or fed to a shell, such as
-`echo 'git push -f origin main' | bash` and `bash <<< '...'`; and commands run
-through `ssh host '...'`, `script`, `at`, `nsenter`, `docker run` or `find . -exec git push -f origin main ';'` (a test pins each of them). Variables
-exported by an earlier command (`export GIT_CONFIG_COUNT=1 ...` followed by a later
-`git` call, or a `--config-env` variable set elsewhere) are not known to the parser, and neither is a configuration
-written earlier in the same command (`git config alias.pf "push -f"; git pf`). A shell function or alias that is defined
-elsewhere is never expanded. Missing Git passes silently. The
-wrapper prefers `python3.14` through `python3.11` over an older default `python3`
-(macOS ships 3.9). With no supported runtime, or a missing policy script, it
-prints `RPI POLICY SKIPPED`. The opt-in receipt gate is a separate Git hook and
-does not depend on this wrapper. An
-unexpected evaluation error (a recursion, a defect) in a command that names git, gh or vercel in any spelling the
-parser resolves blocks with `BLOCKED / WHY / FIX` (rule `policy-error`) and a fix that points to the installation
-check; in a command that names none of them it prints `POLICY UNAVAILABLE` and passes. This hook
-is not a complete shell security boundary. A malformed native event or an unknown adapter argument, which
-indicate a broken installation, fail closed for every command. The hook reads its input as UTF-8 bytes and writes
-escaped text, so a locale or `PYTHONIOENCODING` that cannot print non-ASCII text never turns a command into a
-"malformed event". An invalid
-`.rpi/policy.json` blocks only the commands that read it: force-pushes and
-deleting pushes, and `gh api` DELETE of a branch ref.
+Each block is recorded in `.rpi/local/contract-events.jsonl` at the repository root when `.rpi/` exists.
 
 ## Native permissions
 

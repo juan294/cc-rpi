@@ -60,9 +60,10 @@ invocation or tool visibility does not grant extra authority.
 4. Adapt [the release playbook](references/e2e-pro-playbook.md) into the project's
    release documentation with verified Project Adaptation Profile values. Adopt
    Wave A's truthful release gate; select structural Waves C-H by risk, recording
-   inapplicable sections and reasons. `rpi-explore-release` supplies Wave B when
-   an existing authorized immutable candidate can be exercised; do not create a
-   Preview to satisfy it.
+   inapplicable sections and reasons. Select Wave B in the profile only when the
+   project ships code that runs unattended or destructively on users' machines;
+   `rpi-explore-release` then runs one round on an existing authorized immutable
+   candidate. Do not create a Preview to satisfy it.
 5. Prepare the README and applicable local checks/hooks from actual project
    facts. Remote repository settings, production, new hosted schedules and
    publication remain separately authorized operations. Do not enable optional

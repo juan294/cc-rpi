@@ -68,8 +68,9 @@ actual repository. Preserve the user-owned Drawio or other local extensions.
 6. Preserve curated research/plans/decisions/handoffs. Apply visibility policy to
    raw reports/logs; never stage entire ignored directories.
 7. Adapt [the release playbook](references/e2e-pro-playbook.md): Wave A always;
-   structural Waves C-H by actual risk with N/A reasons. Wave B exercises an
-   existing authorized immutable candidate through `rpi-explore-release`.
+   structural Waves C-H by actual risk with N/A reasons. Wave B is selected only
+   for code that runs unattended or destructively on users' machines, and then
+   runs one round on an existing authorized candidate through `rpi-explore-release`.
 8. Run engine diagnostics and complete applicable local gates. Verify actual
    native entries/resources, rule reachability, settings preservation and recovery.
 

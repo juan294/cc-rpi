@@ -44,6 +44,20 @@ class PolicyFalsePositiveTests(test_policy.PolicyFixture):
             with self.subTest(command=command):
                 self.allowed(command)
 
+    def test_review_false_blocks_of_ordinary_work(self):
+        # Final review of the simplified hook (2026-11-10): each command is ordinary work that was blocked.
+        commit = "git commit -m \"$(cat <<'EOF'\n1) run tests\n2) never `git push --force origin main`\nEOF\n)\""
+        body = "gh pr create --title t --body \"$(cat <<'EOF'\na) first\nb) `vercel` preview\nEOF\n)\""
+        for command in (commit, body, 'command -v vercel >/dev/null || echo missing', 'command -V vc',
+                        "git branch --merged | grep -v main | xargs git push origin --delete"):
+            with self.subTest(command=command):
+                self.allowed(command)
+        self.git('checkout', '-qb', 'v2-redesign')
+        self.allowed('git push --force-with-lease')
+        self.allowed('git push --force-with-lease origin v2-redesign')
+        self.git('checkout', '-qb', 'feature/work')
+        self.allowed('(cd /tmp && ls) && git push --force-with-lease')
+
     def test_codex_harness_matches_claude(self):
         for command in ('git push origin develop', 'gh pr merge 1', 'vercel --prod'):
             with self.subTest(command=command):

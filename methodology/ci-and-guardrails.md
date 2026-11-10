@@ -55,11 +55,13 @@ trust process.
 The shared policy implementation is
 [`templates/scripts/rpi-policy.py`](../templates/scripts/rpi-policy.py), with
 [`guard-bash.sh`](../templates/hooks/guard-bash.sh) as the compatible Claude
-wrapper. It is a denylist: force-pushing or deleting a protected branch,
-`git push --mirror`/`--prune`, Vercel Preview creation and `gh repo delete` block
-with `BLOCKED / WHY / FIX`. Everything else, including shell text the parser
-cannot read and every runtime failure of the hook itself, passes through to
-native permissions. See the [native policy](../docs/native-policy.md).
+wrapper. It is a small, best-effort denylist, not a security boundary:
+force-pushing or deleting a protected branch, deleting or force-moving a version
+tag, `git push --mirror`/`--prune`, Vercel Preview creation and `gh repo delete`
+block with `BLOCKED / WHY / FIX`. Everything else, including shell text the
+parser cannot read and every failure of the hook itself, passes through to
+native permissions. Spellings it does not recognise are accepted limits, not
+defects to chase. See the [native policy](../docs/native-policy.md).
 
 A pass does not authorize publication. The active owner instruction and the
 native permission boundary carry authorization. Never use a model-written

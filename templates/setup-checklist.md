@@ -119,8 +119,9 @@ is the execution authority; this checklist does not authorize remote operations.
   with local fixtures rather than a deliberately failing remote push.
 - [ ] Preserve project release obligations, including any stricter adopter
   maneuver validator. Adapt [the release playbook](e2e-pro-playbook-template.md):
-  truthful Wave A always; structural waves by actual risk. Exercise an existing
-  authorized immutable candidate for exploratory release checks.
+  truthful Wave A always; Wave B and structural waves only when the profile
+  selects them by actual risk. Exploratory checks run one round on an existing
+  authorized immutable candidate.
 - [ ] Keep implementation branches/worktrees local. Integrate completed work
   locally, inspect hosted triggers and publish completed integration once only
   within authorization. Never create Vercel Previews or hosted debugging loops.

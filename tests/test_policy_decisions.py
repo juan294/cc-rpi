@@ -22,34 +22,21 @@ class PolicyFileTests(test_policy.PolicyFixture):
         self.assert_blocked('git push -f origin develop', 'protected branch')
         self.assert_blocked('git push -f origin main', 'protected branch')
 
-    def test_invalid_policy_messages_name_the_cause(self):
+    def test_an_unusable_policy_file_warns_and_keeps_the_default_protection(self):
         path = self.project / '.rpi/policy.json'
-        path.write_text('not json')
-        self.assert_blocked('git push -f origin feature/work', 'not valid JSON')
-        path.write_text(json.dumps({'schema_version': 1, 'integration_branch': ['release']}))
-        self.assert_blocked('git push -f origin release', 'integration_branch')
-
-    def test_unreadable_policy_file_blocks_policy_dependent_commands(self):
-        path = self.project / '.rpi/policy.json'
-        path.unlink()
-        path.mkdir()
-        self.assert_blocked('git push --delete origin feature/old', '.rpi/policy.json')
-        self.assert_allowed('git status')
-
-    def test_invalid_policy_file_blocks_only_policy_dependent_commands(self):
-        path = self.project / '.rpi/policy.json'
-        for data in ('not json', '[]', '{"schema_version": 2}', '{"schema_version": 1, "unknown": 1}'):
+        for data in ('not json', '[]', '{"schema_version": 2}', '{"schema_version": 1, "unknown": 1}',
+                     json.dumps({'schema_version': 1, 'integration_branch': ['release']})):
             with self.subTest(data=data):
                 path.write_text(data)
-                self.assert_blocked('git push -f origin feature/work', '.rpi/policy.json')
-                for command in ('git status', 'git push origin develop', 'gh pr create --fill',
-                                'gh release create v7.7.7 --notes x', 'vercel --prod'):
+                result = self.assert_allowed('git push -f origin feature/work')
+                self.assertIn('POLICY NOTE', result.stderr)
+                self.assert_blocked('git push -f origin main', 'protected branch')
+                for command in ('git status', 'git push origin develop', 'gh pr create --fill', 'vercel --prod'):
                     self.assert_allowed(command)
-        copied = self.workspace / 'policy.json'
-        copied.write_text('{"schema_version": 1}')
         path.unlink()
-        path.symlink_to(copied)
-        self.assert_blocked('git push -f origin feature/work', 'regular file')
+        path.mkdir()
+        self.assert_allowed('git push --delete origin feature/old')
+        self.assert_blocked('git push --delete origin develop', 'protected branch')
 
 
 if __name__ == '__main__':

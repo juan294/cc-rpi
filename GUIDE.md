@@ -137,7 +137,7 @@ for exact source resolution and engine commands.
 | `rpi-status` | Diagnose project state, source/installation drift, native discovery, trust and evidence limitations. |
 | `rpi-fix-ci` | Reproduce a failed CI selection locally, repair it and run the complete applicable gate. |
 | `rpi-update-docs` | Complete authorized documentation, diagram, version and inline documentation updates. |
-| `rpi-explore-release` | Exercise an existing authorized immutable candidate using the project's required exploratory charters; never tags. |
+| `rpi-explore-release` | Run one round of exploratory charters on an existing authorized immutable candidate when the release profile selects Wave B; never tags. |
 | `rpi-release` | Prepare the supplied or selected version, notes and release evidence, then perform only the authorized publication actions. |
 
 An empty project can begin with brainstorming or planning because there is no code
@@ -177,8 +177,9 @@ not permission to silently omit a core domain.
 Findings retain the required ID grammar, fields, regression-risk reasoning and
 `file:line` evidence. Coverage gaps block audit acceptance. Remediation resolves
 all confirmed actionable findings within authorized scope; severity/time horizon
-order work rather than exempting low or strategic findings. False positives need
-evidence. Architectural decisions or explicitly deferred scope receive local
+order the work. An S3 or S4 finding may instead become an owner-approved
+accepted known issue, recorded with its severity and reason and fixed in a later
+release. False positives need evidence. Architectural decisions or explicitly deferred scope receive local
 owner-reviewed dispositions, not invented completion or automatic external issues.
 
 ## Verification, diagnostics and release
@@ -194,6 +195,8 @@ trusted and observed states. Missing native observations stay unavailable. A hoo
 can exist yet be skipped or untrusted. Native permissions retain approval
 authority for pushes, pull requests and workflow dispatch; the pre-action hook
 only blocks clearly destructive operations and passes everything else through.
+It is a best-effort guardrail, not a security boundary, and it never blocks a
+command because it failed.
 Opt in to the exact-candidate push gate with `require_verification_receipt` and
 enable its Git pre-push hook, `.rpi/scripts/rpi-prepush.py`, once per clone. See
 [native policy](docs/native-policy.md), [compatibility](docs/compatibility.md) and
@@ -201,11 +204,15 @@ enable its Git pre-push hook, `.rpi/scripts/rpi-prepush.py`, once per clone. See
 
 The pre-release sequence is `rpi-pre-launch`, `rpi-remediate`, `rpi-update-docs`,
 then `rpi-release`. Adapt the [E2E Pro playbook](templates/e2e-pro-playbook-template.md)
-to the project's actual release runbook. Wave A requires truthful exact-candidate
-evidence; structural waves depend on risk. Preserve existing stricter adopter
-requirements, including eight-maneuver validators. An existing authorized
-immutable candidate can supply exploratory evidence; do not create a Vercel
-Preview to satisfy a gate.
+to the project's actual release runbook. Release verification is proportional:
+Wave A's truthful exact-candidate evidence is required for every release, while
+Wave B exploratory charters and structural Waves C-H run only when the release
+profile selects them. A Wave B run is one round on the candidate; only S1/S2
+findings block, S3/S4 findings become owner-approved accepted known issues, and
+repairs get targeted checks instead of a new round. Preserve existing stricter
+adopter requirements, including eight-maneuver validators. An existing
+authorized immutable candidate can supply exploratory evidence; do not create a
+Vercel Preview to satisfy a gate.
 
 Keep working branches/worktrees local, finish all applicable local checks and
 integrate completed work locally. Inspect hosted triggers before one authorized
