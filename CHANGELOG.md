@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 Nothing retired this cycle: no rule or error ID is retired.
 
-Upgrade note: the 16 workflow skills change in this release. An update plan merges a project's edit to one of them, or reports a conflict when the edit overlaps the change. Move project-specific text into `.rpi/project/<skill>.md` (see `docs/project-overlay.md`). For a conflict, run the printed `restore_command`: it saves your edited copy, then restores the stock copy from `.rpi/baselines/<base_hash>` (the `base_hash` is in that entry of `.rpi/manifest.json`). Then plan the update again; `rpi-status` reports each overlay and the header line to write.
+Upgrade note: the 16 workflow skills change in this release. An update plan merges a project's edit to one of them, or reports a conflict when the edit overlaps the change. Move project-specific text into `.rpi/project/<skill>.md` (see `docs/project-overlay.md`). For a conflict, run the printed `restore_command`: it saves your edited copy, then restores the stock copy from `.rpi/baselines/<base_hash>` (the `base_hash` is in that entry of `.rpi/manifest.json`). Then plan the update again. After the update, `rpi-status` reports each overlay and the header line to write.
 
 ### Added
 
@@ -27,6 +27,18 @@ Upgrade note: the 16 workflow skills change in this release. An update plan merg
 ### Fixed
 
 - Remove executable placeholder package examples from the macOS skill and require verification of package names and publishers before installation.
+
+### Known issues
+
+Two exploratory release charters ran on this candidate and found no S1 or S2 issue. These lower-severity findings are accepted for this release, under the owner's rule that S3 and S4 findings do not block a release, and are planned for a later release:
+
+- S3: on a plugin-route installation, a valid overlay reads as `invalid` with the advice "rename or remove the file". Do not follow that advice there: plugin skills do read the overlay. Diagnostics cannot inspect plugin-route skills, and the output does not name the route.
+- S3: the reserved-path check for `.rpi/project` (and `.rpi/local`, since 2.1.0) compares case-sensitively, so on a case-insensitive filesystem a component destination such as `.rpi/Project/x` is accepted. Only a modified upstream source can declare such a destination.
+- S4: a symlinked overlay is followed and classified, although `docs/project-overlay.md` says anything other than a regular file is invalid. Its text is still never printed.
+- S4: an overlay file name with uppercase letters (for example `rpi-Validate.md` on a case-insensitive filesystem) gets a header fix it cannot satisfy; rename the file to lowercase.
+- S4: a lifecycle-skill copy inside the project makes `.rpi/project/rpi-update.md` read as `inert` with a fix that cannot resolve it; it should read as `invalid`.
+- S4: a directory named like an overlay gets a misleading reason, and overlay reads have no size limit.
+- S4: `project_overlays` items do not always carry the same fields, the `overrides` count is not documented, and a malformed `## Declared overrides` entry counts as 0 without a warning.
 
 ## [2.1.0] - 2026-11-10
 
