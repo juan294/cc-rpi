@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Added
+
+- **Project overlays.** Project-specific workflow behavior lives in a project-owned `.rpi/project/<skill>.md` instead of an edited managed skill. The 16 workflow skills read it when present; install, update and detach never touch it, and no component can claim `.rpi/project`. An overlay adds steps and checks; by instruction contract it cannot grant publication authority or relax a gate, and a declared override changes only other procedure detail. See `docs/project-overlay.md`.
+- **Authored skill hash.** Each installed skill `SKILL.md` manifest entry records `source.authored_sha256`, the same for both harnesses. An installation that has not recorded it yet stays healthy until its next real update.
+- **Overlay diagnostics.** `diagnose` and `rpi-status` report `project_overlays`, one item per overlay file with its status and fix or reason, and the header line to use when the installed hash is known. Overlay text is never printed. Only direct-route skill copies are inspected.
+- `rpi-implement` commits the deviation notes with the phase and cites plans by file name; `rpi-triage` treats an older report left by a failed run as an agent failure, and an unconfigured or failing error-tracker, log or audit query as a YELLOW gap, never "all clear".
+
 ### Fixed
 
 - Remove executable placeholder package examples from the macOS skill and require verification of package names and publishers before installation.

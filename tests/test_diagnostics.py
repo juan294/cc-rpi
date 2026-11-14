@@ -530,5 +530,143 @@ class DiagnosticTests(unittest.TestCase):
         self.assertEqual(self.snapshot(), before)
 
 
+    BLOCK = '## Project overlay\n\nIf `.rpi/project/rpi-release.md` exists, read it.\n\n'
+    AUTHORED = 'ab12cd34ef56' + '0' * 52
+
+    def overlay_install(self, block=('claude', 'codex'), authored=AUTHORED, newline='\n'):
+        """Install rpi-release in both harness copies; `block` names the copies that carry the overlay section."""
+        entries = []
+        for harness, base in (('claude', '.claude/skills'), ('codex', '.agents/skills')):
+            body = '---\nname: rpi-release\n---\n\n' + (self.BLOCK if harness in block else '') + '## Orientation\n'
+            body = body.replace('\n', newline)
+            value = self.entry(base + '/rpi-release/SKILL.md', body, component='skill:rpi-release')
+            value['adapter'] = {'harness': harness}
+            if authored:
+                value['source']['authored_sha256'] = authored
+            entries.append(value)
+        self.install_receipt(entries)
+
+    def overlay(self, name='rpi-release.md', header=None, body='## Procedure\nRun the project checklist.\n'):
+        if header is None:
+            header = '<!-- rpi-overlay: skill=rpi-release; written-against=ab12cd34ef56 -->\n'
+        return self.write('.rpi/project/' + name, header + '# Project overlay for rpi-release\n\n' + body)
+
+    def overlays(self):
+        return {item['file']: item for item in self.report()['project_overlays']}
+
+    def test_project_overlay_present_when_header_matches_installed_skill(self):
+        self.overlay_install()
+        self.overlay()
+        item = self.overlays()['.rpi/project/rpi-release.md']
+        self.assertEqual(item['status'], 'present')
+        self.assertEqual(item['skill'], 'rpi-release')
+        self.assertEqual(item['written_against'], 'ab12cd34ef56')
+        self.assertEqual(item['overrides'], 0)
+
+    def test_no_project_overlays_is_an_empty_list(self):
+        self.overlay_install()
+        result = self.report()
+        self.assertEqual(result['project_overlays'], [])
+        self.assertEqual(result['config_issues'], [])
+
+    def test_project_overlay_stale_when_stock_skill_changed(self):
+        self.overlay_install(authored='9' * 64)
+        self.overlay()
+        item = self.overlays()['.rpi/project/rpi-release.md']
+        self.assertEqual(item['status'], 'stale')
+        self.assertEqual(item['current'], {'claude': '999999999999', 'codex': '999999999999'})
+        self.assertEqual(item['header_line'], '<!-- rpi-overlay: skill=rpi-release; written-against=999999999999 -->')
+
+    def test_project_overlay_staleness_unchecked_without_authored_hash(self):
+        self.overlay_install(authored=None)
+        self.overlay()
+        self.assertEqual(self.overlays()['.rpi/project/rpi-release.md']['status'], 'present')
+
+    def test_project_overlay_staleness_unchecked_for_untracked_install(self):
+        for base in ('.claude/skills', '.agents/skills'):
+            self.write(base + '/rpi-release/SKILL.md', '---\nname: rpi-release\n---\n\n' + self.BLOCK)
+        self.overlay()
+        self.assertEqual(self.overlays()['.rpi/project/rpi-release.md']['status'], 'present')
+
+    def test_project_overlay_invalid_cases(self):
+        self.overlay_install()
+        self.overlay(header='')
+        self.overlay('rpi-update.md')
+        self.overlay('rpi-relase.md')
+        self.write('.rpi/project/notes.txt', 'Not an overlay.\n')
+        result = self.overlays()
+        self.assertEqual(result['.rpi/project/rpi-release.md']['status'], 'invalid')
+        self.assertEqual(result['.rpi/project/rpi-release.md']['header_line'],
+                         '<!-- rpi-overlay: skill=rpi-release; written-against=ab12cd34ef56 -->')
+        for name in ('rpi-update.md', 'rpi-relase.md', 'notes.txt'):
+            with self.subTest(file=name):
+                self.assertEqual(result['.rpi/project/' + name]['status'], 'invalid')
+                self.assertIn('not an installed workflow skill', result['.rpi/project/' + name]['reason'])
+
+    def test_project_overlay_header_must_name_its_own_skill(self):
+        self.overlay_install()
+        self.overlay(header='<!-- rpi-overlay: skill=rpi-plan; written-against=ab12cd34ef56 -->\n')
+        item = self.overlays()['.rpi/project/rpi-release.md']
+        self.assertEqual(item['status'], 'invalid')
+        self.assertIn('header', item['reason'])
+
+    def test_project_overlay_inert_names_the_harness_without_the_block(self):
+        self.overlay_install(block=('claude',))
+        self.overlay()
+        item = self.overlays()['.rpi/project/rpi-release.md']
+        self.assertEqual(item['status'], 'inert')
+        self.assertEqual(item['harnesses'], ['codex'])
+
+    def test_project_overlay_counts_declared_overrides(self):
+        self.overlay_install()
+        self.overlay(body='## Procedure\n- Stock rule: "quoted in procedure, not counted"\n\n## Declared overrides\n'
+                          '- Stock rule: "One."\n  Override: x\n- Stock rule: "Two."\n  Override: y\n\n## Notes\n'
+                          '- Stock rule: "after the section, not counted"\n')
+        self.assertEqual(self.overlays()['.rpi/project/rpi-release.md']['overrides'], 2)
+
+    def test_project_overlay_text_is_never_reported_and_nothing_is_written(self):
+        self.overlay_install()
+        self.overlay(body='## Procedure\nSYNTHETIC_PRIVATE_OVERLAY_STEP\n')
+        before = self.snapshot()
+        result = self.report()
+        self.assertEqual(self.snapshot(), before)
+        self.assertNotIn('SYNTHETIC_PRIVATE', json.dumps(result))
+
+    def test_project_overlays_cli_exits_zero_for_every_status(self):
+        self.overlay_install(block=('claude',), authored='9' * 64)
+        self.overlay()
+        self.overlay('rpi-update.md')
+        result = subprocess.run([sys.executable, str(SCRIPT), '--target', str(self.project)], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        statuses = {item['file']: item['status'] for item in json.loads(result.stdout)['project_overlays']}
+        self.assertEqual(statuses, {'.rpi/project/rpi-release.md': 'inert', '.rpi/project/rpi-update.md': 'invalid'})
+
+
+    def test_project_overlay_unusable_files_are_invalid_and_never_raise(self):
+        self.overlay_install()
+        (self.project / '.rpi/project/rpi-release.md').parent.mkdir(parents=True, exist_ok=True)
+        (self.project / '.rpi/project/rpi-release.md').write_bytes(b'\xff\xfe not utf-8 SYNTHETIC_PRIVATE\n')
+        (self.project / '.rpi/project/rpi-plan.md').mkdir()
+        self.write('.rpi/project/.DS_Store', 'Finder metadata.\n')
+        result = self.overlays()
+        self.assertEqual(result['.rpi/project/rpi-release.md']['status'], 'invalid')
+        self.assertIn('UnicodeDecodeError', result['.rpi/project/rpi-release.md']['reason'])
+        self.assertEqual(result['.rpi/project/rpi-plan.md']['status'], 'invalid')
+        self.assertNotIn('.rpi/project/.DS_Store', result)
+        self.assertNotIn('SYNTHETIC_PRIVATE', json.dumps(self.report()))
+
+    def test_project_overlay_header_is_checked_before_the_block(self):
+        self.overlay_install(block=('claude',))
+        self.overlay(header='', body='## Procedure\nSYNTHETIC_PRIVATE_INVALID_STEP\n')
+        result = self.report()
+        item = {i['file']: i for i in result['project_overlays']}['.rpi/project/rpi-release.md']
+        self.assertEqual(item['status'], 'invalid')
+        self.assertNotIn('SYNTHETIC_PRIVATE', json.dumps(result))
+
+    def test_project_overlay_block_and_header_tolerate_crlf_and_bom(self):
+        self.overlay_install(newline='\r\n')
+        self.overlay(header='\ufeff<!-- rpi-overlay: skill=rpi-release; written-against=ab12cd34ef56 -->\r\n')
+        self.assertEqual(self.overlays()['.rpi/project/rpi-release.md']['status'], 'present')
+
 if __name__ == '__main__':
     unittest.main()

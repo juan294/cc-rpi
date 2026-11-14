@@ -57,6 +57,11 @@ Report these distinctions from the structured result:
   facts. An enabled untrusted hook is not enforcement. A changed or missing hash
   prevents an observed claim. Absent telemetry is unobserved, not zero violations.
 - Actual Git state, documented topology and available verification prerequisites.
+- `project_overlays`: one item per `.rpi/project/` file, never its text. `present`
+  is healthy; `stale` means the stock skill changed since the overlay was reviewed
+  (review it, then use the printed `header_line`); `inert` means an installed copy
+  lacks the overlay section (run `rpi-update`); `invalid` gives the reason and, when
+  known, the header line to use. An empty list is normal.
 
 `--global-instruction` accepts repeated `claude=PATH` or `codex=PATH` selections;
 otherwise the diagnostic inspects conventional configured native homes. A supplied

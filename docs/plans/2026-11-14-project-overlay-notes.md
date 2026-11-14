@@ -45,3 +45,39 @@ Four independent cleanup reviews (reuse, simplification, efficiency, altitude). 
 - The reservation cases are one loop in the existing reserved-state test; the adopter tests share `change_skill` and `strip_authored_hashes`.
 
 Skipped, not material: caching the manifest parse in tests (under 1 ms per call). Mutation checks: removing the `.rpi/project` reservation, the provenance bookkeeping rule or the provenance merge each fails its test.
+
+## Phase 1 acceptance
+
+Candidate `25b105f` on branch `overlay-phase-1`. `bash scripts/verify-local.sh`: PASS, 10 of 10 checks, 766 tests, 90.25% line and 86.66% branch coverage, identity unchanged during the run (`.rpi/local/verification.json` in the worktree). Base `a628fd6` was verified first: PASS, 757 tests.
+
+### Phase 2: version sweep was already stock
+
+- Plan said: add a version-sweep rule to `rpi-update-docs`.
+- Found: its version-scanner step already searches for previous version strings that may be stale (`templates/skills/rpi-update-docs/SKILL.md`, Step 1 item 4), and Step 2 runs the invariant scripts.
+- Chose: no change. Three of the four approved rules were added.
+- Why: the plan's precondition is "rule not already stated"; a duplicate adds text without behavior.
+
+### Phase 2: workflow skill detection
+
+- Plan said: an overlay is for a workflow skill when the manifest lists it as a project-scope `skill:rpi-*` component, with a packaged list for untracked installs.
+- Chose: an overlay is valid when its skill has an installed copy under `.claude/skills/` or `.agents/skills/`; the manifest supplies only the authored hashes.
+- Why: one rule covers tracked and untracked installations, and project installs never contain the user-scope lifecycle skills, so `rpi-update.md` is still `invalid`.
+
+## Review dispositions (Phase 2)
+
+Independent review verdict: APPROVE, no blocking findings.
+
+- Should-fix, triage date rule compared a report with its own run date (circular): fixed to "today, or the run date its schedule expects".
+- Should-fix, no test for unreadable or non-file overlays: added `test_project_overlay_unusable_files_are_invalid_and_never_raise`.
+- Should-fix, plugin-route installs show every overlay as `invalid`: documented as a limitation in `docs/project-overlay.md` and the changelog, not handled. All 10 migration projects use the direct route in both harnesses (verified from their manifests on 2026-11-14); a fifth status would add surface for no current user.
+- Nit, header-before-block ordering and the privacy check on the invalid path: added `test_project_overlay_header_is_checked_before_the_block`.
+- Nit, unreadable `.rpi/project` raised: now one `invalid` item.
+- Nit, CRLF skill copies read as `inert` and a BOM made the header invalid: section match is a line regex, and overlays are read as `utf-8-sig`; test added.
+- Nit, `.DS_Store` and editor files reported: dotfiles are ignored.
+- Nit, changelog and contract overclaimed the fix and header line: qualified with "when known".
+
+## Simplify dispositions (Phase 2)
+
+Applied: the authored-hash map keys on each entry's `component_id` and `adapter.harness` with the existing `records()` guard instead of parsing paths; name and file checks run before any skill copy is read; one `invalid()` helper; overrides are counted only after the header is valid; the CRLF test reuses `overlay_install(newline=...)`; a shorter changelog line.
+
+Skipped: moving the existing `skills()` function onto the shared copy-directory constant (outside this diff); `cc_rpi_skill_names` for validity (needs `--source`, which a plain `rpi-status` run may not pass); merging the privacy checks (each covers a different path); using the module's `overlay_header` in tests (the header assertions would become tautological). Mutation checks: disabling the inert, stale, header-skill, override-section or dotfile rule each fails a test.

@@ -25,7 +25,20 @@ Project steps, checks and profile choices.
   Owner decision: <YYYY-MM-DD, where recorded>
 ```
 
-`written-against` is the first 12 hex characters of `source.authored_sha256` for that skill's `SKILL.md` entry in `.rpi/manifest.json`. The value is the same for both harnesses and changes only when that stock skill changes, which is when the overlay needs a review. Leave out `## Declared overrides` when there are none.
+`written-against` is the first 12 hex characters of `source.authored_sha256` for that skill's `SKILL.md` entry in `.rpi/manifest.json`; when that hash is known, `rpi-status` prints the full header line. The value is the same for both harnesses and changes only when that stock skill changes, which is when the overlay needs a review. Leave out `## Declared overrides` when there are none.
+
+## Statuses
+
+`rpi-status` and the engine's `diagnose` report each file in `.rpi/project/` without printing its text:
+
+| Status | Meaning | Fix |
+| --- | --- | --- |
+| `present` | The header matches the installed skill. | None. |
+| `stale` | The stock skill changed since the overlay was reviewed. | Review the overlay against the new skill, then replace the header with the printed `header_line`. |
+| `inert` | An installed copy of the skill has no `## Project overlay` section, so that harness ignores the overlay. | Run `rpi-update`. |
+| `invalid` | The file is unreadable, is not a regular file, is not for an installed workflow skill, or its first line is not that skill's header. | Rename, remove or fix the file, or use the printed `header_line`. |
+
+Staleness is not checked for an installation that has not recorded authored hashes yet; the next update records them. Files whose names start with a dot are ignored. Diagnostics inspect the direct-route skill copies in `.claude/skills/` and `.agents/skills/`; on a plugin-route installation they cannot see the installed skill, so an overlay reads as `invalid` there.
 
 ## What an overlay can and cannot do
 
