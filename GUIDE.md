@@ -251,6 +251,12 @@ research, plans, decisions, custom files and separate user/plugin installations;
 settings the install created are removed again (it records what it created), and an owner's settings are never deleted or emptied further.
 `scripts/install.sh` may be run through a symbolic link.
 
+Keep project-specific workflow behavior in a [project overlay](docs/project-overlay.md),
+`.rpi/project/<skill>.md`. Every workflow skill reads it when present; install, update
+and detach never touch it. An overlay adds steps and checks; it cannot grant push, tag,
+merge, deployment or publication authority or relax a gate. Editing a managed skill
+instead can make later updates conflict.
+
 Schedules require explicit setup and resource authorization. The optional
 `templates/scripts/cc-rpi-update-agent.sh` launcher requires `RPI_UPDATE_ENABLED=1`,
 absolute `CC_RPI_PATH` and `RPI_PROJECT_ROOT`, and selected `RPI_HARNESS` and

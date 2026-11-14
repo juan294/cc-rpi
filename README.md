@@ -86,6 +86,10 @@ preserved. Interrupted transactions retain journals; `scripts/install.sh --rollb
 takes the recorded journal path and refuses to overwrite concurrent
 edits. Native plugin recovery remains the native manager's operation.
 
+Project-specific workflow behavior belongs in a [project overlay](docs/project-overlay.md),
+`.rpi/project/<skill>.md`, not in an edited managed skill. The engine never touches
+it. By instruction contract, an overlay cannot grant publication authority or relax a gate.
+
 Read the [v2 migration guide](docs/migrations/v2.md) before adopting an existing
 v1 installation. Legacy filenames and sync metadata do not establish ownership.
 Native `/plan` and `/status` are not the RPI workflows: use `rpi-plan` and

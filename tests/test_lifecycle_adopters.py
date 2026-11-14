@@ -336,6 +336,89 @@ class LifecycleAdopterTests(unittest.TestCase):
         self.apply_ready("detach")
         self.assertEqual(self.snapshot(), detached)
 
+    def change_skill(self, name, body):
+        """Replace a synthetic skill's body in the source, keeping make_source's frontmatter, and commit it."""
+        self.write(self.source, "templates/skills/" + name + "/SKILL.md",
+                   '---\nname: ' + name + '\ndescription: "Synthetic workflow contract."\n---\n\n' + body)
+        self.commit_source("Change upstream " + name)
+
+    def strip_authored_hashes(self):
+        """Rewrite the installed manifest as an installation made before authored hashes existed."""
+        path = self.project / ".rpi/manifest.json"
+        manifest = json.loads(path.read_text())
+        for entry in manifest["entries"]:
+            entry.get("source", {}).pop("authored_sha256", None)
+        path.write_text(json.dumps(manifest))
+
+    def skill_entries(self):
+        manifest = json.loads((self.project / ".rpi/manifest.json").read_text())
+        return {entry["destination"]: entry for entry in manifest["entries"] if entry["destination"].endswith("/SKILL.md")}
+
+    def authored(self, name):
+        return hashlib.sha256((self.source / "templates/skills" / name / "SKILL.md").read_bytes()).hexdigest()
+
+    PLAN_BODY = ("Changed plan.\nRead references/playbook.md.\nRead references/nested/detail.md.\n"
+                 "Read scripts/validate.py.\n")
+
+    def test_project_overlay_survives_update_and_detach(self):
+        self.apply_ready()
+        overlay = self.write(self.project, ".rpi/project/rpi-release.md",
+                             "<!-- rpi-overlay: skill=rpi-release; written-against=000000000000 -->\n# Project overlay\n")
+        notes = self.write(self.project, ".rpi/notes.txt", "Project-owned note beside the installation state.\n")
+        expected = {path: path.read_bytes() for path in (overlay, notes)}
+        self.change_skill("rpi-release", "Changed upstream release.\n")
+        self.apply_ready("update")
+        self.assertEqual({path: path.read_bytes() for path in expected}, expected)
+        self.apply_ready("detach")
+        self.assertEqual({path: path.read_bytes() for path in expected}, expected)
+        self.assertTrue((self.project / ".rpi/project").is_dir())
+
+    def test_skill_entries_record_one_authored_hash_for_both_harnesses(self):
+        self.apply_ready()
+        entries = self.skill_entries()
+        for name in ("rpi-plan", "rpi-release"):
+            with self.subTest(skill=name):
+                claude = entries[".claude/skills/" + name + "/SKILL.md"]["source"]
+                codex = entries[".agents/skills/" + name + "/SKILL.md"]["source"]
+                self.assertNotEqual(claude["rendered_sha256"], codex["rendered_sha256"])
+                self.assertEqual(claude["authored_sha256"], self.authored(name))
+                self.assertEqual(codex["authored_sha256"], self.authored(name))
+        every = json.loads((self.project / ".rpi/manifest.json").read_text())["entries"]
+        self.assertEqual({e["destination"] for e in every if "authored_sha256" in e.get("source", {})}, set(entries))
+        self.assertFalse([e["destination"] for e in every if "authored_sha256" in e])
+
+    def test_authored_hash_changes_only_with_its_own_skill(self):
+        self.apply_ready()
+        before = {d: e["source"]["authored_sha256"] for d, e in self.skill_entries().items()}
+        self.change_skill("rpi-plan", self.PLAN_BODY)
+        self.apply_ready("update")
+        after = {d: e["source"]["authored_sha256"] for d, e in self.skill_entries().items()}
+        for harness in (".claude", ".agents"):
+            plan = harness + "/skills/rpi-plan/SKILL.md"
+            release = harness + "/skills/rpi-release/SKILL.md"
+            self.assertNotEqual(after[plan], before[plan])
+            self.assertEqual(after[plan], self.authored("rpi-plan"))
+            self.assertEqual(after[release], before[release])
+
+    def test_manifest_without_authored_hash_stays_healthy_on_unchanged_source(self):
+        # Recording the hash is bookkeeping: an older installation is not action-needed until a real update.
+        self.apply_ready()
+        self.strip_authored_hashes()
+        result = self.invoke("check", "--source", self.source, "--target", self.project, "--harness", "both", "--route", "direct")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_manifest_without_authored_hash_still_updates_and_gains_it(self):
+        self.apply_ready()
+        self.strip_authored_hashes()
+        self.change_skill("rpi-plan", self.PLAN_BODY)
+        self.apply_ready("update")
+        entries = self.skill_entries()
+        for name in ("rpi-plan", "rpi-release"):
+            for harness in (".claude", ".agents"):
+                with self.subTest(skill=name, harness=harness):
+                    self.assertEqual(entries[harness + "/skills/" + name + "/SKILL.md"]["source"]["authored_sha256"],
+                                     self.authored(name))
+
     def test_source_only_change_updates_complete_resource(self):
         self.apply_ready()
         self.write(self.source, "templates/skills/rpi-plan/references/playbook.md", "New upstream playbook contract.\n")

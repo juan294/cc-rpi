@@ -90,13 +90,18 @@ class TransactionTests(unittest.TestCase):
         self.write(self.source, 'templates/unsafe.txt', 'Unrelated resource bytes.\n')
         manifest['components'].append({'id': 'resource:unsafe', 'kind': 'resource', 'scope': 'project',
             'selection': 'default', 'harnesses': ['codex'], 'dependencies': [], 'source': 'templates/unsafe.txt',
-            'outputs': {'codex': '.rpi/manifest.json'}, 'ownership': {'direct': 'cc-rpi', 'plugin': 'cc-rpi'}})
-        source_manifest.write_text(json.dumps(manifest))
-        before = self.snapshot(include_local=True)
-        result = self.invoke('plan', '--source', self.source, '--target', self.project,
-                             '--output', self.plans / 'reserved.json')
-        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        self.assertEqual(self.snapshot(include_local=True), before)
+            'outputs': {}, 'ownership': {'direct': 'cc-rpi', 'plugin': 'cc-rpi'}})
+        # The manifest and baselines are installation state; .rpi/project holds project-owned overlays.
+        for destination in ('.rpi/manifest.json', '.rpi/project', '.rpi/project/rpi-release.md'):
+            with self.subTest(destination=destination):
+                manifest['components'][-1]['outputs']['codex'] = destination
+                source_manifest.write_text(json.dumps(manifest))
+                before = self.snapshot(include_local=True)
+                result = self.invoke('plan', '--source', self.source, '--target', self.project,
+                                     '--output', self.plans / 'reserved.json')
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertIn('component destination cannot claim internal installation state', result.stdout + result.stderr)
+                self.assertEqual(self.snapshot(include_local=True), before)
 
     def test_concurrent_preimage_edit_prevents_every_write(self):
         plan, path = self.plan()

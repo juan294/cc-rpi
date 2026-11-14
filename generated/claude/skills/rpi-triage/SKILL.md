@@ -11,6 +11,10 @@ The request is supplied as literal arguments: $ARGUMENTS
 
 Process all overnight agent reports, GitHub Security & Quality Alerts, and the Dependabot PR queue. Discovers every report using timestamp-based discovery, checks for agent failures, scans open Dependabot PRs (Rule #84), synthesizes findings, proposes an action plan, implements all fixes, and integrates applicable dependency updates locally. Report commit policy depends on repo visibility: public repos keep reports local, private repos commit them as historical artifacts (Rule #70).
 
+## Project overlay
+
+If `.rpi/project/rpi-triage.md` exists, read it completely before you start, together with the controlling instructions. It adds this project's procedure and checks and can make this workflow stricter. It cannot grant push, tag, merge, deployment or publication authority. It cannot relax a gate: a rule that blocks or permits a release, publication, merge, deployment or phase acceptance, or a safety or authorization rule. It can change other procedure detail only under a `## Declared overrides` heading that quotes the stock rule, gives the reason and names the owner decision. Name the overlay you read, and any declared override you applied, in the handoff.
+
 ## Input
 
 If the request specifies report paths, process only the specified report path(s). Otherwise, auto-discover all new/modified reports in `docs/agents/`. Do not report all clear until report, failure, alert-query and dependency-PR
