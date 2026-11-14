@@ -10,13 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 Nothing retired this cycle: no rule or error ID is retired.
 
-Upgrade note: every workflow skill changes in this release, so an update plan reports a conflict for any managed rpi-* `SKILL.md` the project edited. Move that text into `.rpi/project/<skill>.md` (see `docs/project-overlay.md`), restore the stock copy from `.rpi/baselines/<base_hash>`, then plan the update again; `rpi-status` reports each overlay and the header line to write.
+Upgrade note: the 16 workflow skills change in this release. An update plan merges a project's edit to one of them, or reports a conflict when the edit overlaps the change. Move project-specific text into `.rpi/project/<skill>.md` (see `docs/project-overlay.md`). For a conflict, run the printed `restore_command`: it saves your edited copy, then restores the stock copy from `.rpi/baselines/<base_hash>` (the `base_hash` is in that entry of `.rpi/manifest.json`). Then plan the update again; `rpi-status` reports each overlay and the header line to write.
 
 ### Added
 
 - **Project overlays.** Project-specific workflow behavior lives in a project-owned `.rpi/project/<skill>.md` instead of an edited managed skill. The 16 workflow skills read it when present; install, update and detach never touch it, and no component can claim `.rpi/project`. An overlay adds steps and checks; by instruction contract it cannot grant publication authority or relax a gate, and a declared override changes only other procedure detail. See `docs/project-overlay.md`.
 - **Authored skill hash.** Each installed skill `SKILL.md` manifest entry records `source.authored_sha256`, the same for both harnesses. An installation that has not recorded it yet stays healthy until its next real update.
-- **Overlay diagnostics.** `diagnose` and `rpi-status` report `project_overlays`, one item per overlay file with its status and fix or reason, and the header line to use when the installed hash is known. Overlay text is never printed. Only direct-route skill copies are inspected.
+- **Overlay diagnostics.** `diagnose` and `rpi-status` report `project_overlays`, one item per overlay file with its status and fix or reason, and the header line to use when the installed hash is known. Overlay text is never printed. Only direct-route skill copies are inspected; on a plugin-route installation, overlays report `invalid`.
 - `rpi-implement` commits the deviation notes with the phase and cites plans by file name; `rpi-triage` treats an older report left by a failed run as an agent failure, and an unconfigured or failing error-tracker, log or audit query as a YELLOW gap, never "all clear".
 
 ### Changed
