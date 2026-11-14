@@ -1,1 +1,0 @@
-../../templates/commands/pre-launch.md

@@ -33,16 +33,6 @@ manifest, avoiding a second hand-maintained inventory here.
 
 | File |
 | --- |
-| `commands/describe-pr.md` |
-| `commands/fix-ci.md` |
-| `commands/implement.md` |
-| `commands/pre-launch.md` |
-| `commands/release.md` |
-| `commands/remediate.md` |
-| `commands/research.md` |
-| `commands/triage.md` |
-| `commands/update-docs.md` |
-| `commands/validate.md` |
 | `hooks/guard-bash.sh` |
 | `hooks/verify-edit.sh` |
 | `scripts/contract-metrics.py` |

@@ -1,1 +1,0 @@
-../../templates/commands/triage.md

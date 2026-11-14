@@ -1,1 +1,0 @@
-../../templates/commands/remediate.md

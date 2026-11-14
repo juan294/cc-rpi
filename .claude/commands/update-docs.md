@@ -1,1 +1,0 @@
-../../templates/commands/update-docs.md

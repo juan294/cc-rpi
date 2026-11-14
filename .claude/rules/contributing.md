@@ -67,8 +67,8 @@ Retirement procedure:
 1. Validate the ground -- confirm one of the five above applies, stated in
    one sentence.
 2. Find every inbound reference -- `patterns/quick-reference.md`'s index,
-   `templates/skills/` and `.claude/skills/`, `templates/commands/` and
-   `.claude/commands/`, `patterns/agent-errors.md`, and `methodology/`.
+   `templates/skills/` and `.claude/skills/`, `templates/commands/`,
+   `patterns/agent-errors.md`, and `methodology/`.
    **Blocking condition:** if any inbound reference remains, stop and fix
    the references before continuing.
 3. Write the ledger entry below: number, reason, release, replacement.

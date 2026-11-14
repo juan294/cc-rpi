@@ -1,1 +1,0 @@
-../../templates/commands/describe-pr.md
