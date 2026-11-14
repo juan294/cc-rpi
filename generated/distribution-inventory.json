@@ -155,9 +155,9 @@
     "sha256": "a90bb082cdec25fc70f9ea5f134ff4474bf3f6ee648641856d2f20230b022db9"
   },
   "claude/skills/macos-rules/SKILL.md": {
-    "bytes": 3171,
+    "bytes": 3468,
     "mode": "644",
-    "sha256": "36027fda2740d7481724e6a50ff3de7bcd7d87968b5f25bf7f8524905ed5b37c"
+    "sha256": "d4df0e4f919088237cb7a9e2b8bb82294b468242f2ce03fe971beb477e81c2da"
   },
   "claude/skills/multi-agent/SKILL.md": {
     "bytes": 4807,
@@ -850,9 +850,9 @@
     "sha256": "a90bb082cdec25fc70f9ea5f134ff4474bf3f6ee648641856d2f20230b022db9"
   },
   "codex/runtime/templates/skills/macos-rules/SKILL.md": {
-    "bytes": 3171,
+    "bytes": 3468,
     "mode": "644",
-    "sha256": "36027fda2740d7481724e6a50ff3de7bcd7d87968b5f25bf7f8524905ed5b37c"
+    "sha256": "d4df0e4f919088237cb7a9e2b8bb82294b468242f2ce03fe971beb477e81c2da"
   },
   "codex/runtime/templates/skills/multi-agent/SKILL.md": {
     "bytes": 4807,
@@ -1245,9 +1245,9 @@
     "sha256": "8619a54e8c098122a7f3881394f84ca89b684366e848233a29ad18b6ec363935"
   },
   "codex/skills/macos-rules/SKILL.md": {
-    "bytes": 3171,
+    "bytes": 3468,
     "mode": "644",
-    "sha256": "36027fda2740d7481724e6a50ff3de7bcd7d87968b5f25bf7f8524905ed5b37c"
+    "sha256": "d4df0e4f919088237cb7a9e2b8bb82294b468242f2ce03fe971beb477e81c2da"
   },
   "codex/skills/macos-rules/agents/openai.yaml": {
     "bytes": 42,

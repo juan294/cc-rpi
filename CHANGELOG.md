@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Fixed
+
+- Remove executable placeholder package examples from the macOS skill and require verification of package names and publishers before installation.
+
 ## [2.1.0] - 2026-11-10
 
 Nothing retired this cycle: no rule or error ID is retired. Index rules #33,
