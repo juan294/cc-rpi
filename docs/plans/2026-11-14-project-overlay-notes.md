@@ -81,3 +81,51 @@ Independent review verdict: APPROVE, no blocking findings.
 Applied: the authored-hash map keys on each entry's `component_id` and `adapter.harness` with the existing `records()` guard instead of parsing paths; name and file checks run before any skill copy is read; one `invalid()` helper; overrides are counted only after the header is valid; the CRLF test reuses `overlay_install(newline=...)`; a shorter changelog line.
 
 Skipped: moving the existing `skills()` function onto the shared copy-directory constant (outside this diff); `cc_rpi_skill_names` for validity (needs `--source`, which a plain `rpi-status` run may not pass); merging the privacy checks (each covers a different path); using the module's `overlay_header` in tests (the header assertions would become tautological). Mutation checks: disabling the inert, stale, header-skill, override-section or dotfile rule each fails a test.
+
+## Phase 2 acceptance
+
+Frozen candidate `5f9c8dc` (main fast-forwarded locally; tree `91a6809` equals the verified tree). `bash scripts/verify-local.sh`: PASS, 10 of 10 checks, 780 tests, 90.32% line coverage, identity unchanged.
+
+## Phase 3: migration results (local commits only, nothing pushed)
+
+| Project | develop before -> after | Overlays |
+| --- | --- | --- |
+| gh-glance (pilot) | 81fa88d -> bb5b3ea | rpi-fix-ci, rpi-release |
+| chapa-cli | 55c89fd -> d130e7c | rpi-release |
+| layalga | fa796ce -> 03df6fe | rpi-release, rpi-explore-release |
+| summon | 5227241 -> 772be92 | rpi-explore-release, rpi-release, rpi-update-docs |
+| chapa | 763a7770 -> d9b60407 | rpi-explore-release (declared override), rpi-release |
+| coach | 33fb1340 -> ec772549 | rpi-explore-release (declared override), rpi-pre-launch, rpi-release, rpi-remediate |
+| spoken-letter | 807a0a5b -> 3b827e22 | rpi-explore-release, rpi-release, rpi-triage |
+| portfolio | aa80ab4 -> 680c308 | rpi-explore-release, rpi-pre-launch, rpi-release, rpi-remediate, rpi-triage |
+| archy | ef4820c -> f52d155 | rpi-explore-release, rpi-release, rpi-triage |
+| paisaxe | HELD at 4832d7fc | worktree commit b74d0c5 retained, not merged |
+
+Every merged project: engine plan `ready` with 0 conflicts before apply; diagnostics show every overlay `present` and no modified rpi-* `SKILL.md`; no `Project-specific procedure` section remains; every staged path was a plan operation or a listed overlay, test, validator, capability or doc path.
+
+### Deviations found during migration
+
+- The inventory was incomplete (gh-glance and coach `rpi-release`, coach `rpi-remediate`, archy 22 formatter-churn copies). Each migration classified every changed line against its baseline before restoring, as the plan's safety check requires.
+- Blanket precedence text ("X overrides this workflow", "the playbook governs where it differs") was rewritten under the gate rule: the document is named as the project's procedure, and the stock gates still apply where it is less strict.
+- Gate text removed under the owner's rule: spoken-letter's owner-disposition sentence; chapa's and coach's "never gate/block a release"; archy's charter validator replacing the stock S1/S2 rule (the validator accepts `critical` findings marked `tracked` or `accepted_exception`; the stock S1/S2 block now applies as well).
+- summon: the integration owner added that the GitHub Release authorization must also name npm publication, because creating the release auto-publishes (stock: never infer npm authority from GitHub release authority).
+- Project docs that described the old skill edits were updated to point at the overlays (gh-glance playbook, paisaxe checklist, summon, coach, portfolio and archy `AGENTS.md`, coach `CLAUDE.md` and ADR-009, portfolio `CLAUDE.md`).
+- Test commands: after paisaxe, migrations ran only retargeted tests, validators, typecheck, lint and suites confirmed not to reach a database or service.
+
+### Incident: paisaxe shared database
+
+paisaxe's `npm test` auto-ran PostgREST integration suites against the inherited primary stack `supabase_db_paisaxe` (ports 54321/54322), which is not task-owned; the `paisaxe-retention-hold` stack (54921/54922) was not the target. Two integration files failed (`retention`, `feature-flag-realtime`); a 2026-11-14 memory note records the same two failing before this migration. Nothing was reset, stopped or cleaned. The suites use fixed fixture IDs with pre-cleanup and teardown. paisaxe is held for the owner's decision.
+
+## Phase 4: fleet verification
+
+- The 9 merged projects pass the read-only fleet check (diagnostics exit 0, overlays `present`, 0 modified rpi-* `SKILL.md`, no inline sections).
+- Plan-only updates from the candidate, nothing applied: captalo, cirujano, clarity, home-weave, kalpha, retrofit, roots, spoken-letter-alexa, sutura and termplex are `ready` with 0 conflicts. coach-copper-icons (another session's coach worktree on `chore/copper-app-icons` at the pre-migration base) is `conflict` on two edited skills; rebasing onto coach develop resolves it.
+- archy keeps 12 locally modified skill reference files (`dispatch.md`, `triage-state.md`, `webmcp/DOMAIN.md`): Prettier reflow from its 2.1.0 update commit `60603f0`, retained by the engine as local customizations, outside this plan's `SKILL.md` scope.
+
+## Owner follow-ups
+
+1. paisaxe: merge the held worktree commit, and decide whether the primary local stack needs a look after the integration-test run.
+2. archy: the charter validator accepts `critical`/`high` findings marked `tracked` or `accepted_exception`; decide whether the validator or schema should map severities to S1-S4.
+3. Docs that still contradict the gate rule: chapa `docs/playbooks/e2e-pro-release-verification.md:25`; spoken-letter `scripts/agents/explore-charter-agent.sh:24,157`.
+4. coach: the "one release authorization covers preparation, push, tag, publication" paragraph was not carried into the overlay (authority text; it remains in `CLAUDE.md` and the checklist); its QA fallback runs contract tests against local Supabase while `AGENTS.md` prefers `pnpm run contracts:oneshot`; the unattended morning-triage prompt says "Push when done".
+5. Apply the ready fleet updates where wanted (sutura and cirujano commits stay local under the lockdown).
