@@ -99,7 +99,7 @@ Frozen candidate `5f9c8dc` (main fast-forwarded locally; tree `91a6809` equals t
 | spoken-letter | 807a0a5b -> 3b827e22 | rpi-explore-release, rpi-release, rpi-triage |
 | portfolio | aa80ab4 -> 680c308 | rpi-explore-release, rpi-pre-launch, rpi-release, rpi-remediate, rpi-triage |
 | archy | ef4820c -> f52d155 | rpi-explore-release, rpi-release, rpi-triage |
-| paisaxe | HELD at 4832d7fc | worktree commit b74d0c5 retained, not merged |
+| paisaxe | 4832d7fc -> b74d0c5e | rpi-release (held after the incident below, then merged on owner instruction) |
 
 Every merged project: engine plan `ready` with 0 conflicts before apply; diagnostics show every overlay `present` and no modified rpi-* `SKILL.md`; no `Project-specific procedure` section remains; every staged path was a plan operation or a listed overlay, test, validator, capability or doc path.
 
@@ -114,17 +114,17 @@ Every merged project: engine plan `ready` with 0 conflicts before apply; diagnos
 
 ### Incident: paisaxe shared database
 
-paisaxe's `npm test` auto-ran PostgREST integration suites against the inherited primary stack `supabase_db_paisaxe` (ports 54321/54322), which is not task-owned; the `paisaxe-retention-hold` stack (54921/54922) was not the target. Two integration files failed (`retention`, `feature-flag-realtime`); a 2026-11-14 memory note records the same two failing before this migration. Nothing was reset, stopped or cleaned. The suites use fixed fixture IDs with pre-cleanup and teardown. paisaxe is held for the owner's decision.
+paisaxe's `npm test` auto-ran PostgREST integration suites against the inherited primary stack `supabase_db_paisaxe` (ports 54321/54322), which is not task-owned; the `paisaxe-retention-hold` stack (54921/54922) was not the target. Two integration files failed (`retention`, `feature-flag-realtime`); a 2026-11-14 memory note records the same two failing before this migration. Nothing was reset, stopped or cleaned. The suites use fixed fixture IDs with pre-cleanup and teardown. The owner then instructed the merge.
 
 ## Phase 4: fleet verification
 
-- The 9 merged projects pass the read-only fleet check (diagnostics exit 0, overlays `present`, 0 modified rpi-* `SKILL.md`, no inline sections).
+- The 9 projects merged before paisaxe pass the read-only fleet check; paisaxe passes the same check after its merge (diagnostics exit 0, overlays `present`, 0 modified rpi-* `SKILL.md`, no inline sections).
 - Plan-only updates from the candidate, nothing applied: captalo, cirujano, clarity, home-weave, kalpha, retrofit, roots, spoken-letter-alexa, sutura and termplex are `ready` with 0 conflicts. coach-copper-icons (another session's coach worktree on `chore/copper-app-icons` at the pre-migration base) is `conflict` on two edited skills; rebasing onto coach develop resolves it.
 - archy keeps 12 locally modified skill reference files (`dispatch.md`, `triage-state.md`, `webmcp/DOMAIN.md`): Prettier reflow from its 2.1.0 update commit `60603f0`, retained by the engine as local customizations, outside this plan's `SKILL.md` scope.
 
 ## Owner follow-ups
 
-1. paisaxe: merge the held worktree commit, and decide whether the primary local stack needs a look after the integration-test run.
+1. paisaxe: decide whether the primary local stack needs a look after the integration-test run, and whether to fix the two failing integration files.
 2. archy: the charter validator accepts `critical`/`high` findings marked `tracked` or `accepted_exception`; decide whether the validator or schema should map severities to S1-S4.
 3. Docs that still contradict the gate rule: chapa `docs/playbooks/e2e-pro-release-verification.md:25`; spoken-letter `scripts/agents/explore-charter-agent.sh:24,157`.
 4. coach: the "one release authorization covers preparation, push, tag, publication" paragraph was not carried into the overlay (authority text; it remains in `CLAUDE.md` and the checklist); its QA fallback runs contract tests against local Supabase while `AGENTS.md` prefers `pnpm run contracts:oneshot`; the unattended morning-triage prompt says "Push when done".
