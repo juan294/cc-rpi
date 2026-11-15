@@ -673,7 +673,7 @@ class TransactionTests(unittest.TestCase):
         self.assertIsNone(self.receipt_gate(self.check()[1]))  # Same release: nothing changed.
         manifest_path = self.source / 'templates/distribution.json'
         manifest = json.loads(manifest_path.read_text())
-        recorded, manifest['version'] = manifest['version'], '2.2.0'
+        recorded, manifest['version'] = manifest['version'], '2.2.1'
         manifest_path.write_text(json.dumps(manifest))
         self.assertFalse((self.project / '.rpi/policy.json').exists())
         result, summary = self.check()
