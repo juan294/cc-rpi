@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Changed
+
+- The `## Project overlay` section in the 16 workflow skills now tells the agent to open `.rpi/project/<skill>.md` directly by its path, because a file search or glob can skip the hidden `.rpi` directory. A native probe on GitHub Copilot CLI 1.0.88 (copilot-rpi, 2026-11-15) missed the overlay with the earlier "If it exists" wording and read it with this one.
+
 ## [2.2.0] - 2026-11-14
 
 Nothing retired this cycle: no rule or error ID is retired.

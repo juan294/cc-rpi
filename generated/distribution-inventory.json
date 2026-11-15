@@ -185,9 +185,9 @@
     "sha256": "00a060b9da9831ba8c2120c0876757f5e555a02b69dce1c2abd4755b59f6c2f3"
   },
   "claude/skills/rpi-assess/SKILL.md": {
-    "bytes": 4009,
+    "bytes": 4101,
     "mode": "644",
-    "sha256": "bb7479e28c0509716635db43dd5c2017946f1581a6fef4fd2e7f6e46a42bc15d"
+    "sha256": "bab02348fd18c0f9dcabf533497290afff0607938a98c8ccb97a08375a2d2271"
   },
   "claude/skills/rpi-assess/references/handoff.md": {
     "bytes": 2409,
@@ -210,14 +210,14 @@
     "sha256": "00a060b9da9831ba8c2120c0876757f5e555a02b69dce1c2abd4755b59f6c2f3"
   },
   "claude/skills/rpi-brainstorm/SKILL.md": {
-    "bytes": 4389,
+    "bytes": 4481,
     "mode": "644",
-    "sha256": "5d46404913fdab7c97d05151e726374c3e0090d0dcbe98f19b334448c3ce27cc"
+    "sha256": "05e9cb454dbac136221c7451dbb5963149cc65843903d1ef6739f6b0f774ff42"
   },
   "claude/skills/rpi-describe-pr/SKILL.md": {
-    "bytes": 2601,
+    "bytes": 2693,
     "mode": "644",
-    "sha256": "b72356e0d93717b4f19ee17e8d521202fc62e26a36b6549b092ecb87de7e789a"
+    "sha256": "6dcd6ce75bfda11397051f07ef981012b999b4078a62dbd6cf6d65a0ed1e9357"
   },
   "claude/skills/rpi-describe-pr/references/handoff.md": {
     "bytes": 2409,
@@ -235,9 +235,9 @@
     "sha256": "00a060b9da9831ba8c2120c0876757f5e555a02b69dce1c2abd4755b59f6c2f3"
   },
   "claude/skills/rpi-explore-release/SKILL.md": {
-    "bytes": 8674,
+    "bytes": 8766,
     "mode": "644",
-    "sha256": "e5608210f660230c90f578750158db915b83a85246502b21b479ae096e717896"
+    "sha256": "ad695ea8b22ad362224ccc807c647a0f1f4c5cccb3c6c8c87a978af80c9018c0"
   },
   "claude/skills/rpi-explore-release/references/e2e-pro-playbook.md": {
     "bytes": 55978,
@@ -245,9 +245,9 @@
     "sha256": "5243955c00baff46718204610368f7a3fefb246129aa0f4ee5bf6af06c8a8d0c"
   },
   "claude/skills/rpi-fix-ci/SKILL.md": {
-    "bytes": 4907,
+    "bytes": 4999,
     "mode": "644",
-    "sha256": "0ba845da493f4e5f6b6a9a1e0295603ef2012bb793fac211837168d0045d52bc"
+    "sha256": "f56a3c8f1c40b6388be5ffeaf1ddebde49dc6fdd177cbf883540dd1040c881fc"
   },
   "claude/skills/rpi-fix-ci/references/handoff.md": {
     "bytes": 2409,
@@ -255,9 +255,9 @@
     "sha256": "5277e013f281a82f3834979c4c627766185bf614cb84811281f422c59f73512a"
   },
   "claude/skills/rpi-implement/SKILL.md": {
-    "bytes": 6353,
+    "bytes": 6445,
     "mode": "644",
-    "sha256": "60aacbe5260083c66cc5f960672ed6d3b7d017ea14eadf88598466b1ae5efa61"
+    "sha256": "ea93266842130864bccae29297a7de786415dd669f068d27b435b8027f75d23f"
   },
   "claude/skills/rpi-implement/references/dispatch.md": {
     "bytes": 9498,
@@ -280,9 +280,9 @@
     "sha256": "da9a4705c92c59f8284a936012f18d1bbedb7bc9fa591725a6435fc1a97f90c5"
   },
   "claude/skills/rpi-plan/SKILL.md": {
-    "bytes": 5266,
+    "bytes": 5358,
     "mode": "644",
-    "sha256": "6feaf78efbfc88987fa2d082e89bb0bf600c6c4f5982ad297f90acddad6c7094"
+    "sha256": "c0725b4733d30fce121c5be3b790f67feb57d0caead30ce4abca6008e6bf7557"
   },
   "claude/skills/rpi-plan/references/handoff.md": {
     "bytes": 2409,
@@ -295,9 +295,9 @@
     "sha256": "23104d62bda3299ea4e60cd4b1003ac07ee268f5be2f4683f030389e8eec3881"
   },
   "claude/skills/rpi-pre-launch/SKILL.md": {
-    "bytes": 19118,
+    "bytes": 19210,
     "mode": "644",
-    "sha256": "3d507a1a4bb76d7e75b07b15a132443b98fcac6ac7203a599757bee4dff48661"
+    "sha256": "f313cda559868a03fcc6b23d182c0713ee69e1782d600a84f57d31f72d81fe65"
   },
   "claude/skills/rpi-pre-launch/references/dispatch.md": {
     "bytes": 9498,
@@ -320,9 +320,9 @@
     "sha256": "da9a4705c92c59f8284a936012f18d1bbedb7bc9fa591725a6435fc1a97f90c5"
   },
   "claude/skills/rpi-release/SKILL.md": {
-    "bytes": 8850,
+    "bytes": 8942,
     "mode": "644",
-    "sha256": "0059b9c5b31a36d6b9557ed2541333d23447b244d19cf10c9be13d785adb31ec"
+    "sha256": "1080f6cc49b99f273430954e5b098f540b68567a206b9dba35e829b337c6fbf6"
   },
   "claude/skills/rpi-release/references/e2e-pro-playbook.md": {
     "bytes": 55978,
@@ -335,9 +335,9 @@
     "sha256": "5277e013f281a82f3834979c4c627766185bf614cb84811281f422c59f73512a"
   },
   "claude/skills/rpi-remediate/SKILL.md": {
-    "bytes": 20506,
+    "bytes": 20598,
     "mode": "644",
-    "sha256": "1af04cf917a7cf4e9ea9eebef5ccee593ad9af6b1f96b88c3e5ff6315ba7dcdf"
+    "sha256": "7c3d5f593cb8d99fd68c7914e5601c95c6591ff86488f9c8e110ea55d7dbf2f2"
   },
   "claude/skills/rpi-remediate/references/dispatch.md": {
     "bytes": 9498,
@@ -360,9 +360,9 @@
     "sha256": "da9a4705c92c59f8284a936012f18d1bbedb7bc9fa591725a6435fc1a97f90c5"
   },
   "claude/skills/rpi-research/SKILL.md": {
-    "bytes": 4038,
+    "bytes": 4130,
     "mode": "644",
-    "sha256": "c1b830471d6cfb5dc9c9a05989979329ac061b6a5652dcd469b36d8bd904d5f8"
+    "sha256": "b6c6f8b2358635885d3e47be6eaac3b9553f77435c76a682b32b125a62034687"
   },
   "claude/skills/rpi-research/references/handoff.md": {
     "bytes": 2409,
@@ -375,14 +375,14 @@
     "sha256": "93c304a71fa7039ee3b246328f34c181b90c990c03ff594a924eae9ba8509bf6"
   },
   "claude/skills/rpi-status/SKILL.md": {
-    "bytes": 5504,
+    "bytes": 5596,
     "mode": "644",
-    "sha256": "53dbfe52a1611cc66c67a81b3d43a457c57736a7d5b0ee7f07c5a8a53f131eb5"
+    "sha256": "6d4ade41c141470ee37a52d2adf5cf8673470fec7885daf3efc914ec3879bd62"
   },
   "claude/skills/rpi-tool-design/SKILL.md": {
-    "bytes": 7959,
+    "bytes": 8051,
     "mode": "644",
-    "sha256": "5c3b2c26424056263c47c95073b17a58bd6f283a2e4cd671083e9acf8fd2c51a"
+    "sha256": "18a9fa81e991a974cc54435ab1dd88af147aa81925b23d3ae4aa10303320ecd0"
   },
   "claude/skills/rpi-tool-design/references/webmcp/DOMAIN.md": {
     "bytes": 8734,
@@ -395,9 +395,9 @@
     "sha256": "c802cc226b94e16df3b3978df190271f364fe38d00108574c3940ed288531def"
   },
   "claude/skills/rpi-triage/SKILL.md": {
-    "bytes": 22694,
+    "bytes": 22786,
     "mode": "644",
-    "sha256": "e0546215e9e9b53e89e2e5424e75794fbf3e8b1897f1441a1c56538fabc18fcf"
+    "sha256": "4796a145ec8518b7b9c4a565f3f3c1c6df403c15f82a9ac5dc4df21549d0d266"
   },
   "claude/skills/rpi-triage/references/handoff.md": {
     "bytes": 2409,
@@ -415,9 +415,9 @@
     "sha256": "cd66ae06436452190eac245399746bf80087faa0c3b1b9782bd267cfc006fcc7"
   },
   "claude/skills/rpi-update-docs/SKILL.md": {
-    "bytes": 9999,
+    "bytes": 10091,
     "mode": "644",
-    "sha256": "d02a9233c850ce05e7b456778ead3efdfa1604b6b8f9e421a6f362d70653c126"
+    "sha256": "aabbb0d11538d8d4b69e314479462052d7922956d9e1fee07b731847a93c0a50"
   },
   "claude/skills/rpi-update-docs/references/handoff.md": {
     "bytes": 2409,
@@ -435,9 +435,9 @@
     "sha256": "00a060b9da9831ba8c2120c0876757f5e555a02b69dce1c2abd4755b59f6c2f3"
   },
   "claude/skills/rpi-validate/SKILL.md": {
-    "bytes": 5279,
+    "bytes": 5371,
     "mode": "644",
-    "sha256": "ba85ac52fc2ed3ee65288e755631d96cb9c77b8cdc75207a3df3299463eadedf"
+    "sha256": "5d2db290f79b15bd725c1c4b09ae56e02f054dde969c690b868376859eabbaf4"
   },
   "claude/skills/rpi-validate/references/dispatch.md": {
     "bytes": 9498,
@@ -880,9 +880,9 @@
     "sha256": "00a060b9da9831ba8c2120c0876757f5e555a02b69dce1c2abd4755b59f6c2f3"
   },
   "codex/runtime/templates/skills/rpi-assess/SKILL.md": {
-    "bytes": 3922,
+    "bytes": 4014,
     "mode": "644",
-    "sha256": "50d70c92a40b29f6ab2c9b93316acf1e7b2625705992b3a4a9c16b5c0c6dff61"
+    "sha256": "0f34f14d25e87339d6570aaf879e7df1cc963806fa5d1a8340b830cba0eb6c2c"
   },
   "codex/runtime/templates/skills/rpi-assess/references/handoff.md": {
     "bytes": 2409,
@@ -905,14 +905,14 @@
     "sha256": "00a060b9da9831ba8c2120c0876757f5e555a02b69dce1c2abd4755b59f6c2f3"
   },
   "codex/runtime/templates/skills/rpi-brainstorm/SKILL.md": {
-    "bytes": 4302,
+    "bytes": 4394,
     "mode": "644",
-    "sha256": "6ed0f20ec9fb73c056cab65101fd9c7157e02973c8b18111c2c42c790eee4e75"
+    "sha256": "adfd312744f0fc0bf33bca6992204fe1f6de3cdc1753c6d67eafa8e0432a2592"
   },
   "codex/runtime/templates/skills/rpi-describe-pr/SKILL.md": {
-    "bytes": 2514,
+    "bytes": 2606,
     "mode": "644",
-    "sha256": "be06d3cb585ae96ee912bd496a62d8c367b5b4e567137af14ac0dd989dd6078a"
+    "sha256": "f8786e32f15acd82c0800418868d286524623dd37b3c239b0c2906b29bac00fa"
   },
   "codex/runtime/templates/skills/rpi-describe-pr/references/handoff.md": {
     "bytes": 2409,
@@ -930,9 +930,9 @@
     "sha256": "00a060b9da9831ba8c2120c0876757f5e555a02b69dce1c2abd4755b59f6c2f3"
   },
   "codex/runtime/templates/skills/rpi-explore-release/SKILL.md": {
-    "bytes": 8556,
+    "bytes": 8648,
     "mode": "644",
-    "sha256": "a3c686faf4f7bcfddf6379dcab269d60b33088b83b3b4f50647fe98e9987744d"
+    "sha256": "3afe71f9207b520cf1f3186c0b8c58b8aa74511b3dc251c8f265da61162ff763"
   },
   "codex/runtime/templates/skills/rpi-explore-release/references/e2e-pro-playbook.md": {
     "bytes": 55978,
@@ -940,9 +940,9 @@
     "sha256": "5243955c00baff46718204610368f7a3fefb246129aa0f4ee5bf6af06c8a8d0c"
   },
   "codex/runtime/templates/skills/rpi-fix-ci/SKILL.md": {
-    "bytes": 4789,
+    "bytes": 4881,
     "mode": "644",
-    "sha256": "454a24af15038f86970bc302d5b0b1ac68f69f595ac6a1ad1392cb012bd1117f"
+    "sha256": "e5a90fd252e8ab350ab5a62af3800e52f6d8b20dc90ef109f912eb58a01cf91c"
   },
   "codex/runtime/templates/skills/rpi-fix-ci/references/handoff.md": {
     "bytes": 2409,
@@ -950,9 +950,9 @@
     "sha256": "5277e013f281a82f3834979c4c627766185bf614cb84811281f422c59f73512a"
   },
   "codex/runtime/templates/skills/rpi-implement/SKILL.md": {
-    "bytes": 6235,
+    "bytes": 6327,
     "mode": "644",
-    "sha256": "4f0578f02258de5e972781eef0879828320e1793ca568157d1fc540e9e1ef378"
+    "sha256": "22cc1ead4cf9c6afebad5b89b7391f7de7c5d556152efe61adae71da5d2f998f"
   },
   "codex/runtime/templates/skills/rpi-implement/references/dispatch.md": {
     "bytes": 9498,
@@ -975,9 +975,9 @@
     "sha256": "da9a4705c92c59f8284a936012f18d1bbedb7bc9fa591725a6435fc1a97f90c5"
   },
   "codex/runtime/templates/skills/rpi-plan/SKILL.md": {
-    "bytes": 5179,
+    "bytes": 5271,
     "mode": "644",
-    "sha256": "c00216bb5ee59216763bc68d52321cecc0ceabbc14085f0a9eed9cec8fa33273"
+    "sha256": "f359aa0db4a5d36b9c62ea06b5cf08ca5fbff0733cb24551c3fc3c6bbcc05337"
   },
   "codex/runtime/templates/skills/rpi-plan/references/handoff.md": {
     "bytes": 2409,
@@ -990,9 +990,9 @@
     "sha256": "23104d62bda3299ea4e60cd4b1003ac07ee268f5be2f4683f030389e8eec3881"
   },
   "codex/runtime/templates/skills/rpi-pre-launch/SKILL.md": {
-    "bytes": 19031,
+    "bytes": 19123,
     "mode": "644",
-    "sha256": "e9767291618b6c2400c88b811f4fe2aa71b2bc8c75948d3b8dd78689e4b67de8"
+    "sha256": "8dbf0f232f4964d9fe414db4bb297fa1d487c5517e8712943f04122fb11dee6a"
   },
   "codex/runtime/templates/skills/rpi-pre-launch/references/dispatch.md": {
     "bytes": 9498,
@@ -1015,9 +1015,9 @@
     "sha256": "da9a4705c92c59f8284a936012f18d1bbedb7bc9fa591725a6435fc1a97f90c5"
   },
   "codex/runtime/templates/skills/rpi-release/SKILL.md": {
-    "bytes": 8732,
+    "bytes": 8824,
     "mode": "644",
-    "sha256": "7e8b592b517057a5af5063ccdf9aae60fd804d03ad4292409b7e7ce0dc445797"
+    "sha256": "034673a9ed5006b10e90bcce3126fa2f952c54b89c9b4da3c2a4e6fddd07b81d"
   },
   "codex/runtime/templates/skills/rpi-release/references/e2e-pro-playbook.md": {
     "bytes": 55978,
@@ -1030,9 +1030,9 @@
     "sha256": "5277e013f281a82f3834979c4c627766185bf614cb84811281f422c59f73512a"
   },
   "codex/runtime/templates/skills/rpi-remediate/SKILL.md": {
-    "bytes": 20388,
+    "bytes": 20480,
     "mode": "644",
-    "sha256": "b0b05ab45e73cfeb48379fe955bb63677a03bfcd55f284eca94ffa972873d51b"
+    "sha256": "c6ca1639c4f57b3a61fa9b97be8f8df1b0e2a7732b7923f07e2f5e89a0885530"
   },
   "codex/runtime/templates/skills/rpi-remediate/references/dispatch.md": {
     "bytes": 9498,
@@ -1055,9 +1055,9 @@
     "sha256": "da9a4705c92c59f8284a936012f18d1bbedb7bc9fa591725a6435fc1a97f90c5"
   },
   "codex/runtime/templates/skills/rpi-research/SKILL.md": {
-    "bytes": 3951,
+    "bytes": 4043,
     "mode": "644",
-    "sha256": "221b51de15206193e5de504b67769bd66c90148d12d917ee8e361f9c9c4717d2"
+    "sha256": "72c049a88d5dcac8a8786b08edfd12f727fca1a369763641da4d1a0167239caa"
   },
   "codex/runtime/templates/skills/rpi-research/references/handoff.md": {
     "bytes": 2409,
@@ -1070,14 +1070,14 @@
     "sha256": "93c304a71fa7039ee3b246328f34c181b90c990c03ff594a924eae9ba8509bf6"
   },
   "codex/runtime/templates/skills/rpi-status/SKILL.md": {
-    "bytes": 5417,
+    "bytes": 5509,
     "mode": "644",
-    "sha256": "d436a1350717c2b90e585800e034a104a0bdbb60a8d23eae79b5e6c5d2085d78"
+    "sha256": "8ff28371de8983874c2358b14079339667c9fdeadb4f2f58d5ed3d8e198fcd6e"
   },
   "codex/runtime/templates/skills/rpi-tool-design/SKILL.md": {
-    "bytes": 7872,
+    "bytes": 7964,
     "mode": "644",
-    "sha256": "edf0ca294e680de41ed3d709f38f2ee215f665b47de02438b22b095d14f934fd"
+    "sha256": "e48ae2d4700bb5b9baad2d162cb7f1112bba1d5c3ee23b8973419095eb5cb4af"
   },
   "codex/runtime/templates/skills/rpi-tool-design/references/webmcp/DOMAIN.md": {
     "bytes": 8734,
@@ -1090,9 +1090,9 @@
     "sha256": "c802cc226b94e16df3b3978df190271f364fe38d00108574c3940ed288531def"
   },
   "codex/runtime/templates/skills/rpi-triage/SKILL.md": {
-    "bytes": 22576,
+    "bytes": 22668,
     "mode": "644",
-    "sha256": "16a28b765db389d6234ed84703878a80708d98ab665871e3a67799e9297396cc"
+    "sha256": "93ec80d2e5829cc24b9885ddb886f2c02516b8715ad6a73aa2ec8ff537437936"
   },
   "codex/runtime/templates/skills/rpi-triage/references/handoff.md": {
     "bytes": 2409,
@@ -1110,9 +1110,9 @@
     "sha256": "cd66ae06436452190eac245399746bf80087faa0c3b1b9782bd267cfc006fcc7"
   },
   "codex/runtime/templates/skills/rpi-update-docs/SKILL.md": {
-    "bytes": 9881,
+    "bytes": 9973,
     "mode": "644",
-    "sha256": "c6edb810a4c8ba6b7f24ccf0eda1624562b2036c26ed25d7736808bdb1866ab1"
+    "sha256": "b1bd71232ee3ca7589bac78bfefc824af364d4268fdb18fda5609feb60a3ca58"
   },
   "codex/runtime/templates/skills/rpi-update-docs/references/handoff.md": {
     "bytes": 2409,
@@ -1130,9 +1130,9 @@
     "sha256": "00a060b9da9831ba8c2120c0876757f5e555a02b69dce1c2abd4755b59f6c2f3"
   },
   "codex/runtime/templates/skills/rpi-validate/SKILL.md": {
-    "bytes": 5192,
+    "bytes": 5284,
     "mode": "644",
-    "sha256": "6d1e524b10433e20cd6b0a41c1a067f592df7001cf69c72d202e8bcf32b1096b"
+    "sha256": "a72722e1a25280300811b8b02be7fa9dc80e22b5e60ab5dcebdcc85d22a35b69"
   },
   "codex/runtime/templates/skills/rpi-validate/references/dispatch.md": {
     "bytes": 9498,
@@ -1295,9 +1295,9 @@
     "sha256": "00a060b9da9831ba8c2120c0876757f5e555a02b69dce1c2abd4755b59f6c2f3"
   },
   "codex/skills/rpi-assess/SKILL.md": {
-    "bytes": 3924,
+    "bytes": 4016,
     "mode": "644",
-    "sha256": "1e2bc7b7f84008bd940b353ba279a7e56ad9e9927b990b411170697511d8d1fe"
+    "sha256": "3053a57d0c594f13248dbf014d8ba4de4939efa06af831f770791d6a8400f2ad"
   },
   "codex/skills/rpi-assess/agents/openai.yaml": {
     "bytes": 42,
@@ -1330,9 +1330,9 @@
     "sha256": "00a060b9da9831ba8c2120c0876757f5e555a02b69dce1c2abd4755b59f6c2f3"
   },
   "codex/skills/rpi-brainstorm/SKILL.md": {
-    "bytes": 4304,
+    "bytes": 4396,
     "mode": "644",
-    "sha256": "737df05033039a17a10cff97ed7c0eeab371767a804efc6150589707c2505755"
+    "sha256": "946d20d1ca335b87f7a15af2d1e07a645ef130a47838542882fb6823d5d2e9c3"
   },
   "codex/skills/rpi-brainstorm/agents/openai.yaml": {
     "bytes": 42,
@@ -1340,9 +1340,9 @@
     "sha256": "8619a54e8c098122a7f3881394f84ca89b684366e848233a29ad18b6ec363935"
   },
   "codex/skills/rpi-describe-pr/SKILL.md": {
-    "bytes": 2516,
+    "bytes": 2608,
     "mode": "644",
-    "sha256": "ffac4ebdd543f570f1df5ff7f2ff8619d03ef376a0ce297b945f2b125c8bcecf"
+    "sha256": "75e54b30d20f0c9bcf69c08f81a7f058fe10867c6e6e859989c580d1aa17b656"
   },
   "codex/skills/rpi-describe-pr/agents/openai.yaml": {
     "bytes": 42,
@@ -1370,9 +1370,9 @@
     "sha256": "00a060b9da9831ba8c2120c0876757f5e555a02b69dce1c2abd4755b59f6c2f3"
   },
   "codex/skills/rpi-explore-release/SKILL.md": {
-    "bytes": 8558,
+    "bytes": 8650,
     "mode": "644",
-    "sha256": "80fc8be4b81339883fd9e5172e468f3f30f090d5256a28050a14d60889cfb9e1"
+    "sha256": "903670669ae3c33e31da9b52d4256ed2235eac2645559ab1b0ccffc6b9cfbd93"
   },
   "codex/skills/rpi-explore-release/agents/openai.yaml": {
     "bytes": 43,
@@ -1385,9 +1385,9 @@
     "sha256": "5243955c00baff46718204610368f7a3fefb246129aa0f4ee5bf6af06c8a8d0c"
   },
   "codex/skills/rpi-fix-ci/SKILL.md": {
-    "bytes": 4791,
+    "bytes": 4883,
     "mode": "644",
-    "sha256": "8ac1a3f4ce5ddb76fb6bb846fd8252dfa7c25684f77baca49574b3d079fa4b31"
+    "sha256": "920c2ce3314ac0dda8babc63d094b3da089fb0c8aaa86806e805f6bc1329382a"
   },
   "codex/skills/rpi-fix-ci/agents/openai.yaml": {
     "bytes": 43,
@@ -1400,9 +1400,9 @@
     "sha256": "5277e013f281a82f3834979c4c627766185bf614cb84811281f422c59f73512a"
   },
   "codex/skills/rpi-implement/SKILL.md": {
-    "bytes": 6237,
+    "bytes": 6329,
     "mode": "644",
-    "sha256": "fd5d5d897a2592d0c4c3862372047973fb8a610e791cf3ce40bed3b4acdaa6a3"
+    "sha256": "18e5254be6efe892e2cfdab571dbed29191f6069152705b4b01948517fff8ef5"
   },
   "codex/skills/rpi-implement/agents/openai.yaml": {
     "bytes": 43,
@@ -1430,9 +1430,9 @@
     "sha256": "da9a4705c92c59f8284a936012f18d1bbedb7bc9fa591725a6435fc1a97f90c5"
   },
   "codex/skills/rpi-plan/SKILL.md": {
-    "bytes": 5181,
+    "bytes": 5273,
     "mode": "644",
-    "sha256": "f9b71895f31cc02b83ade6905b0b2f62d99777cf38101b8c87c5dcef682a224e"
+    "sha256": "7c0598b0f80a65caf14eef03c0c8cbf71780d54e471f16c8d85ff2e5c2b494b2"
   },
   "codex/skills/rpi-plan/agents/openai.yaml": {
     "bytes": 42,
@@ -1450,9 +1450,9 @@
     "sha256": "23104d62bda3299ea4e60cd4b1003ac07ee268f5be2f4683f030389e8eec3881"
   },
   "codex/skills/rpi-pre-launch/SKILL.md": {
-    "bytes": 19033,
+    "bytes": 19125,
     "mode": "644",
-    "sha256": "2c30240605450951da8166e932fc37db5220b2d57edb07d0c43d386793a3f921"
+    "sha256": "f39ec5b358ce0c7805184dcb6cb48dbc9eda8664b6fe60e114035e73db3d4fb3"
   },
   "codex/skills/rpi-pre-launch/agents/openai.yaml": {
     "bytes": 42,
@@ -1480,9 +1480,9 @@
     "sha256": "da9a4705c92c59f8284a936012f18d1bbedb7bc9fa591725a6435fc1a97f90c5"
   },
   "codex/skills/rpi-release/SKILL.md": {
-    "bytes": 8734,
+    "bytes": 8826,
     "mode": "644",
-    "sha256": "6c9cb5c5cc8c50ac95f2e8ebb907d78fd81218f7f667b13b712eddd72d65810f"
+    "sha256": "a2f6d8299b65aeab20a0e8cad832a9838c109b64f71b10fd3402328ceaad5520"
   },
   "codex/skills/rpi-release/agents/openai.yaml": {
     "bytes": 43,
@@ -1500,9 +1500,9 @@
     "sha256": "5277e013f281a82f3834979c4c627766185bf614cb84811281f422c59f73512a"
   },
   "codex/skills/rpi-remediate/SKILL.md": {
-    "bytes": 20390,
+    "bytes": 20482,
     "mode": "644",
-    "sha256": "c8b9295459ed5d24ab0877a4dd4f7981d292ed9a4699bd89761563611bd15494"
+    "sha256": "81831138458971cdfb679818ba26b32cdc5df9d3ce924b903df3322afe009921"
   },
   "codex/skills/rpi-remediate/agents/openai.yaml": {
     "bytes": 43,
@@ -1530,9 +1530,9 @@
     "sha256": "da9a4705c92c59f8284a936012f18d1bbedb7bc9fa591725a6435fc1a97f90c5"
   },
   "codex/skills/rpi-research/SKILL.md": {
-    "bytes": 3953,
+    "bytes": 4045,
     "mode": "644",
-    "sha256": "91afd3d91640d547302fc9517e8949266785f0d7c0de32a8923bbb3275cef0ff"
+    "sha256": "72c170983a6809d2972fb3048c4ebd0d7c1d244ca8956396de3fce6a3f46e062"
   },
   "codex/skills/rpi-research/agents/openai.yaml": {
     "bytes": 42,
@@ -1550,9 +1550,9 @@
     "sha256": "93c304a71fa7039ee3b246328f34c181b90c990c03ff594a924eae9ba8509bf6"
   },
   "codex/skills/rpi-status/SKILL.md": {
-    "bytes": 5419,
+    "bytes": 5511,
     "mode": "644",
-    "sha256": "1ee61fdc6efe653eac6cf389d11def0c8fee9af03e2fa2a44de9d063ed607cdb"
+    "sha256": "0bddb22b3f99b893ee4d41c8c974a42d896a29989f4d4b479b8003330307aeec"
   },
   "codex/skills/rpi-status/agents/openai.yaml": {
     "bytes": 42,
@@ -1560,9 +1560,9 @@
     "sha256": "8619a54e8c098122a7f3881394f84ca89b684366e848233a29ad18b6ec363935"
   },
   "codex/skills/rpi-tool-design/SKILL.md": {
-    "bytes": 7874,
+    "bytes": 7966,
     "mode": "644",
-    "sha256": "6c858f4a01efc4c7c93abcd4b1dd4e7d7e950597b5bb26f1df4fe1687d40016e"
+    "sha256": "6b7a0e6be4d8c17dc6324125b2d51fbaa9cd0a205684ab905abf7073372d895f"
   },
   "codex/skills/rpi-tool-design/agents/openai.yaml": {
     "bytes": 42,
@@ -1580,9 +1580,9 @@
     "sha256": "c802cc226b94e16df3b3978df190271f364fe38d00108574c3940ed288531def"
   },
   "codex/skills/rpi-triage/SKILL.md": {
-    "bytes": 22578,
+    "bytes": 22670,
     "mode": "644",
-    "sha256": "eec9079f363f5f3e78e88bddd167048b1ca501d5949ff90838ad36601c7e884d"
+    "sha256": "9fe80e954320772631338ba0a905de47c808f3a803ba9d34120b6726e9c11acf"
   },
   "codex/skills/rpi-triage/agents/openai.yaml": {
     "bytes": 43,
@@ -1605,9 +1605,9 @@
     "sha256": "cd66ae06436452190eac245399746bf80087faa0c3b1b9782bd267cfc006fcc7"
   },
   "codex/skills/rpi-update-docs/SKILL.md": {
-    "bytes": 9883,
+    "bytes": 9975,
     "mode": "644",
-    "sha256": "a3bcfdf0d004a23bf1a11a91f4c23debe69ded3bc9f69ee1dadb985bf9fdc482"
+    "sha256": "a7233c331d2a5f940e3de7acd78cba8bf3de0af4967767bfb9b6675e85faa7d7"
   },
   "codex/skills/rpi-update-docs/agents/openai.yaml": {
     "bytes": 43,
@@ -1635,9 +1635,9 @@
     "sha256": "00a060b9da9831ba8c2120c0876757f5e555a02b69dce1c2abd4755b59f6c2f3"
   },
   "codex/skills/rpi-validate/SKILL.md": {
-    "bytes": 5194,
+    "bytes": 5286,
     "mode": "644",
-    "sha256": "3f3b3b89d871f058cdaea7b157e0dd0cd9b1c85991ed8f89f27210ddd9153690"
+    "sha256": "0c7811a250a794d646115a0d16ceaad47bb6d215db23a86cd58515b740d1fe95"
   },
   "codex/skills/rpi-validate/agents/openai.yaml": {
     "bytes": 42,

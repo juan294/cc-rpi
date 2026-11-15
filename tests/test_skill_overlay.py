@@ -13,7 +13,8 @@ def overlay_block(name):
     return (
         '## Project overlay\n'
         '\n'
-        'If `.rpi/project/' + name + '.md` exists, read it completely before you start, together with the controlling '
+        'Open `.rpi/project/' + name + '.md` directly by that path (a file search or glob can skip the hidden `.rpi` '
+        'directory). If it exists, read it completely before you start, together with the controlling '
         "instructions. It adds this project's procedure and checks and can make this workflow stricter. It cannot grant "
         'push, tag, merge, deployment or publication authority. It cannot relax a gate: a rule that blocks or permits a '
         'release, publication, merge, deployment or phase acceptance, or a safety or authorization rule. It can change '
